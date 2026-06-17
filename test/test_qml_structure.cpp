@@ -176,14 +176,37 @@ TEST(QmlStructure, TimelineViewportRenderingRulesAreExplicit)
 {
   const std::string panel_text = read_text(qml_dir() / "components" / "TimelinePanel.qml");
   const std::string curve_text = read_text(qml_dir() / "components" / "TimelineCurveRow.qml");
+  const std::string viewport_text = read_text(qml_dir() / "components" / "TimelineViewport.qml");
   const std::string range_text = read_text(qml_dir() / "components" / "TimelineRangeBar.qml");
 
   expect_contains(panel_text, "viewport.isTimeVisible(root.playheadSeconds)");
-  expect_contains(panel_text, "minorTickTimes");
-  expect_contains(panel_text, "majorTickTimes");
+  expect_contains(panel_text, "rulerTickTimes");
+  expect_contains(panel_text, "property int rulerLabelTickStride: 10");
+  expect_contains(panel_text, "index % root.rulerLabelTickStride === 0");
+  expect_contains(panel_text, "function formatTickLabel");
+  expect_contains(panel_text, "totalMinutes");
+  expect_contains(panel_text, "padStart(2, \"0\")");
+  expect_contains(panel_text, "padStart(3, \"0\")");
+
+  expect_contains(viewport_text, "function denseTickInterval");
+  expect_contains(viewport_text, "var targetPixels = 10");
+
   expect_contains(curve_text, "property real plotTopPadding: 4");
   expect_contains(curve_text, "property real plotBottomPadding: 4");
-  expect_contains(curve_text, "plotHeight");
+  expect_contains(curve_text, "property real sampleMarkerSpacingThreshold: 12");
+  expect_contains(curve_text, "function collectDrawablePoints");
+  expect_contains(curve_text, "function interpolateBoundaryPoint");
+  expect_contains(curve_text, "function collectVisibleSamples");
+  expect_contains(curve_text, "function shouldDrawSampleMarkers");
+  expect_contains(curve_text, "function drawSampleMarkers");
+  expect_contains(curve_text, "boundary: true");
+  expect_contains(curve_text, "boundary: false");
+  expect_contains(curve_text, "ctx.arc");
+
+  expect_contains(range_text, "id: thumbBody");
+  expect_contains(range_text, "color: \"#9aa8ba\"");
+  expect_contains(range_text, "id: leftHandleGrip");
+  expect_contains(range_text, "id: rightHandleGrip");
   expect_contains(range_text, "mapToItem(track");
   expect_contains(range_text, "pressTrackX");
 }
