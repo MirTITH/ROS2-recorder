@@ -31,7 +31,7 @@ source ~/.local/ros2_rc && rr && colcon build \
 
 ```bash
 source ~/.local/ros2_rc && rs && ros2 run data_recorder data_recorder \
-  --ros-args -p config_file:=/home/nros/Documents/Woosh/ros2_recorder_ws/docs/reference/example_config.yaml
+  --ros-args -p config_file:=/home/nros/Documents/Woosh/ros2_recorder_ws/src/data_recorder/config/example_config.yaml
 ```
 
 Running without `config_file` prints usage help and exits with a non-zero status.
@@ -42,9 +42,11 @@ The app requires a graphical desktop session. Check `DISPLAY` or `WAYLAND_DISPLA
 
 Manual checks:
 
-- Resize splitters.
-- Toggle Record/Stop.
-- Select recording tags.
-- Select event markers.
-- Toggle topic visibility.
-- Click the timeline to move the playhead.
+- Resize splitters and verify hover handles become blue with resize cursors.
+- Toggle Record/Stop with the button and Space key.
+- Verify the camera grid has no scroll bars and does not crop previews.
+- Hide camera topics from the Timeline and verify the camera area collapses when none are visible.
+- Select recording tags and event marker buttons.
+- Drag the Timeline playhead and verify it follows the mouse continuously.
+- Wheel over Timeline information rows to scroll vertically.
+- Wheel over Timeline curves to zoom horizontally.

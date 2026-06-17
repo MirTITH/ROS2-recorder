@@ -17,6 +17,12 @@
 | 工作区 | Workspace | `Workspace` | 整个可调整面板布局 |
 | 面板 | Panel | `Panel` | 统一样式、可组合的 UI 模块 |
 | 分隔条 | Splitter Handle | `SplitterHandle` | 可拖动调整面板大小的分隔控件 |
+| 时间轴信息面板 | Timeline Information Pane | `TimelineInfoPane` | 时间轴左侧 topic 信息、播放头时间、可见性控制区域 |
+| 曲线区 | Curve Area | `CurveArea` | 时间轴右侧曲线、时间尺、播放头所在区域 |
+| 相机网格 | Camera Grid | `CameraGrid` | 自动排列所有可见相机预览的区域 |
+| 标签片 | Tag Chip | `TagChip` | 采集记录和记录标签中复用的彩色标签 |
+| 实时端 | Live Edge | `LiveEdge` | 录制中模拟的最新采集时间位置 |
+| 轨道类型 | Track Kind | `TrackKind` | topic 在时间轴中的 `camera`、`numeric`、`empty` 分类 |
 
 ## Naming Rules
 

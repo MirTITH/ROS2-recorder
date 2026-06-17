@@ -63,7 +63,10 @@ install(DIRECTORY include/
 install(DIRECTORY qml
   DESTINATION share/${PROJECT_NAME}
 )
-install(DIRECTORY doc
+install(DIRECTORY docs
+  DESTINATION share/${PROJECT_NAME}
+)
+install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 
