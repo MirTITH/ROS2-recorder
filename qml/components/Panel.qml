@@ -20,7 +20,7 @@ Rectangle {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 34
+            Layout.preferredHeight: 20
             color: root.active ? "#dbeafe" : "#eef2f7"
             radius: 6
 
@@ -34,7 +34,7 @@ Rectangle {
                     id: titleLabel
                     Layout.fillWidth: true
                     color: "#162033"
-                    font.pixelSize: 13
+                    font.pixelSize: 11
                     font.bold: true
                     elide: Text.ElideRight
                 }
