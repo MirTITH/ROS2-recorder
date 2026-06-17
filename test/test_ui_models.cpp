@@ -478,3 +478,24 @@ TEST(AppController, EventFilterIgnoresAutoRepeatAndUnknownKeys)
   EXPECT_FALSE(controller.eventFilter(nullptr, &unknown_event));
   EXPECT_TRUE(controller.selectedMarkerShortcut().isEmpty());
 }
+
+TEST(AppController, EventFilterIgnoresModifiedShortcuts)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  QKeyEvent ctrl_space_event(
+    QEvent::KeyPress, Qt::Key_Space, Qt::ControlModifier, QStringLiteral(" "));
+  EXPECT_FALSE(controller.eventFilter(nullptr, &ctrl_space_event));
+  EXPECT_FALSE(controller.recording());
+
+  QKeyEvent alt_space_event(
+    QEvent::KeyPress, Qt::Key_Space, Qt::AltModifier, QStringLiteral(" "));
+  EXPECT_FALSE(controller.eventFilter(nullptr, &alt_space_event));
+  EXPECT_FALSE(controller.recording());
+
+  QKeyEvent ctrl_marker_event(
+    QEvent::KeyPress, Qt::Key_1, Qt::ControlModifier, QStringLiteral("1"));
+  EXPECT_FALSE(controller.eventFilter(nullptr, &ctrl_marker_event));
+  EXPECT_TRUE(controller.selectedMarkerShortcut().isEmpty());
+}

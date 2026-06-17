@@ -208,14 +208,23 @@ bool AppController::eventFilter(QObject * watched, QEvent * event)
     return QObject::eventFilter(watched, event);
   }
 
+  const Qt::KeyboardModifiers modifiers = key_event->modifiers();
+  const bool unmodified = modifiers == Qt::NoModifier;
+  const bool marker_modifiers = unmodified || modifiers == Qt::ShiftModifier;
+
   if (key_event->key() == Qt::Key_Space) {
+    if (!unmodified) {
+      return QObject::eventFilter(watched, event);
+    }
     toggleRecording();
     event->accept();
     return true;
   }
 
   const QString text = key_event->text();
-  if (text.size() == 1 && !text.at(0).isSpace() && triggerMarkerShortcut(text)) {
+  if (marker_modifiers && text.size() == 1 && !text.at(0).isSpace() &&
+    triggerMarkerShortcut(text))
+  {
     event->accept();
     return true;
   }
