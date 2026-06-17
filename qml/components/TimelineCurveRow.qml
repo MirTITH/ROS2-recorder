@@ -1,7 +1,4 @@
 import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-import QtCharts 2.15
 
 Rectangle {
     id: root
@@ -9,14 +6,14 @@ Rectangle {
     property string trackKind: "empty"
     property var seriesList: []
     property real xMax: 80
-    property real timeScale: 1.0
+    property real visibleStartSeconds: 0
+    property real visibleDurationSeconds: 80
 
-    function boundedXMax() {
-        return isFinite(xMax) ? Math.max(1, xMax) : 80
-    }
+    height: 48
+    color: trackKind === "empty" ? "#f8fafc" : "#ffffff"
 
-    function boundedTimeScale() {
-        return isFinite(timeScale) ? Math.max(0.2, timeScale) : 1.0
+    function boundedDuration() {
+        return Math.max(0.001, Number(visibleDurationSeconds) || 1)
     }
 
     function seriesColor(value) {
@@ -24,61 +21,85 @@ Rectangle {
         return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(text) ? text : "#2563eb"
     }
 
-    height: 48
-    color: trackKind === "empty" ? "#f8fafc" : "#ffffff"
-
-    ChartView {
-        id: chart
+    Canvas {
+        id: curveCanvas
 
         anchors.fill: parent
         visible: root.trackKind === "numeric"
-        antialiasing: true
-        animationOptions: ChartView.NoAnimation
-        backgroundColor: "transparent"
-        plotAreaColor: "transparent"
-        legend.visible: false
-        margins.left: 0
-        margins.right: 0
-        margins.top: 0
-        margins.bottom: 0
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
 
-        ValueAxis { id: axisX; min: 0; max: root.boundedXMax() / root.boundedTimeScale(); labelsVisible: false; gridVisible: true }
-        ValueAxis { id: axisY; min: -1.4; max: 2.4; labelsVisible: false; gridVisible: false }
-
-        function rebuildSeries() {
-            removeAllSeries()
-            if (root.trackKind !== "numeric") {
-                return
-            }
+        onPaint: {
+            var ctx = getContext("2d")
+            ctx.clearRect(0, 0, width, height)
+            ctx.fillStyle = "#ffffff"
+            ctx.fillRect(0, 0, width, height)
 
             var entries = root.seriesList || []
+            var minY = -1
+            var maxY = 1
             for (var seriesIndex = 0; seriesIndex < entries.length; ++seriesIndex) {
-                var entry = entries[seriesIndex] || {}
-                var lineSeries = createSeries(ChartView.SeriesTypeLine, "series-" + seriesIndex, axisX, axisY)
-                lineSeries.color = root.seriesColor(entry.color)
-                lineSeries.width = 1.5
-
-                var points = entry.points || []
+                var points = (entries[seriesIndex] || {}).points || []
                 for (var pointIndex = 0; pointIndex < points.length; ++pointIndex) {
-                    var point = points[pointIndex]
-                    if (!point || typeof point !== "object") {
-                        continue
-                    }
-
-                    var x = Number(point.x)
-                    var y = Number(point.y)
-                    if (isFinite(x) && isFinite(y)) {
-                        lineSeries.append(x, y)
+                    var yValue = Number(points[pointIndex].y)
+                    if (isFinite(yValue)) {
+                        minY = Math.min(minY, yValue)
+                        maxY = Math.max(maxY, yValue)
                     }
                 }
             }
-        }
+            if (minY === maxY) {
+                minY -= 1
+                maxY += 1
+            }
 
-        Component.onCompleted: rebuildSeries()
+            ctx.strokeStyle = "#e2e8f0"
+            ctx.lineWidth = 1
+            for (var gridY = 0; gridY <= 2; ++gridY) {
+                var yLine = (gridY / 2) * height
+                ctx.beginPath()
+                ctx.moveTo(0, yLine)
+                ctx.lineTo(width, yLine)
+                ctx.stroke()
+            }
+
+            for (var drawSeriesIndex = 0; drawSeriesIndex < entries.length; ++drawSeriesIndex) {
+                var entry = entries[drawSeriesIndex] || {}
+                var drawPoints = entry.points || []
+                var started = false
+                ctx.beginPath()
+                ctx.strokeStyle = root.seriesColor(entry.color)
+                ctx.lineWidth = 1.5
+                for (var drawPointIndex = 0; drawPointIndex < drawPoints.length; ++drawPointIndex) {
+                    var point = drawPoints[drawPointIndex]
+                    var xValue = Number(point.x)
+                    var y = Number(point.y)
+                    if (!isFinite(xValue) || !isFinite(y)) {
+                        continue
+                    }
+                    if (xValue < root.visibleStartSeconds || xValue > root.visibleStartSeconds + root.boundedDuration()) {
+                        continue
+                    }
+                    var x = ((xValue - root.visibleStartSeconds) / root.boundedDuration()) * width
+                    var yPixel = height - ((y - minY) / Math.max(0.001, maxY - minY)) * height
+                    if (!started) {
+                        ctx.moveTo(x, yPixel)
+                        started = true
+                    } else {
+                        ctx.lineTo(x, yPixel)
+                    }
+                }
+                if (started) {
+                    ctx.stroke()
+                }
+            }
+        }
     }
 
-    onTrackKindChanged: chart.rebuildSeries()
-    onSeriesListChanged: chart.rebuildSeries()
+    onTrackKindChanged: curveCanvas.requestPaint()
+    onSeriesListChanged: curveCanvas.requestPaint()
+    onVisibleStartSecondsChanged: curveCanvas.requestPaint()
+    onVisibleDurationSecondsChanged: curveCanvas.requestPaint()
 
     Rectangle {
         anchors.left: parent.left

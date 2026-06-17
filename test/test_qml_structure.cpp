@@ -106,3 +106,25 @@ TEST(QmlStructure, TimelineInfoUsesEyeSvgAndOmitsTrackKindText)
   EXPECT_TRUE(std::filesystem::exists(qml_dir() / "assets" / "icons" / "eye.svg"));
   EXPECT_TRUE(std::filesystem::exists(qml_dir() / "assets" / "icons" / "eye-off.svg"));
 }
+
+TEST(QmlStructure, TimelineCurveAreaHasAdaptiveWindowAndRangeBar)
+{
+  const std::string panel_text = read_text(qml_dir() / "components" / "TimelinePanel.qml");
+  const std::string curve_text = read_text(qml_dir() / "components" / "TimelineCurveRow.qml");
+
+  expect_contains(panel_text, "property real visibleStartSeconds");
+  expect_contains(panel_text, "property real visibleDurationSeconds");
+  expect_contains(panel_text, "function niceTickInterval");
+  expect_contains(panel_text, "function formatTickLabel");
+  expect_contains(panel_text, "function nudgePlayhead");
+  expect_contains(panel_text, "TimelineRangeBar {");
+  expect_contains(panel_text, "wheel.modifiers & Qt.ShiftModifier");
+  expect_not_contains(panel_text, "Math.floor(root.effectiveDurationSeconds / 5) + 1");
+
+  expect_not_contains(curve_text, "ChartView");
+  expect_contains(curve_text, "Canvas {");
+  expect_contains(curve_text, "property real visibleStartSeconds");
+  expect_contains(curve_text, "property real visibleDurationSeconds");
+
+  EXPECT_TRUE(std::filesystem::exists(qml_dir() / "components" / "TimelineRangeBar.qml"));
+}

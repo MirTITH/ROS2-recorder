@@ -8,30 +8,24 @@ Panel {
     property var controller
     property var model
     property real durationSeconds: 80
-    property real timeScale: 1.0
+    property real visibleStartSeconds: 0
+    property real visibleDurationSeconds: 80
     property bool listsReady: false
     readonly property real effectiveDurationSeconds: Math.max(1, Number(durationSeconds) || 1)
     readonly property real playheadSeconds: controller ? Number(controller.playheadSeconds) : 0
 
     title: "时间轴"
 
-    function boundedTimeScale() {
-        return Math.max(0.2, Number(timeScale) || 1)
+    function clamp(value, low, high) {
+        return Math.max(low, Math.min(high, value))
     }
 
-    function curveDurationSeconds() {
-        return effectiveDurationSeconds / boundedTimeScale()
+    function boundedVisibleDuration() {
+        return Math.max(0.001, Math.min(effectiveDurationSeconds, Number(visibleDurationSeconds) || effectiveDurationSeconds))
     }
 
-    function playheadX(widthValue) {
-        return Math.max(0, Math.min(widthValue, (playheadSeconds / curveDurationSeconds()) * widthValue))
-    }
-
-    function seekFromCurveX(xPosition) {
-        var seconds = Math.max(0, Math.min(effectiveDurationSeconds, (xPosition / Math.max(1, curveViewport.width)) * curveDurationSeconds()))
-        if (controller && controller.setPlayheadSeconds) {
-            controller.setPlayheadSeconds(seconds)
-        }
+    function visibleEndSeconds() {
+        return Math.min(effectiveDurationSeconds, visibleStartSeconds + boundedVisibleDuration())
     }
 
     function scrollRows(deltaY) {
@@ -56,6 +50,79 @@ Panel {
         if (Math.abs(infoList.contentY - curveList.contentY) > 0.5) {
             infoList.contentY = curveList.contentY
         }
+    }
+
+    function setVisibleWindow(startSeconds, durationSeconds) {
+        var duration = Math.max(0.001, Math.min(effectiveDurationSeconds, Number(durationSeconds) || effectiveDurationSeconds))
+        visibleDurationSeconds = duration
+        visibleStartSeconds = clamp(Number(startSeconds) || 0, 0, Math.max(0, effectiveDurationSeconds - duration))
+    }
+
+    function playheadX(widthValue) {
+        return clamp(((playheadSeconds - visibleStartSeconds) / boundedVisibleDuration()) * widthValue, 0, widthValue)
+    }
+
+    function seekFromCurveX(xPosition) {
+        var seconds = visibleStartSeconds + (xPosition / Math.max(1, curveViewport.width)) * boundedVisibleDuration()
+        if (controller && controller.setPlayheadSeconds) {
+            controller.setPlayheadSeconds(clamp(seconds, 0, effectiveDurationSeconds))
+        }
+    }
+
+    function zoomVisibleWindow(deltaY, anchorX, widthValue) {
+        var oldDuration = boundedVisibleDuration()
+        var factor = deltaY > 0 ? 0.86 : 1.16
+        var newDuration = clamp(oldDuration * factor, 0.05, effectiveDurationSeconds)
+        var anchorRatio = clamp(anchorX / Math.max(1, widthValue), 0, 1)
+        var anchorTime = visibleStartSeconds + oldDuration * anchorRatio
+        setVisibleWindow(anchorTime - newDuration * anchorRatio, newDuration)
+    }
+
+    function nudgePlayhead(deltaY) {
+        var step = boundedVisibleDuration() / 40
+        var direction = deltaY > 0 ? 1 : -1
+        if (controller && controller.setPlayheadSeconds) {
+            controller.setPlayheadSeconds(clamp(playheadSeconds + direction * step, 0, effectiveDurationSeconds))
+        }
+    }
+
+    function niceTickInterval(widthValue) {
+        var intervals = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60, 120, 300]
+        var targetPixels = 110
+        var rawInterval = boundedVisibleDuration() / Math.max(1, widthValue / targetPixels)
+        for (var index = 0; index < intervals.length; ++index) {
+            if (intervals[index] >= rawInterval) {
+                return intervals[index]
+            }
+        }
+        return intervals[intervals.length - 1]
+    }
+
+    function firstTick(interval) {
+        return Math.ceil(visibleStartSeconds / interval) * interval
+    }
+
+    function tickCount(widthValue) {
+        var interval = niceTickInterval(widthValue)
+        return Math.max(1, Math.floor((visibleEndSeconds() - firstTick(interval)) / interval) + 1)
+    }
+
+    function tickTimeAt(index, widthValue) {
+        var interval = niceTickInterval(widthValue)
+        return firstTick(interval) + index * interval
+    }
+
+    function formatTickLabel(seconds) {
+        if (boundedVisibleDuration() < 2) {
+            return Math.round(seconds * 1000) + "ms"
+        }
+        if (boundedVisibleDuration() < 90) {
+            return seconds.toFixed(seconds < 10 ? 1 : 0) + "s"
+        }
+        var totalSeconds = Math.floor(seconds)
+        var minutes = Math.floor(totalSeconds / 60)
+        var remainder = totalSeconds % 60
+        return minutes + ":" + remainder.toString().padStart(2, "0")
     }
 
     function timeString(seconds) {
@@ -160,12 +227,14 @@ Panel {
                 border.width: 1
 
                 Repeater {
-                    model: Math.floor(root.effectiveDurationSeconds / 5) + 1
+                    model: root.tickCount(ruler.width)
 
                     delegate: Item {
                         required property int index
 
-                        x: ((index * 5) / root.curveDurationSeconds()) * ruler.width
+                        readonly property real tickTime: root.tickTimeAt(index, ruler.width)
+
+                        x: ((tickTime - root.visibleStartSeconds) / root.boundedVisibleDuration()) * ruler.width
                         width: 1
                         height: ruler.height
 
@@ -179,7 +248,7 @@ Panel {
                             anchors.top: parent.top
                             anchors.topMargin: 11
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: (index * 5) + "s"
+                            text: root.formatTickLabel(tickTime)
                             color: "#64748b"
                             font.pixelSize: 10
                         }
@@ -226,8 +295,9 @@ Panel {
                         width: ListView.view.width
                         trackKind: model.trackKind
                         seriesList: model.seriesList
-                        timeScale: root.timeScale
                         xMax: root.effectiveDurationSeconds
+                        visibleStartSeconds: root.visibleStartSeconds
+                        visibleDurationSeconds: root.boundedVisibleDuration()
                     }
                 }
 
@@ -242,9 +312,9 @@ Panel {
                     }
                     onWheel: function(wheel) {
                         if (wheel.modifiers & Qt.ShiftModifier) {
-                            root.scrollRows(wheel.angleDelta.y)
+                            root.nudgePlayhead(wheel.angleDelta.y)
                         } else {
-                            root.timeScale = Math.max(0.25, Math.min(6.0, root.timeScale + (wheel.angleDelta.y > 0 ? 0.15 : -0.15)))
+                            root.zoomVisibleWindow(wheel.angleDelta.y, wheel.x, curveViewport.width)
                         }
                         wheel.accepted = true
                     }
@@ -258,8 +328,21 @@ Panel {
                     z: 5
                 }
             }
+
+            TimelineRangeBar {
+                Layout.fillWidth: true
+                totalDurationSeconds: root.effectiveDurationSeconds
+                visibleStartSeconds: root.visibleStartSeconds
+                visibleDurationSeconds: root.boundedVisibleDuration()
+                onWindowRequested: function(startSeconds, durationSeconds) {
+                    root.setVisibleWindow(startSeconds, durationSeconds)
+                }
+            }
         }
     }
 
-    Component.onCompleted: listsReady = true
+    Component.onCompleted: {
+        root.setVisibleWindow(0, root.effectiveDurationSeconds)
+        listsReady = true
+    }
 }
