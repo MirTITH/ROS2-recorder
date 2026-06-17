@@ -63,12 +63,39 @@ TEST(QmlStructure, EverySplitViewUsesCustomResizeHandle)
   expect_contains(read_text(qml_dir() / "components" / "ResizeHandle.qml"), "property int lineOrientation");
 }
 
-TEST(QmlStructure, PanelChromeHasOnlyOuterRoundedCorners)
+TEST(QmlStructure, PanelChromeIsSquareCornered)
 {
   const std::string panel_text = read_text(qml_dir() / "components" / "Panel.qml");
 
   EXPECT_EQ(count_token(panel_text, "radius:"), 1U);
-  expect_contains(panel_text, "radius: 6");
+  expect_contains(panel_text, "radius: 0");
+}
+
+TEST(QmlStructure, MainLayoutUsesFlushLeftWorkspace)
+{
+  const std::string main_text = read_text(qml_dir() / "Main.qml");
+
+  expect_contains(main_text, "leftPadding: 0");
+  expect_contains(main_text, "rightPadding: 8");
+  expect_not_contains(main_text, "padding: 8");
+}
+
+TEST(QmlStructure, CameraSplitHandleDrawsBelowPreviewPanel)
+{
+  const std::string main_text = read_text(qml_dir() / "Main.qml");
+  const std::string handle_text = read_text(qml_dir() / "components" / "ResizeHandle.qml");
+
+  expect_contains(handle_text, "property int lineGravity");
+  expect_contains(handle_text, "Qt.AlignBottom");
+  expect_contains(main_text, "handle: ResizeHandle { lineOrientation: Qt.Horizontal; lineGravity: Qt.AlignBottom }");
+}
+
+TEST(QmlStructure, RecordingTagsPanelCanCollapseToTitleBar)
+{
+  const std::string main_text = read_text(qml_dir() / "Main.qml");
+
+  expect_contains(main_text, "RecordingTagsPanel {");
+  expect_contains(main_text, "SplitView.minimumHeight: 20");
 }
 
 TEST(QmlStructure, CameraPreviewTileIsSquareCornered)

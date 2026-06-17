@@ -7,6 +7,10 @@ Panel {
     property var model
     property int visibleCameraCount: 0
     property var visualOrder: []
+    property string pendingDragSourceKey: ""
+    property int pendingDragSourceIndex: -1
+    property real dragStartX: 0
+    property real dragStartY: 0
     property string dragSourceKey: ""
     property int dragSourceIndex: -1
     property int dropInsertIndex: -1
@@ -14,6 +18,7 @@ Panel {
     property real dragY: 0
     property bool sourceRefreshActive: false
     readonly property bool dragActive: dragSourceKey.length > 0
+    readonly property real dragStartThreshold: 6
     readonly property real tileGap: 4
 
     title: "相机预览"
@@ -229,9 +234,46 @@ Panel {
         return layoutForIndex(targetIndexAfterRemovingSource())
     }
 
+    function beginDragPress(sourceKey, sourceIndex, xPosition, yPosition) {
+        pendingDragSourceKey = sourceKey
+        pendingDragSourceIndex = sourceIndex
+        dragStartX = xPosition
+        dragStartY = yPosition
+        dragX = xPosition
+        dragY = yPosition
+    }
+
+    function activatePendingDrag(xPosition, yPosition) {
+        if (pendingDragSourceKey.length <= 0) {
+            return
+        }
+        dragSourceKey = pendingDragSourceKey
+        dragSourceIndex = pendingDragSourceIndex
+        updateDropInsertIndex(xPosition, yPosition)
+    }
+
+    function updateDragPosition(xPosition, yPosition) {
+        dragX = xPosition
+        dragY = yPosition
+        if (!root.dragActive) {
+            var deltaX = xPosition - dragStartX
+            var deltaY = yPosition - dragStartY
+            if (deltaX * deltaX + deltaY * deltaY < dragStartThreshold * dragStartThreshold) {
+                return
+            }
+            activatePendingDrag(xPosition, yPosition)
+            return
+        }
+        updateDropInsertIndex(xPosition, yPosition)
+    }
+
     function startDrag(sourceKey, sourceIndex, xPosition, yPosition) {
+        pendingDragSourceKey = sourceKey
+        pendingDragSourceIndex = sourceIndex
         dragSourceKey = sourceKey
         dragSourceIndex = sourceIndex
+        dragStartX = xPosition
+        dragStartY = yPosition
         dragX = xPosition
         dragY = yPosition
         updateDropInsertIndex(xPosition, yPosition)
@@ -276,6 +318,8 @@ Panel {
     }
 
     function finishDrag() {
+        pendingDragSourceKey = ""
+        pendingDragSourceIndex = -1
         dragSourceKey = ""
         dragSourceIndex = -1
         dropInsertIndex = -1
@@ -424,10 +468,10 @@ Panel {
                 y: cellLayout.y
                 width: cellLayout.width
                 height: cellLayout.height
-                visible: root.dragSourceKey !== sourceKey
 
                 CameraPreviewTile {
                     anchors.fill: parent
+                    visible: !(root.dragActive && root.dragSourceKey === cameraCell.sourceKey)
                     topicName: cameraCell.topicName
                     resolutionText: cameraCell.resolutionText
                     seriesColor: cameraCell.seriesColor
@@ -439,13 +483,13 @@ Panel {
 
                     onPressed: function(mouse) {
                         var point = cameraCell.mapToItem(previewArea, mouse.x, mouse.y)
-                        root.startDrag(cameraCell.sourceKey, cameraCell.index, point.x, point.y)
+                        root.beginDragPress(cameraCell.sourceKey, cameraCell.index, point.x, point.y)
                     }
 
                     onPositionChanged: function(mouse) {
                         if (pressed) {
                             var point = cameraCell.mapToItem(previewArea, mouse.x, mouse.y)
-                            root.updateDropInsertIndex(point.x, point.y)
+                            root.updateDragPosition(point.x, point.y)
                         }
                     }
 

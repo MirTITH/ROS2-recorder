@@ -12,7 +12,7 @@ Rectangle {
     color: active ? "#eef5ff" : "#f8fafc"
     border.color: active ? "#2563eb" : "#d5dce8"
     border.width: 1
-    radius: 6
+    radius: 0
 
     ColumnLayout {
         anchors.fill: parent

@@ -76,6 +76,38 @@ QObject * find_by_object_name(QObject * object, const QString & object_name)
   return nullptr;
 }
 
+QQuickItem * find_camera_preview_tile(QObject * object, const QString & topic_name)
+{
+  if (object == nullptr) {
+    return nullptr;
+  }
+
+  const QVariant object_topic = object->property("topicName");
+  const QVariant resolution_text = object->property("resolutionText");
+  if (object_topic.isValid() && object_topic.toString() == topic_name &&
+    resolution_text.isValid())
+  {
+    if (auto * item = qobject_cast<QQuickItem *>(object)) {
+      return item;
+    }
+  }
+
+  if (auto * item = qobject_cast<QQuickItem *>(object)) {
+    for (QQuickItem * child_item : item->childItems()) {
+      if (auto * found = find_camera_preview_tile(child_item, topic_name)) {
+        return found;
+      }
+    }
+  }
+
+  for (QObject * child : object->children()) {
+    if (auto * found = find_camera_preview_tile(child, topic_name)) {
+      return found;
+    }
+  }
+  return nullptr;
+}
+
 QObject * find_required(QObject * root, const QString & object_name)
 {
   QObject * object = nullptr;
@@ -88,6 +120,20 @@ QObject * find_required(QObject * root, const QString & object_name)
   }
   EXPECT_NE(object, nullptr) << object_name.toStdString();
   return object;
+}
+
+QQuickItem * find_required_camera_preview_tile(QObject * root, const QString & topic_name)
+{
+  QQuickItem * item = nullptr;
+  for (int attempt = 0; attempt < 20 && item == nullptr; ++attempt) {
+    QCoreApplication::processEvents();
+    item = find_camera_preview_tile(root, topic_name);
+    if (item == nullptr) {
+      QTest::qWait(25);
+    }
+  }
+  EXPECT_NE(item, nullptr) << topic_name.toStdString();
+  return item;
 }
 
 class QmlSmokeTest : public ::testing::Test
@@ -202,4 +248,25 @@ TEST_F(QmlSmokeTest, CameraVisibilityButtonTogglesPreview)
 
   EXPECT_EQ(visible_camera_spy.count(), 1);
   EXPECT_EQ(controller_->visibleCameraCount(), 0);
+}
+
+TEST_F(QmlSmokeTest, PressingCameraPreviewDoesNotHideTile)
+{
+  QQuickItem * camera_tile = find_required_camera_preview_tile(root_, "/camera/image_raw");
+  ASSERT_NE(camera_tile, nullptr);
+  ASSERT_GT(camera_tile->width(), 0.0);
+  ASSERT_GT(camera_tile->height(), 0.0);
+  ASSERT_TRUE(camera_tile->isVisible());
+
+  const QPoint window_position =
+    camera_tile->mapToScene(QPointF(camera_tile->width() / 2.0, camera_tile->height() / 2.0))
+      .toPoint();
+
+  QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, window_position);
+  QCoreApplication::processEvents();
+  QTest::qWait(25);
+
+  EXPECT_TRUE(camera_tile->isVisible());
+
+  QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, window_position);
 }

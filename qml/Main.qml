@@ -51,8 +51,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 orientation: Qt.Vertical
-                handle: ResizeHandle { lineOrientation: Qt.Horizontal }
-                padding: 8
+                handle: ResizeHandle { lineOrientation: Qt.Horizontal; lineGravity: Qt.AlignBottom }
 
                 CameraGridPanel {
                     model: appController.topicModel
@@ -80,7 +79,7 @@ ApplicationWindow {
 
                         RecordingTagsPanel {
                             SplitView.fillHeight: true
-                            SplitView.minimumHeight: 120
+                            SplitView.minimumHeight: 20
                             model: appController.tagModel
                         }
                     }
