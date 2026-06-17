@@ -7,7 +7,7 @@ Panel {
 
     property var controller
     property var model
-    property real durationSeconds: 60
+    property real durationSeconds: 80
     property real timeScale: 1.0
     property bool listsReady: false
     readonly property real effectiveDurationSeconds: Math.max(1, Number(durationSeconds) || 1)
@@ -32,6 +32,12 @@ Panel {
         if (controller && controller.setPlayheadSeconds) {
             controller.setPlayheadSeconds(seconds)
         }
+    }
+
+    function scrollRows(deltaY) {
+        var nextY = Math.max(0, Math.min(infoList.contentHeight - infoList.height, infoList.contentY - deltaY))
+        infoList.contentY = nextY
+        curveList.contentY = nextY
     }
 
     function syncCurveToInfo() {
@@ -68,7 +74,7 @@ Panel {
     SplitView {
         anchors.fill: parent
         orientation: Qt.Horizontal
-        handle: SplitHandle { vertical: true }
+        handle: ResizeHandle { vertical: true }
 
         ColumnLayout {
             SplitView.preferredWidth: 300
@@ -190,6 +196,14 @@ Panel {
                         }
                     }
                 }
+
+                Rectangle {
+                    width: 2
+                    height: parent.height
+                    x: Math.max(0, Math.min(parent.width - width, root.playheadX(parent.width) - width / 2))
+                    color: "#dc2626"
+                    z: 5
+                }
             }
 
             Item {
@@ -228,7 +242,11 @@ Panel {
                         }
                     }
                     onWheel: function(wheel) {
-                        root.timeScale = Math.max(0.25, Math.min(6.0, root.timeScale + (wheel.angleDelta.y > 0 ? 0.15 : -0.15)))
+                        if (wheel.modifiers & Qt.ShiftModifier) {
+                            root.scrollRows(wheel.angleDelta.y)
+                        } else {
+                            root.timeScale = Math.max(0.25, Math.min(6.0, root.timeScale + (wheel.angleDelta.y > 0 ? 0.15 : -0.15)))
+                        }
                         wheel.accepted = true
                     }
                 }
