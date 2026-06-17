@@ -8,25 +8,13 @@ Panel {
     property var controller
     property var model
     property real durationSeconds: 80
-    property real visibleStartSeconds: 0
-    property real visibleDurationSeconds: 80
     property bool listsReady: false
     readonly property real effectiveDurationSeconds: Math.max(1, Number(durationSeconds) || 1)
     readonly property real playheadSeconds: controller ? Number(controller.playheadSeconds) : 0
+    readonly property real visibleStartSeconds: viewport.visibleStartSeconds
+    readonly property real visibleDurationSeconds: viewport.boundedVisibleDuration
 
     title: "时间轴"
-
-    function clamp(value, low, high) {
-        return Math.max(low, Math.min(high, value))
-    }
-
-    function boundedVisibleDuration() {
-        return Math.max(0.001, Math.min(effectiveDurationSeconds, Number(visibleDurationSeconds) || effectiveDurationSeconds))
-    }
-
-    function visibleEndSeconds() {
-        return Math.min(effectiveDurationSeconds, visibleStartSeconds + boundedVisibleDuration())
-    }
 
     function scrollRows(deltaY) {
         var nextY = Math.max(0, Math.min(infoList.contentHeight - infoList.height, infoList.contentY - deltaY))
@@ -52,71 +40,17 @@ Panel {
         }
     }
 
-    function setVisibleWindow(startSeconds, durationSeconds) {
-        var duration = Math.max(0.001, Math.min(effectiveDurationSeconds, Number(durationSeconds) || effectiveDurationSeconds))
-        visibleDurationSeconds = duration
-        visibleStartSeconds = clamp(Number(startSeconds) || 0, 0, Math.max(0, effectiveDurationSeconds - duration))
-    }
-
-    function playheadX(widthValue) {
-        return clamp(((playheadSeconds - visibleStartSeconds) / boundedVisibleDuration()) * widthValue, 0, widthValue)
-    }
-
     function seekFromCurveX(xPosition) {
-        var seconds = visibleStartSeconds + (xPosition / Math.max(1, curveViewport.width)) * boundedVisibleDuration()
         if (controller && controller.setPlayheadSeconds) {
-            controller.setPlayheadSeconds(clamp(seconds, 0, effectiveDurationSeconds))
+            controller.setPlayheadSeconds(viewport.timeAtX(xPosition, curveViewport.width))
         }
-    }
-
-    function zoomVisibleWindow(deltaY, anchorX, widthValue) {
-        var oldDuration = boundedVisibleDuration()
-        var factor = deltaY > 0 ? 0.86 : 1.16
-        var newDuration = clamp(oldDuration * factor, 0.05, effectiveDurationSeconds)
-        var anchorRatio = clamp(anchorX / Math.max(1, widthValue), 0, 1)
-        var anchorTime = visibleStartSeconds + oldDuration * anchorRatio
-        setVisibleWindow(anchorTime - newDuration * anchorRatio, newDuration)
-    }
-
-    function nudgePlayhead(deltaY) {
-        var step = boundedVisibleDuration() / 40
-        var direction = deltaY > 0 ? 1 : -1
-        if (controller && controller.setPlayheadSeconds) {
-            controller.setPlayheadSeconds(clamp(playheadSeconds + direction * step, 0, effectiveDurationSeconds))
-        }
-    }
-
-    function niceTickInterval(widthValue) {
-        var intervals = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60, 120, 300]
-        var targetPixels = 110
-        var rawInterval = boundedVisibleDuration() / Math.max(1, widthValue / targetPixels)
-        for (var index = 0; index < intervals.length; ++index) {
-            if (intervals[index] >= rawInterval) {
-                return intervals[index]
-            }
-        }
-        return intervals[intervals.length - 1]
-    }
-
-    function firstTick(interval) {
-        return Math.ceil(visibleStartSeconds / interval) * interval
-    }
-
-    function tickCount(widthValue) {
-        var interval = niceTickInterval(widthValue)
-        return Math.max(1, Math.floor((visibleEndSeconds() - firstTick(interval)) / interval) + 1)
-    }
-
-    function tickTimeAt(index, widthValue) {
-        var interval = niceTickInterval(widthValue)
-        return firstTick(interval) + index * interval
     }
 
     function formatTickLabel(seconds) {
-        if (boundedVisibleDuration() < 2) {
+        if (viewport.boundedVisibleDuration < 2) {
             return Math.round(seconds * 1000) + "ms"
         }
-        if (boundedVisibleDuration() < 90) {
+        if (viewport.boundedVisibleDuration < 90) {
             return seconds.toFixed(seconds < 10 ? 1 : 0) + "s"
         }
         var totalSeconds = Math.floor(seconds)
@@ -136,6 +70,11 @@ Panel {
             m.toString().padStart(2, "0") + ":" +
             s.toString().padStart(2, "0") + "." +
             ms.toString().padStart(3, "0")
+    }
+
+    TimelineViewport {
+        id: viewport
+        totalDurationSeconds: root.effectiveDurationSeconds
     }
 
     SplitView {
@@ -226,21 +165,44 @@ Panel {
                 border.color: "#dbe3ef"
                 border.width: 1
 
+                readonly property var majorTickTimes: viewport.tickTimes(width, viewport.majorTickInterval(width))
+                readonly property var minorTickTimes: viewport.tickTimes(width, viewport.minorTickInterval(width))
+
                 Repeater {
-                    model: root.tickCount(ruler.width)
+                    model: ruler.minorTickTimes
 
                     delegate: Item {
                         required property int index
 
-                        readonly property real tickTime: root.tickTimeAt(index, ruler.width)
+                        readonly property real tickTime: ruler.minorTickTimes[index]
 
-                        x: ((tickTime - root.visibleStartSeconds) / root.boundedVisibleDuration()) * ruler.width
+                        x: viewport.xAtTime(tickTime, ruler.width)
                         width: 1
                         height: ruler.height
 
                         Rectangle {
                             width: 1
-                            height: 9
+                            height: 5
+                            color: "#cbd5e1"
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: ruler.majorTickTimes
+
+                    delegate: Item {
+                        required property int index
+
+                        readonly property real tickTime: ruler.majorTickTimes[index]
+
+                        x: viewport.xAtTime(tickTime, ruler.width)
+                        width: 1
+                        height: ruler.height
+
+                        Rectangle {
+                            width: 1
+                            height: 10
                             color: "#94a3b8"
                         }
 
@@ -266,9 +228,11 @@ Panel {
                 }
 
                 Rectangle {
+                    objectName: "timelineRulerPlayhead"
                     width: 2
                     height: parent.height
-                    x: Math.max(0, Math.min(parent.width - width, root.playheadX(parent.width) - width / 2))
+                    visible: viewport.isTimeVisible(root.playheadSeconds)
+                    x: viewport.xAtTime(root.playheadSeconds, parent.width) - width / 2
                     color: "#dc2626"
                     z: 5
                 }
@@ -296,12 +260,13 @@ Panel {
                         trackKind: model.trackKind
                         seriesList: model.seriesList
                         xMax: root.effectiveDurationSeconds
-                        visibleStartSeconds: root.visibleStartSeconds
-                        visibleDurationSeconds: root.boundedVisibleDuration()
+                        visibleStartSeconds: viewport.visibleStartSeconds
+                        visibleDurationSeconds: viewport.boundedVisibleDuration
                     }
                 }
 
                 MouseArea {
+                    objectName: "timelineCurveMouseArea"
                     anchors.fill: parent
                     acceptedButtons: Qt.LeftButton
                     onPressed: root.seekFromCurveX(mouse.x)
@@ -312,18 +277,20 @@ Panel {
                     }
                     onWheel: function(wheel) {
                         if (wheel.modifiers & Qt.ShiftModifier) {
-                            root.nudgePlayhead(wheel.angleDelta.y)
+                            viewport.panByWheel(wheel.angleDelta.y)
                         } else {
-                            root.zoomVisibleWindow(wheel.angleDelta.y, wheel.x, curveViewport.width)
+                            viewport.zoomAt(wheel.x, curveViewport.width, wheel.angleDelta.y)
                         }
                         wheel.accepted = true
                     }
                 }
 
                 Rectangle {
+                    objectName: "timelineCurvePlayhead"
                     width: 2
                     height: parent.height
-                    x: Math.max(0, Math.min(parent.width - width, root.playheadX(parent.width) - width / 2))
+                    visible: viewport.isTimeVisible(root.playheadSeconds)
+                    x: viewport.xAtTime(root.playheadSeconds, parent.width) - width / 2
                     color: "#dc2626"
                     z: 5
                 }
@@ -332,17 +299,17 @@ Panel {
             TimelineRangeBar {
                 Layout.fillWidth: true
                 totalDurationSeconds: root.effectiveDurationSeconds
-                visibleStartSeconds: root.visibleStartSeconds
-                visibleDurationSeconds: root.boundedVisibleDuration()
+                visibleStartSeconds: viewport.visibleStartSeconds
+                visibleDurationSeconds: viewport.boundedVisibleDuration
                 onWindowRequested: function(startSeconds, durationSeconds) {
-                    root.setVisibleWindow(startSeconds, durationSeconds)
+                    viewport.setWindow(startSeconds, durationSeconds)
                 }
             }
         }
     }
 
     Component.onCompleted: {
-        root.setVisibleWindow(0, root.effectiveDurationSeconds)
+        viewport.setWindow(0, root.effectiveDurationSeconds)
         listsReady = true
     }
 }

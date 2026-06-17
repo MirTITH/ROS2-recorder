@@ -48,18 +48,24 @@ Rectangle {
 
         MouseArea {
             anchors.fill: parent
-            property real pressX: 0
+            property real pressTrackX: 0
             property real pressStart: 0
+            property real pressDuration: 0
+
+            function trackX(mouse) {
+                return mapToItem(track, mouse.x, mouse.y).x
+            }
 
             onPressed: function(mouse) {
-                pressX = mouse.x
+                pressTrackX = trackX(mouse)
                 pressStart = root.boundedStart
+                pressDuration = root.boundedDuration
             }
 
             onPositionChanged: function(mouse) {
                 if (pressed) {
-                    var deltaSeconds = ((mouse.x - pressX) / Math.max(1, track.width)) * root.boundedTotal
-                    root.requestWindow(pressStart + deltaSeconds, root.boundedDuration)
+                    var deltaSeconds = ((trackX(mouse) - pressTrackX) / Math.max(1, track.width)) * root.boundedTotal
+                    root.requestWindow(pressStart + deltaSeconds, pressDuration)
                 }
             }
         }
@@ -75,19 +81,23 @@ Rectangle {
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.SizeHorCursor
-                property real pressX: 0
+                property real pressTrackX: 0
                 property real pressStart: 0
                 property real pressDuration: 0
 
+                function trackX(mouse) {
+                    return mapToItem(track, mouse.x, mouse.y).x
+                }
+
                 onPressed: function(mouse) {
-                    pressX = mouse.x
+                    pressTrackX = trackX(mouse)
                     pressStart = root.boundedStart
                     pressDuration = root.boundedDuration
                 }
 
                 onPositionChanged: function(mouse) {
                     if (pressed) {
-                        var deltaSeconds = ((mouse.x - pressX) / Math.max(1, track.width)) * root.boundedTotal
+                        var deltaSeconds = ((trackX(mouse) - pressTrackX) / Math.max(1, track.width)) * root.boundedTotal
                         root.requestWindow(pressStart + deltaSeconds, pressDuration - deltaSeconds)
                     }
                 }
@@ -105,18 +115,24 @@ Rectangle {
             MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.SizeHorCursor
-                property real pressX: 0
+                property real pressTrackX: 0
+                property real pressStart: 0
                 property real pressDuration: 0
 
+                function trackX(mouse) {
+                    return mapToItem(track, mouse.x, mouse.y).x
+                }
+
                 onPressed: function(mouse) {
-                    pressX = mouse.x
+                    pressTrackX = trackX(mouse)
+                    pressStart = root.boundedStart
                     pressDuration = root.boundedDuration
                 }
 
                 onPositionChanged: function(mouse) {
                     if (pressed) {
-                        var deltaSeconds = ((mouse.x - pressX) / Math.max(1, track.width)) * root.boundedTotal
-                        root.requestWindow(root.boundedStart, pressDuration + deltaSeconds)
+                        var deltaSeconds = ((trackX(mouse) - pressTrackX) / Math.max(1, track.width)) * root.boundedTotal
+                        root.requestWindow(pressStart, pressDuration + deltaSeconds)
                     }
                 }
             }

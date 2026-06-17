@@ -8,6 +8,8 @@ Rectangle {
     property real xMax: 80
     property real visibleStartSeconds: 0
     property real visibleDurationSeconds: 80
+    property real plotTopPadding: 4
+    property real plotBottomPadding: 4
 
     height: 48
     color: trackKind === "empty" ? "#f8fafc" : "#ffffff"
@@ -19,6 +21,14 @@ Rectangle {
     function seriesColor(value) {
         var text = String(value || "")
         return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(text) ? text : "#2563eb"
+    }
+
+    function plotTop() {
+        return Math.min(height / 2, Math.max(0, plotTopPadding))
+    }
+
+    function plotHeight() {
+        return Math.max(1, height - plotTop() - Math.max(0, plotBottomPadding))
     }
 
     Canvas {
@@ -35,6 +45,8 @@ Rectangle {
             ctx.fillStyle = "#ffffff"
             ctx.fillRect(0, 0, width, height)
 
+            var top = root.plotTop()
+            var plotHeight = root.plotHeight()
             var entries = root.seriesList || []
             var minY = -1
             var maxY = 1
@@ -56,7 +68,7 @@ Rectangle {
             ctx.strokeStyle = "#e2e8f0"
             ctx.lineWidth = 1
             for (var gridY = 0; gridY <= 2; ++gridY) {
-                var yLine = (gridY / 2) * height
+                var yLine = top + (gridY / 2) * plotHeight
                 ctx.beginPath()
                 ctx.moveTo(0, yLine)
                 ctx.lineTo(width, yLine)
@@ -81,7 +93,7 @@ Rectangle {
                         continue
                     }
                     var x = ((xValue - root.visibleStartSeconds) / root.boundedDuration()) * width
-                    var yPixel = height - ((y - minY) / Math.max(0.001, maxY - minY)) * height
+                    var yPixel = top + (1 - ((y - minY) / Math.max(0.001, maxY - minY))) * plotHeight
                     if (!started) {
                         ctx.moveTo(x, yPixel)
                         started = true

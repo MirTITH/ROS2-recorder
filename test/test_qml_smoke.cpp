@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 
 #include <QApplication>
+#include <QJSValue>
 #include <QMetaObject>
 #include <QObject>
 #include <QQmlApplicationEngine>
+#include <QQmlEngine>
 #include <QQmlContext>
 #include <QQuickItem>
 #include <QSignalSpy>
@@ -269,4 +271,65 @@ TEST_F(QmlSmokeTest, PressingCameraPreviewDoesNotHideTile)
   EXPECT_TRUE(camera_tile->isVisible());
 
   QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, window_position);
+}
+
+TEST_F(QmlSmokeTest, ShiftWheelPansTimelineWithoutMovingPlayhead)
+{
+  QObject * viewport = find_required(root_, "timelineViewport");
+  auto * curve_mouse_area = qobject_cast<QQuickItem *>(find_required(root_, "timelineCurveMouseArea"));
+  ASSERT_NE(curve_mouse_area, nullptr);
+
+  QJSValue viewport_value = engine_->newQObject(viewport);
+  QJSValue set_window = viewport_value.property(QStringLiteral("setWindow"));
+  ASSERT_TRUE(set_window.isCallable());
+  set_window.call({QJSValue(10.0), QJSValue(20.0)});
+
+  controller_->setPlayheadSeconds(15.0);
+  const double previous_playhead = controller_->playheadSeconds();
+  const double previous_start = viewport->property("visibleStartSeconds").toDouble();
+
+  const QPoint position =
+    curve_mouse_area
+      ->mapToScene(QPointF(curve_mouse_area->width() / 2.0, curve_mouse_area->height() / 2.0))
+      .toPoint();
+  QWheelEvent wheel_event(
+    position,
+    window_->mapToGlobal(position),
+    QPoint(),
+    QPoint(0, -120),
+    Qt::NoButton,
+    Qt::ShiftModifier,
+    Qt::NoScrollPhase,
+    false);
+  EXPECT_TRUE(QCoreApplication::sendEvent(window_, &wheel_event));
+  QCoreApplication::processEvents();
+
+  EXPECT_DOUBLE_EQ(controller_->playheadSeconds(), previous_playhead);
+  EXPECT_GT(viewport->property("visibleStartSeconds").toDouble(), previous_start);
+}
+
+TEST_F(QmlSmokeTest, PlayheadLineHidesOutsideVisibleWindow)
+{
+  QObject * viewport = find_required(root_, "timelineViewport");
+  auto * curve_playhead = qobject_cast<QQuickItem *>(find_required(root_, "timelineCurvePlayhead"));
+  auto * ruler_playhead = qobject_cast<QQuickItem *>(find_required(root_, "timelineRulerPlayhead"));
+  ASSERT_NE(curve_playhead, nullptr);
+  ASSERT_NE(ruler_playhead, nullptr);
+
+  QJSValue viewport_value = engine_->newQObject(viewport);
+  QJSValue set_window = viewport_value.property(QStringLiteral("setWindow"));
+  ASSERT_TRUE(set_window.isCallable());
+  set_window.call({QJSValue(20.0), QJSValue(10.0)});
+
+  controller_->setPlayheadSeconds(5.0);
+  QCoreApplication::processEvents();
+
+  EXPECT_FALSE(curve_playhead->isVisible());
+  EXPECT_FALSE(ruler_playhead->isVisible());
+
+  controller_->setPlayheadSeconds(25.0);
+  QCoreApplication::processEvents();
+
+  EXPECT_TRUE(curve_playhead->isVisible());
+  EXPECT_TRUE(ruler_playhead->isVisible());
 }

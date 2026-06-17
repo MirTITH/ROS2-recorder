@@ -75,19 +75,20 @@ TEST(QmlStructure, MainLayoutUsesFlushLeftWorkspace)
 {
   const std::string main_text = read_text(qml_dir() / "Main.qml");
 
-  expect_contains(main_text, "leftPadding: 0");
-  expect_contains(main_text, "rightPadding: 8");
   expect_not_contains(main_text, "padding: 8");
+  expect_not_contains(main_text, "leftPadding:");
+  expect_not_contains(main_text, "rightPadding:");
+  expect_not_contains(main_text, "topPadding:");
+  expect_not_contains(main_text, "bottomPadding:");
 }
 
-TEST(QmlStructure, CameraSplitHandleDrawsBelowPreviewPanel)
+TEST(QmlStructure, ResizeHandleUsesCompactUnifiedHitArea)
 {
-  const std::string main_text = read_text(qml_dir() / "Main.qml");
   const std::string handle_text = read_text(qml_dir() / "components" / "ResizeHandle.qml");
 
-  expect_contains(handle_text, "property int lineGravity");
-  expect_contains(handle_text, "Qt.AlignBottom");
-  expect_contains(main_text, "handle: ResizeHandle { lineOrientation: Qt.Horizontal; lineGravity: Qt.AlignBottom }");
+  expect_contains(handle_text, "implicitWidth: 5");
+  expect_contains(handle_text, "implicitHeight: 5");
+  expect_not_contains(handle_text, "lineGravity");
 }
 
 TEST(QmlStructure, RecordingTagsPanelCanCollapseToTitleBar)
@@ -141,9 +142,7 @@ TEST(QmlStructure, TimelineCurveAreaHasAdaptiveWindowAndRangeBar)
 
   expect_contains(panel_text, "property real visibleStartSeconds");
   expect_contains(panel_text, "property real visibleDurationSeconds");
-  expect_contains(panel_text, "function niceTickInterval");
   expect_contains(panel_text, "function formatTickLabel");
-  expect_contains(panel_text, "function nudgePlayhead");
   expect_contains(panel_text, "TimelineRangeBar {");
   expect_contains(panel_text, "wheel.modifiers & Qt.ShiftModifier");
   expect_not_contains(panel_text, "Math.floor(root.effectiveDurationSeconds / 5) + 1");
@@ -154,4 +153,37 @@ TEST(QmlStructure, TimelineCurveAreaHasAdaptiveWindowAndRangeBar)
   expect_contains(curve_text, "property real visibleDurationSeconds");
 
   EXPECT_TRUE(std::filesystem::exists(qml_dir() / "components" / "TimelineRangeBar.qml"));
+}
+
+TEST(QmlStructure, TimelineUsesViewportObjectForWindowMath)
+{
+  const std::string panel_text = read_text(qml_dir() / "components" / "TimelinePanel.qml");
+  const std::string viewport_text = read_text(qml_dir() / "components" / "TimelineViewport.qml");
+
+  EXPECT_TRUE(std::filesystem::exists(qml_dir() / "components" / "TimelineViewport.qml"));
+  expect_contains(panel_text, "TimelineViewport {");
+  expect_contains(panel_text, "id: viewport");
+  expect_not_contains(panel_text, "function nudgePlayhead");
+  expect_not_contains(panel_text, "root.nudgePlayhead");
+  expect_contains(viewport_text, "function panByWheel");
+  expect_contains(viewport_text, "function zoomAt");
+  expect_contains(viewport_text, "function timeAtX");
+  expect_contains(viewport_text, "function xAtTime");
+  expect_contains(viewport_text, "function isTimeVisible");
+}
+
+TEST(QmlStructure, TimelineViewportRenderingRulesAreExplicit)
+{
+  const std::string panel_text = read_text(qml_dir() / "components" / "TimelinePanel.qml");
+  const std::string curve_text = read_text(qml_dir() / "components" / "TimelineCurveRow.qml");
+  const std::string range_text = read_text(qml_dir() / "components" / "TimelineRangeBar.qml");
+
+  expect_contains(panel_text, "viewport.isTimeVisible(root.playheadSeconds)");
+  expect_contains(panel_text, "minorTickTimes");
+  expect_contains(panel_text, "majorTickTimes");
+  expect_contains(curve_text, "property real plotTopPadding: 4");
+  expect_contains(curve_text, "property real plotBottomPadding: 4");
+  expect_contains(curve_text, "plotHeight");
+  expect_contains(range_text, "mapToItem(track");
+  expect_contains(range_text, "pressTrackX");
 }
