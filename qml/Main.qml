@@ -69,22 +69,11 @@ ApplicationWindow {
                         model: appController.eventMarkerModel
                     }
 
-                    SplitView {
+                    TimelinePanel {
                         SplitView.fillHeight: true
-                        orientation: Qt.Horizontal
-
-                        TopicListPanel {
-                            SplitView.preferredWidth: 320
-                            SplitView.minimumWidth: 240
-                            SplitView.maximumWidth: 440
-                            model: appController.topicModel
-                        }
-
-                        TimelinePanel {
-                            SplitView.fillWidth: true
-                            controller: appController
-                            model: appController.trackModel
-                        }
+                        SplitView.fillWidth: true
+                        controller: appController
+                        model: appController.topicModel
                     }
                 }
             }
