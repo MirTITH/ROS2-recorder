@@ -17,6 +17,11 @@ class AppController : public QObject
   Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
   Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
   Q_PROPERTY(double playheadSeconds READ playheadSeconds NOTIFY playheadSecondsChanged)
+  Q_PROPERTY(double liveEdgeSeconds READ liveEdgeSeconds NOTIFY liveEdgeSecondsChanged)
+  Q_PROPERTY(bool followingLiveEdge READ followingLiveEdge NOTIFY followingLiveEdgeChanged)
+  Q_PROPERTY(QString modeText READ modeText NOTIFY modeTextChanged)
+  Q_PROPERTY(QString selectedMarkerShortcut READ selectedMarkerShortcut NOTIFY selectedMarkerShortcutChanged)
+  Q_PROPERTY(int visibleCameraCount READ visibleCameraCount NOTIFY visibleCameraCountChanged)
   Q_PROPERTY(TopicListModel * topicModel READ topicModel CONSTANT)
   Q_PROPERTY(TopicListModel * cameraModel READ cameraModel CONSTANT)
   Q_PROPERTY(TopicListModel * trackModel READ trackModel CONSTANT)
@@ -32,6 +37,11 @@ public:
   QString statusText() const;
   bool recording() const;
   double playheadSeconds() const;
+  double liveEdgeSeconds() const;
+  bool followingLiveEdge() const;
+  QString modeText() const;
+  QString selectedMarkerShortcut() const;
+  int visibleCameraCount() const;
   TopicListModel * topicModel();
   TopicListModel * cameraModel();
   TopicListModel * trackModel();
@@ -41,11 +51,20 @@ public:
 
   Q_INVOKABLE void toggleRecording();
   Q_INVOKABLE void setPlayheadSeconds(double seconds);
+  Q_INVOKABLE void advanceLiveEdge(double seconds);
+  Q_INVOKABLE void returnToLiveEdge();
+  Q_INVOKABLE bool triggerMarkerShortcut(const QString & shortcut);
+  Q_INVOKABLE void toggleTopicVisible(int row);
 
 signals:
   void statusTextChanged();
   void recordingChanged();
   void playheadSecondsChanged();
+  void liveEdgeSecondsChanged();
+  void followingLiveEdgeChanged();
+  void modeTextChanged();
+  void selectedMarkerShortcutChanged();
+  void visibleCameraCountChanged();
 
 private:
   QString config_path_;
@@ -53,6 +72,9 @@ private:
   QString status_text_{"就绪"};
   bool recording_{false};
   double playhead_seconds_{0.0};
+  double live_edge_seconds_{0.0};
+  bool following_live_edge_{false};
+  QString selected_marker_shortcut_;
   TopicListModel topic_model_;
   TopicListModel camera_model_;
   TopicListModel track_model_;

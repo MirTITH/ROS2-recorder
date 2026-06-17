@@ -320,3 +320,50 @@ TEST(AppController, SetPlayheadSecondsUpdatesClampsAndEmits)
   EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 0.0);
   EXPECT_EQ(playhead_changed_count, 2);
 }
+
+TEST(AppController, RecordingStartsFollowingLiveEdge)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  controller.toggleRecording();
+  controller.advanceLiveEdge(3.5);
+
+  EXPECT_TRUE(controller.recording());
+  EXPECT_TRUE(controller.followingLiveEdge());
+  EXPECT_DOUBLE_EQ(controller.liveEdgeSeconds(), 3.5);
+  EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 3.5);
+  EXPECT_EQ(controller.modeText().toStdString(), "录制中");
+}
+
+TEST(AppController, ScrubbingDuringRecordingDetachesAndCanReturnToLive)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  controller.toggleRecording();
+  controller.advanceLiveEdge(10.0);
+  controller.setPlayheadSeconds(4.0);
+
+  EXPECT_FALSE(controller.followingLiveEdge());
+  EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 4.0);
+
+  controller.advanceLiveEdge(12.0);
+  EXPECT_DOUBLE_EQ(controller.liveEdgeSeconds(), 12.0);
+  EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 4.0);
+
+  controller.returnToLiveEdge();
+  EXPECT_TRUE(controller.followingLiveEdge());
+  EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 12.0);
+}
+
+TEST(AppController, TriggerMarkerShortcutSelectsMarker)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  EXPECT_TRUE(controller.triggerMarkerShortcut("1"));
+  EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
+  EXPECT_FALSE(controller.triggerMarkerShortcut("missing"));
+  EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
+}

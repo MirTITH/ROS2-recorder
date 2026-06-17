@@ -359,6 +359,20 @@ void EventMarkerModel::select(int row)
   emit dataChanged(next_index, next_index, {IsSelectedRole});
 }
 
+bool EventMarkerModel::selectByShortcut(const QString & shortcut)
+{
+  const auto normalized = shortcut.toLower();
+  for (int row = 0; row < static_cast<int>(markers_.size()); ++row) {
+    if (QString::fromStdString(markers_.at(static_cast<std::size_t>(row)).shortcut).toLower() ==
+      normalized)
+    {
+      select(row);
+      return true;
+    }
+  }
+  return false;
+}
+
 void EventMarkerModel::set_markers(std::vector<EventMarkerEntry> markers)
 {
   beginResetModel();

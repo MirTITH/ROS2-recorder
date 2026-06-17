@@ -116,6 +116,7 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   Q_INVOKABLE void select(int row);
+  Q_INVOKABLE bool selectByShortcut(const QString & shortcut);
 
   void set_markers(std::vector<EventMarkerEntry> markers);
 
