@@ -130,7 +130,6 @@ Panel {
                     topicName: model.topicName
                     frequencyText: model.frequencyText
                     backendName: model.backendName
-                    trackKind: model.trackKind
                     isVisible: model.isVisible
                     isCamera: model.isCamera
                     onToggleVisibleRequested: {

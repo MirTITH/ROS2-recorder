@@ -92,3 +92,17 @@ TEST(QmlStructure, CameraGridUsesExplicitLayoutAndDragPreview)
   expect_contains(grid_text, "id: dropPlaceholder");
   expect_contains(grid_text, "id: floatingPreview");
 }
+
+TEST(QmlStructure, TimelineInfoUsesEyeSvgAndOmitsTrackKindText)
+{
+  const std::string row_text = read_text(qml_dir() / "components" / "TimelineInfoRow.qml");
+
+  expect_not_contains(row_text, "root.trackKind");
+  expect_not_contains(row_text, "property string trackKind");
+  expect_contains(row_text, "../assets/icons/eye.svg");
+  expect_contains(row_text, "../assets/icons/eye-off.svg");
+  expect_contains(row_text, "id: cameraVisibilityButton");
+
+  EXPECT_TRUE(std::filesystem::exists(qml_dir() / "assets" / "icons" / "eye.svg"));
+  EXPECT_TRUE(std::filesystem::exists(qml_dir() / "assets" / "icons" / "eye-off.svg"));
+}

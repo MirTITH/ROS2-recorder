@@ -8,7 +8,6 @@ Rectangle {
     property string topicName: ""
     property string frequencyText: ""
     property string backendName: ""
-    property string trackKind: "empty"
     property bool isVisible: true
     property bool isCamera: false
     signal toggleVisibleRequested()
@@ -18,43 +17,59 @@ Rectangle {
     border.color: "#dbe3ef"
     border.width: 0
 
-    RowLayout {
+    ColumnLayout {
         anchors.fill: parent
         anchors.leftMargin: 8
         anchors.rightMargin: 6
-        spacing: 6
+        anchors.topMargin: 5
+        anchors.bottomMargin: 5
+        spacing: 2
 
-        Button {
-            visible: root.isCamera
-            Layout.preferredWidth: 26
-            Layout.preferredHeight: 24
-            text: root.isVisible ? "◉" : "○"
-            font.pixelSize: 13
-            Accessible.name: root.isVisible ? "隐藏相机预览" : "显示相机预览"
-            ToolTip.visible: hovered
-            ToolTip.text: root.isVisible ? "隐藏相机预览" : "显示相机预览"
-            onClicked: root.toggleVisibleRequested()
+        Label {
+            Layout.fillWidth: true
+            text: root.topicName
+            color: "#111827"
+            font.pixelSize: 11
+            font.bold: true
+            elide: Text.ElideMiddle
         }
 
-        ColumnLayout {
+        RowLayout {
             Layout.fillWidth: true
-            spacing: 1
+            spacing: 6
 
             Label {
                 Layout.fillWidth: true
-                text: root.topicName
-                color: "#111827"
-                font.pixelSize: 11
-                font.bold: true
-                elide: Text.ElideMiddle
-            }
-
-            Label {
-                Layout.fillWidth: true
-                text: root.frequencyText + " · " + root.backendName + " · " + root.trackKind
+                text: root.frequencyText + " · " + root.backendName
                 color: "#64748b"
                 font.pixelSize: 10
                 elide: Text.ElideRight
+            }
+
+            Button {
+                id: cameraVisibilityButton
+
+                visible: root.isCamera
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 20
+                padding: 0
+                Accessible.name: root.isVisible ? "隐藏相机预览" : "显示相机预览"
+                ToolTip.visible: hovered
+                ToolTip.text: root.isVisible ? "隐藏相机预览" : "显示相机预览"
+                onClicked: root.toggleVisibleRequested()
+
+                background: Rectangle {
+                    color: cameraVisibilityButton.hovered ? "#e2e8f0" : "transparent"
+                    border.width: 0
+                }
+
+                contentItem: Image {
+                    anchors.centerIn: parent
+                    width: 16
+                    height: 16
+                    source: root.isVisible ? "../assets/icons/eye.svg" : "../assets/icons/eye-off.svg"
+                    fillMode: Image.PreserveAspectFit
+                }
             }
         }
     }
