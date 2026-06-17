@@ -85,6 +85,18 @@ QtObject {
         return major / 2
     }
 
+    function denseTickInterval(widthValue) {
+        var intervals = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 60, 120, 300]
+        var targetPixels = 10
+        var rawInterval = boundedVisibleDuration / Math.max(1, widthValue / targetPixels)
+        for (var index = 0; index < intervals.length; ++index) {
+            if (intervals[index] >= rawInterval) {
+                return intervals[index]
+            }
+        }
+        return intervals[intervals.length - 1]
+    }
+
     function tickTimes(widthValue, interval) {
         var boundedInterval = Math.max(0.000001, Number(interval) || majorTickInterval(widthValue))
         var first = Math.ceil(visibleStartSeconds / boundedInterval) * boundedInterval

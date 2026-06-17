@@ -9,6 +9,7 @@ Panel {
     property var model
     property real durationSeconds: 80
     property bool listsReady: false
+    property int rulerLabelTickStride: 10
     readonly property real effectiveDurationSeconds: Math.max(1, Number(durationSeconds) || 1)
     readonly property real playheadSeconds: controller ? Number(controller.playheadSeconds) : 0
     readonly property real visibleStartSeconds: viewport.visibleStartSeconds
@@ -47,16 +48,14 @@ Panel {
     }
 
     function formatTickLabel(seconds) {
-        if (viewport.boundedVisibleDuration < 2) {
-            return Math.round(seconds * 1000) + "ms"
-        }
-        if (viewport.boundedVisibleDuration < 90) {
-            return seconds.toFixed(seconds < 10 ? 1 : 0) + "s"
-        }
-        var totalSeconds = Math.floor(seconds)
-        var minutes = Math.floor(totalSeconds / 60)
-        var remainder = totalSeconds % 60
-        return minutes + ":" + remainder.toString().padStart(2, "0")
+        var totalMs = Math.max(0, Math.round(Number(seconds || 0) * 1000))
+        var ms = totalMs % 1000
+        var totalSeconds = Math.floor(totalMs / 1000)
+        var s = totalSeconds % 60
+        var totalMinutes = Math.floor(totalSeconds / 60)
+        return totalMinutes + ":" +
+            s.toString().padStart(2, "0") + "." +
+            ms.toString().padStart(3, "0")
     }
 
     function timeString(seconds) {
@@ -165,16 +164,16 @@ Panel {
                 border.color: "#dbe3ef"
                 border.width: 1
 
-                readonly property var majorTickTimes: viewport.tickTimes(width, viewport.majorTickInterval(width))
-                readonly property var minorTickTimes: viewport.tickTimes(width, viewport.minorTickInterval(width))
+                readonly property var rulerTickTimes: viewport.tickTimes(width, viewport.denseTickInterval(width))
 
                 Repeater {
-                    model: ruler.minorTickTimes
+                    model: ruler.rulerTickTimes
 
                     delegate: Item {
                         required property int index
 
-                        readonly property real tickTime: ruler.minorTickTimes[index]
+                        readonly property real tickTime: ruler.rulerTickTimes[index]
+                        readonly property bool labeledTick: index % root.rulerLabelTickStride === 0
 
                         x: viewport.xAtTime(tickTime, ruler.width)
                         width: 1
@@ -182,34 +181,15 @@ Panel {
 
                         Rectangle {
                             width: 1
-                            height: 5
-                            color: "#cbd5e1"
-                        }
-                    }
-                }
-
-                Repeater {
-                    model: ruler.majorTickTimes
-
-                    delegate: Item {
-                        required property int index
-
-                        readonly property real tickTime: ruler.majorTickTimes[index]
-
-                        x: viewport.xAtTime(tickTime, ruler.width)
-                        width: 1
-                        height: ruler.height
-
-                        Rectangle {
-                            width: 1
-                            height: 10
-                            color: "#94a3b8"
+                            height: labeledTick ? 11 : 6
+                            color: labeledTick ? "#94a3b8" : "#cbd5e1"
                         }
 
                         Label {
                             anchors.top: parent.top
-                            anchors.topMargin: 11
+                            anchors.topMargin: 12
                             anchors.horizontalCenter: parent.horizontalCenter
+                            visible: labeledTick
                             text: root.formatTickLabel(tickTime)
                             color: "#64748b"
                             font.pixelSize: 10
