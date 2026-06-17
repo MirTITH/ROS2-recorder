@@ -30,6 +30,11 @@ public:
     FrequencyTextRole,
     SeriesColorRole,
     SeriesRole,
+    TrackKindRole,
+    IsCameraRole,
+    IsDrawableRole,
+    SeriesListRole,
+    ResolutionTextRole,
   };
 
   explicit TopicListModel(QObject * parent = nullptr);
@@ -41,6 +46,7 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   Q_INVOKABLE void toggleVisible(int row);
+  Q_INVOKABLE int visibleCameraCount() const;
 
   void set_topics(std::vector<TopicEntry> topics);
 
@@ -52,6 +58,11 @@ private:
     QString frequency_text;
     QString series_color;
     QVariantList series;
+    QString track_kind;
+    bool is_camera{false};
+    bool is_drawable{false};
+    QString resolution_text;
+    QVariantList series_list;
   };
 
   std::vector<TopicRow> topics_;
@@ -123,6 +134,12 @@ public:
     NameRole = Qt::UserRole + 1,
     SizeRole,
     DurationRole,
+    FolderNameRole,
+    ShortDurationRole,
+    FullDurationRole,
+    SizeTextRole,
+    TagNameRole,
+    TagColorRole,
   };
 
   explicit RecordingSessionModel(QObject * parent = nullptr);
@@ -137,6 +154,12 @@ private:
     QString name;
     QString size;
     QString duration;
+    QString folder_name;
+    QString short_duration;
+    QString full_duration;
+    QString size_text;
+    QString tag_name;
+    QString tag_color;
   };
 
   std::vector<RecordingSessionRow> sessions_;

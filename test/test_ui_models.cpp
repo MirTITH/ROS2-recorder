@@ -124,6 +124,60 @@ TEST(TopicListModel, FlagsAreNotEditable)
   EXPECT_FALSE(model.flags(model.index(0, 0)) & Qt::ItemIsEditable);
 }
 
+TEST(TopicListModel, ClassifiesCameraNumericAndEmptyTracks)
+{
+  data_recorder::TopicEntry tf_topic;
+  tf_topic.topic_name = "/tf";
+  tf_topic.backend_name = "rosbag";
+  tf_topic.ui_category = data_recorder::TopicUiCategory::NumericTrack;
+
+  data_recorder::TopicEntry joint_topic;
+  joint_topic.topic_name = "/joint_states";
+  joint_topic.backend_name = "rosbag";
+  joint_topic.ui_category = data_recorder::TopicUiCategory::NumericTrack;
+
+  data_recorder::TopicEntry camera_topic;
+  camera_topic.topic_name = "/camera/image_raw";
+  camera_topic.backend_name = "video";
+  camera_topic.ui_category = data_recorder::TopicUiCategory::CameraPreview;
+
+  data_recorder::TopicListModel model;
+  model.set_topics({tf_topic, joint_topic, camera_topic});
+
+  EXPECT_EQ(model.data(model.index(0, 0), data_recorder::TopicListModel::TrackKindRole).toString().toStdString(), "empty");
+  EXPECT_FALSE(model.data(model.index(0, 0), data_recorder::TopicListModel::IsDrawableRole).toBool());
+  EXPECT_TRUE(model.data(model.index(0, 0), data_recorder::TopicListModel::SeriesListRole).toList().isEmpty());
+
+  EXPECT_EQ(model.data(model.index(1, 0), data_recorder::TopicListModel::TrackKindRole).toString().toStdString(), "numeric");
+  EXPECT_TRUE(model.data(model.index(1, 0), data_recorder::TopicListModel::IsDrawableRole).toBool());
+  EXPECT_GE(model.data(model.index(1, 0), data_recorder::TopicListModel::SeriesListRole).toList().size(), 2);
+
+  EXPECT_EQ(model.data(model.index(2, 0), data_recorder::TopicListModel::TrackKindRole).toString().toStdString(), "camera");
+  EXPECT_TRUE(model.data(model.index(2, 0), data_recorder::TopicListModel::IsCameraRole).toBool());
+  EXPECT_FALSE(model.data(model.index(2, 0), data_recorder::TopicListModel::IsDrawableRole).toBool());
+  EXPECT_FALSE(model.data(model.index(2, 0), data_recorder::TopicListModel::ResolutionTextRole).toString().isEmpty());
+}
+
+TEST(TopicListModel, CountsVisibleCameraRows)
+{
+  data_recorder::TopicEntry camera_topic;
+  camera_topic.topic_name = "/camera/image_raw";
+  camera_topic.backend_name = "video";
+  camera_topic.ui_category = data_recorder::TopicUiCategory::CameraPreview;
+
+  data_recorder::TopicEntry other_camera_topic = camera_topic;
+  other_camera_topic.topic_name = "/left_camera/image_raw";
+
+  data_recorder::TopicListModel model;
+  model.set_topics({camera_topic, other_camera_topic});
+
+  EXPECT_EQ(model.visibleCameraCount(), 2);
+  model.toggleVisible(0);
+  EXPECT_EQ(model.visibleCameraCount(), 1);
+  model.toggleVisible(1);
+  EXPECT_EQ(model.visibleCameraCount(), 0);
+}
+
 TEST(TagListModel, StartsWithNoSelection)
 {
   data_recorder::TagListModel model;
@@ -205,6 +259,20 @@ TEST(AppController, ExposesPopulatedModels)
   EXPECT_EQ(controller.tagModel()->rowCount(), 2);
   EXPECT_EQ(controller.eventMarkerModel()->rowCount(), 1);
   EXPECT_GT(controller.recordingSessionModel()->rowCount(), 0);
+}
+
+TEST(RecordingSessionModel, ExposesFolderDurationSizeAndTagRoles)
+{
+  data_recorder::RecordingSessionModel model;
+
+  ASSERT_GT(model.rowCount(), 0);
+  const auto row = model.index(0, 0);
+  EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::FolderNameRole).toString().isEmpty());
+  EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::ShortDurationRole).toString().isEmpty());
+  EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::FullDurationRole).toString().isEmpty());
+  EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::SizeTextRole).toString().isEmpty());
+  EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::TagNameRole).toString().isEmpty());
+  EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::TagColorRole).toString().isEmpty());
 }
 
 TEST(AppController, ToggleRecordingUpdatesStateAndEmitsSignals)

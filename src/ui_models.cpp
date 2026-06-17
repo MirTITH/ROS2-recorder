@@ -26,21 +26,54 @@ QString topic_category_name(TopicUiCategory category)
   return category == TopicUiCategory::CameraPreview ? QStringLiteral("camera") : QStringLiteral("numeric");
 }
 
-QVariantList make_series(int row, TopicUiCategory category)
+QString track_kind_for_topic(const TopicEntry & topic)
 {
-  QVariantList points;
-  points.reserve(80);
-  const double row_offset = static_cast<double>(row) * 0.35;
-  const double amplitude = category == TopicUiCategory::CameraPreview ? 0.35 : 1.0;
-  for (int i = 0; i < 80; ++i) {
-    QVariantMap point;
-    point.insert(QStringLiteral("x"), i);
-    point.insert(
-      QStringLiteral("y"),
-      amplitude * std::sin((static_cast<double>(i) / 8.0) + row_offset) + row_offset);
-    points.push_back(point);
+  if (topic.ui_category == TopicUiCategory::CameraPreview) {
+    return QStringLiteral("camera");
   }
-  return points;
+  if (topic.topic_name == "/tf" || topic.topic_name == "/tf_static") {
+    return QStringLiteral("empty");
+  }
+  if (topic.topic_name == "/joint_states") {
+    return QStringLiteral("numeric");
+  }
+  return QStringLiteral("numeric");
+}
+
+QVariantList make_series_list(int row, const QString & track_kind)
+{
+  QVariantList series_list;
+  if (track_kind != QStringLiteral("numeric")) {
+    return series_list;
+  }
+
+  const int series_count = row == 0 ? 2 : 3;
+  for (int series_index = 0; series_index < series_count; ++series_index) {
+    QVariantMap series;
+    series.insert(QStringLiteral("name"), QStringLiteral("series_%1").arg(series_index + 1));
+    series.insert(QStringLiteral("color"), QString::fromLatin1(kSeriesColors[
+      static_cast<std::size_t>((row + series_index) % kSeriesColors.size())]));
+
+    QVariantList points;
+    points.reserve(80);
+    for (int i = 0; i < 80; ++i) {
+      QVariantMap point;
+      point.insert(QStringLiteral("x"), i);
+      point.insert(
+        QStringLiteral("y"),
+        std::sin((static_cast<double>(i) / 8.0) + series_index) +
+          static_cast<double>(series_index) * 0.4);
+      points.push_back(point);
+    }
+    series.insert(QStringLiteral("points"), points);
+    series_list.push_back(series);
+  }
+  return series_list;
+}
+
+QString make_resolution_text(int row)
+{
+  return row % 2 == 0 ? QStringLiteral("1280x720") : QStringLiteral("1920x1080");
 }
 
 QString make_frequency_text(int row, TopicUiCategory category)
@@ -93,6 +126,16 @@ QVariant TopicListModel::data(const QModelIndex & index, int role) const
       return row.series_color;
     case SeriesRole:
       return row.series;
+    case TrackKindRole:
+      return row.track_kind;
+    case IsCameraRole:
+      return row.is_camera;
+    case IsDrawableRole:
+      return row.is_drawable;
+    case SeriesListRole:
+      return row.series_list;
+    case ResolutionTextRole:
+      return row.resolution_text;
     default:
       return {};
   }
@@ -135,6 +178,11 @@ QHash<int, QByteArray> TopicListModel::roleNames() const
     {FrequencyTextRole, "frequencyText"},
     {SeriesColorRole, "seriesColor"},
     {SeriesRole, "series"},
+    {TrackKindRole, "trackKind"},
+    {IsCameraRole, "isCamera"},
+    {IsDrawableRole, "isDrawable"},
+    {SeriesListRole, "seriesList"},
+    {ResolutionTextRole, "resolutionText"},
   };
 }
 
@@ -148,6 +196,17 @@ void TopicListModel::toggleVisible(int row)
   setData(model_index, !topics_.at(static_cast<std::size_t>(row)).is_visible, IsVisibleRole);
 }
 
+int TopicListModel::visibleCameraCount() const
+{
+  int count = 0;
+  for (const auto & row : topics_) {
+    if (row.is_camera && row.is_visible) {
+      ++count;
+    }
+  }
+  return count;
+}
+
 void TopicListModel::set_topics(std::vector<TopicEntry> topics)
 {
   beginResetModel();
@@ -159,7 +218,14 @@ void TopicListModel::set_topics(std::vector<TopicEntry> topics)
     row.is_visible = true;
     row.frequency_text = make_frequency_text(static_cast<int>(i), row.topic.ui_category);
     row.series_color = QString::fromLatin1(kSeriesColors[i % kSeriesColors.size()]);
-    row.series = make_series(static_cast<int>(i), row.topic.ui_category);
+    row.track_kind = track_kind_for_topic(row.topic);
+    row.is_camera = row.track_kind == QStringLiteral("camera");
+    row.is_drawable = row.track_kind == QStringLiteral("numeric");
+    row.resolution_text = row.is_camera ? make_resolution_text(static_cast<int>(i)) : QString();
+    row.series_list = make_series_list(static_cast<int>(i), row.track_kind);
+    row.series = row.series_list.isEmpty() ?
+      QVariantList{} :
+      row.series_list.first().toMap().value(QStringLiteral("points")).toList();
     topics_.push_back(std::move(row));
   }
   endResetModel();
@@ -305,9 +371,15 @@ RecordingSessionModel::RecordingSessionModel(QObject * parent)
 : QAbstractListModel(parent)
 {
   sessions_ = {
-    {QStringLiteral("今日采集 01"), QStringLiteral("1.2 GB"), QStringLiteral("00:18:42")},
-    {QStringLiteral("夹爪标定"), QStringLiteral("860 MB"), QStringLiteral("00:12:09")},
-    {QStringLiteral("倒水演示"), QStringLiteral("2.4 GB"), QStringLiteral("00:31:15")},
+    {QStringLiteral("2026-05-31_07-46-20"), QStringLiteral("1.2 GB"), QStringLiteral("00:00:24.123"),
+      QStringLiteral("2026-05-31_07-46-20"), QStringLiteral("24s"), QStringLiteral("00:00:24.123"),
+      QStringLiteral("1.2 GB"), QStringLiteral("成功"), QStringLiteral("#2f9e44")},
+    {QStringLiteral("2026-05-31_07-47-06"), QStringLiteral("860 MB"), QStringLiteral("00:12:35.000"),
+      QStringLiteral("2026-05-31_07-47-06"), QStringLiteral("12m35s"), QStringLiteral("00:12:35.000"),
+      QStringLiteral("860 MB"), QStringLiteral("力控"), QStringLiteral("#7c4dff")},
+    {QStringLiteral("用户自己改的名称"), QStringLiteral("2.4 GB"), QStringLiteral("02:34:35.500"),
+      QStringLiteral("用户自己改的名称"), QStringLiteral("154m35s"), QStringLiteral("02:34:35.500"),
+      QStringLiteral("2.4 GB"), QStringLiteral("失败"), QStringLiteral("#e03131")},
   };
 }
 
@@ -333,6 +405,18 @@ QVariant RecordingSessionModel::data(const QModelIndex & index, int role) const
       return session.size;
     case DurationRole:
       return session.duration;
+    case FolderNameRole:
+      return session.folder_name;
+    case ShortDurationRole:
+      return session.short_duration;
+    case FullDurationRole:
+      return session.full_duration;
+    case SizeTextRole:
+      return session.size_text;
+    case TagNameRole:
+      return session.tag_name;
+    case TagColorRole:
+      return session.tag_color;
     default:
       return {};
   }
@@ -344,6 +428,12 @@ QHash<int, QByteArray> RecordingSessionModel::roleNames() const
     {NameRole, "name"},
     {SizeRole, "size"},
     {DurationRole, "duration"},
+    {FolderNameRole, "folderName"},
+    {ShortDurationRole, "shortDuration"},
+    {FullDurationRole, "fullDuration"},
+    {SizeTextRole, "sizeText"},
+    {TagNameRole, "tagName"},
+    {TagColorRole, "tagColor"},
   };
 }
 
