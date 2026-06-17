@@ -74,6 +74,11 @@ if(BUILD_TESTING)
   ament_add_gtest(test_config_model test/test_config_model.cpp)
   target_link_libraries(test_config_model data_recorder_core)
 
+  ament_add_gtest(test_usage_help test/test_usage_help.cpp)
+  target_compile_definitions(test_usage_help PRIVATE
+    DATA_RECORDER_EXECUTABLE_PATH="$<TARGET_FILE:data_recorder>"
+  )
+
   ament_add_gtest(test_ui_models test/test_ui_models.cpp)
   target_link_libraries(test_ui_models data_recorder_core)
 endif()

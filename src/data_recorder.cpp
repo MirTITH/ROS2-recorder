@@ -26,7 +26,7 @@ void print_usage(const char * program_name)
   std::cerr
     << "Usage:\n"
     << "  source ~/.local/ros2_rc && rs && ros2 run data_recorder data_recorder \\\n"
-    << "    --ros-args -p config_file:=/home/nros/Documents/Woosh/ros2_recorder_ws/docs/reference/example_config.yaml\n\n"
+    << "    --ros-args -p config_file:=/home/nros/Documents/Woosh/ros2_recorder_ws/src/data_recorder/config/example_config.yaml\n\n"
     << "Required ROS parameter:\n"
     << "  config_file: path to the YAML recorder configuration\n\n"
     << "Program: " << program_name << std::endl;
