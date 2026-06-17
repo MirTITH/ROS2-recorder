@@ -77,3 +77,18 @@ TEST(QmlStructure, CameraPreviewTileIsSquareCornered)
 
   expect_not_contains(tile_text, "radius:");
 }
+
+TEST(QmlStructure, CameraGridUsesExplicitLayoutAndDragPreview)
+{
+  const std::string grid_text = read_text(qml_dir() / "components" / "CameraGridPanel.qml");
+
+  expect_not_contains(grid_text, "GridView {");
+  expect_contains(grid_text, "Repeater {");
+  expect_contains(grid_text, "function chooseLayout");
+  expect_contains(grid_text, "function layoutForIndex");
+  expect_contains(grid_text, "function cameraAspectRatio");
+  expect_contains(grid_text, "function updateDropInsertIndex");
+  expect_contains(grid_text, "function commitDropInsertIndex");
+  expect_contains(grid_text, "id: dropPlaceholder");
+  expect_contains(grid_text, "id: floatingPreview");
+}

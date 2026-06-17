@@ -10,6 +10,30 @@ Rectangle {
     property color seriesColor: "#2563eb"
     property bool dragActive: false
 
+    function videoRect(widthValue, heightValue) {
+        var match = /^([0-9]+)x([0-9]+)$/.exec(String(resolutionText || ""))
+        var aspect = 16 / 9
+        if (match) {
+            var parsedWidth = Number(match[1])
+            var parsedHeight = Number(match[2])
+            if (isFinite(parsedWidth) && isFinite(parsedHeight) && parsedHeight > 0) {
+                aspect = parsedWidth / parsedHeight
+            }
+        }
+        var targetWidth = widthValue
+        var targetHeight = targetWidth / aspect
+        if (targetHeight > heightValue) {
+            targetHeight = heightValue
+            targetWidth = targetHeight * aspect
+        }
+        return {
+            x: (widthValue - targetWidth) / 2,
+            y: (heightValue - targetHeight) / 2,
+            width: targetWidth,
+            height: targetHeight
+        }
+    }
+
     color: dragActive ? "#172554" : "#0f172a"
     clip: true
     border.color: dragActive ? seriesColor : "#334155"
@@ -70,31 +94,49 @@ Rectangle {
                 onPaint: {
                     var ctx = getContext("2d")
                     ctx.clearRect(0, 0, width, height)
-                    ctx.fillStyle = "#111827"
+                    ctx.fillStyle = "#020617"
                     ctx.fillRect(0, 0, width, height)
+
+                    var rect = root.videoRect(width, height)
+                    ctx.save()
+                    ctx.beginPath()
+                    ctx.rect(rect.x, rect.y, rect.width, rect.height)
+                    ctx.clip()
+
+                    ctx.fillStyle = "#111827"
+                    ctx.fillRect(rect.x, rect.y, rect.width, rect.height)
                     ctx.strokeStyle = "#475569"
                     ctx.lineWidth = 1
-                    for (var x = 0; x < width; x += Math.max(24, width / 8)) {
+                    for (var x = rect.x; x < rect.x + rect.width; x += Math.max(24, rect.width / 8)) {
                         ctx.beginPath()
-                        ctx.moveTo(x, 0)
-                        ctx.lineTo(x, height)
+                        ctx.moveTo(x, rect.y)
+                        ctx.lineTo(x, rect.y + rect.height)
                         ctx.stroke()
                     }
-                    for (var y = 0; y < height; y += Math.max(18, height / 6)) {
+                    for (var y = rect.y; y < rect.y + rect.height; y += Math.max(18, rect.height / 6)) {
                         ctx.beginPath()
-                        ctx.moveTo(0, y)
-                        ctx.lineTo(width, y)
+                        ctx.moveTo(rect.x, y)
+                        ctx.lineTo(rect.x + rect.width, y)
                         ctx.stroke()
                     }
                     ctx.strokeStyle = root.seriesColor
                     ctx.lineWidth = 3
-                    ctx.strokeRect(width * 0.18, height * 0.18, width * 0.64, height * 0.64)
+                    ctx.strokeRect(
+                        rect.x + rect.width * 0.18,
+                        rect.y + rect.height * 0.18,
+                        rect.width * 0.64,
+                        rect.height * 0.64)
+                    ctx.restore()
                 }
 
                 Connections {
                     target: root
 
                     function onSeriesColorChanged() {
+                        previewCanvas.requestPaint()
+                    }
+
+                    function onResolutionTextChanged() {
                         previewCanvas.requestPaint()
                     }
                 }

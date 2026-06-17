@@ -8,7 +8,13 @@ Panel {
     property int visibleCameraCount: 0
     property var visualOrder: []
     property string dragSourceKey: ""
+    property int dragSourceIndex: -1
+    property int dropInsertIndex: -1
+    property real dragX: 0
+    property real dragY: 0
     property bool sourceRefreshActive: false
+    readonly property bool dragActive: dragSourceKey.length > 0
+    readonly property real tileGap: 4
 
     title: "相机预览"
 
@@ -105,56 +111,174 @@ Panel {
         }
     }
 
-    function moveCamera(fromIndex, toIndex) {
-        if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex ||
-            fromIndex >= cameraProxy.count || toIndex >= cameraProxy.count) {
-            return
+    function cameraAspectRatio(resolutionText) {
+        var match = /^([0-9]+)x([0-9]+)$/.exec(String(resolutionText || ""))
+        if (!match) {
+            return 16 / 9
         }
-
-        var movedKey = cameraProxy.get(fromIndex).sourceKey
-        var targetKey = cameraProxy.get(toIndex).sourceKey
-        var nextOrder = visualOrder.slice()
-        var movedOrderIndex = nextOrder.indexOf(movedKey)
-        if (movedOrderIndex < 0) {
-            return
+        var widthValue = Number(match[1])
+        var heightValue = Number(match[2])
+        if (!isFinite(widthValue) || !isFinite(heightValue) || heightValue <= 0) {
+            return 16 / 9
         }
-        nextOrder.splice(movedOrderIndex, 1)
-
-        var targetOrderIndex = nextOrder.indexOf(targetKey)
-        if (targetOrderIndex < 0) {
-            return
-        }
-        nextOrder.splice(targetOrderIndex + (toIndex > fromIndex ? 1 : 0), 0, movedKey)
-        visualOrder = nextOrder
-        rebuildVisibleCameras()
+        return Math.max(0.25, Math.min(4.0, widthValue / heightValue))
     }
 
-    function startDragKey(sourceKey) {
+    function averageCameraAspectRatio() {
+        if (cameraProxy.count <= 0) {
+            return 16 / 9
+        }
+        var aspectSum = 0
+        for (var index = 0; index < cameraProxy.count; ++index) {
+            aspectSum += cameraAspectRatio(cameraProxy.get(index).resolutionText)
+        }
+        return aspectSum / cameraProxy.count
+    }
+
+    function chooseLayout(areaWidth, areaHeight, count) {
+        var boundedCount = Math.max(1, count)
+        var best = {
+            columns: 1,
+            rows: boundedCount,
+            cellWidth: areaWidth,
+            cellHeight: areaHeight / boundedCount
+        }
+        var bestScore = -1
+        var averageAspect = averageCameraAspectRatio()
+        for (var columns = 1; columns <= boundedCount; ++columns) {
+            var rows = Math.ceil(boundedCount / columns)
+            var cellWidth = areaWidth / columns
+            var cellHeight = areaHeight / rows
+            var previewHeight = Math.max(1, cellHeight - 20)
+            var previewAspect = cellWidth / previewHeight
+            var aspectPenalty = Math.abs(Math.log(previewAspect / averageAspect))
+            var usefulArea = cellWidth * previewHeight * boundedCount
+            var emptyCells = rows * columns - boundedCount
+            var score = usefulArea - emptyCells * cellWidth * previewHeight * 0.45 - aspectPenalty * 8000
+            if (score > bestScore) {
+                bestScore = score
+                best = {
+                    columns: columns,
+                    rows: rows,
+                    cellWidth: cellWidth,
+                    cellHeight: cellHeight
+                }
+            }
+        }
+        return best
+    }
+
+    function layoutForIndex(itemIndex) {
+        var count = Math.max(1, cameraProxy.count)
+        var availableWidth = Math.max(1, previewArea.width)
+        var availableHeight = Math.max(1, previewArea.height)
+        var layout = chooseLayout(availableWidth, availableHeight, count)
+        var row = Math.floor(itemIndex / layout.columns)
+        var column = itemIndex % layout.columns
+        var itemsInRow = Math.min(layout.columns, count - row * layout.columns)
+        var rowWidth = itemsInRow * layout.cellWidth
+        var rowOffsetX = Math.max(0, (availableWidth - rowWidth) / 2)
+        return {
+            x: rowOffsetX + column * layout.cellWidth + root.tileGap / 2,
+            y: row * layout.cellHeight + root.tileGap / 2,
+            width: Math.max(1, layout.cellWidth - root.tileGap),
+            height: Math.max(1, layout.cellHeight - root.tileGap)
+        }
+    }
+
+    function insertIndexAtPoint(xPosition, yPosition) {
+        var count = cameraProxy.count
+        if (count <= 0) {
+            return 0
+        }
+        var bestIndex = count
+        var bestDistance = Number.MAX_VALUE
+        for (var index = 0; index < count; ++index) {
+            var itemLayout = layoutForIndex(index)
+            var centerX = itemLayout.x + itemLayout.width / 2
+            var centerY = itemLayout.y + itemLayout.height / 2
+            var distance = Math.pow(centerX - xPosition, 2) + Math.pow(centerY - yPosition, 2)
+            if (distance < bestDistance) {
+                bestDistance = distance
+                bestIndex = xPosition < centerX ? index : index + 1
+            }
+        }
+        return Math.max(0, Math.min(count, bestIndex))
+    }
+
+    function targetIndexAfterRemovingSource() {
+        if (dropInsertIndex < 0) {
+            return -1
+        }
+        var targetIndex = dropInsertIndex
+        if (dragSourceIndex >= 0 && targetIndex > dragSourceIndex) {
+            targetIndex -= 1
+        }
+        return Math.max(0, Math.min(Math.max(0, cameraProxy.count - 1), targetIndex))
+    }
+
+    function placeholderLayout() {
+        if (!root.dragActive || root.dropInsertIndex < 0) {
+            return {
+                x: 0,
+                y: 0,
+                width: 0,
+                height: 0
+            }
+        }
+        return layoutForIndex(targetIndexAfterRemovingSource())
+    }
+
+    function startDrag(sourceKey, sourceIndex, xPosition, yPosition) {
         dragSourceKey = sourceKey
+        dragSourceIndex = sourceIndex
+        dragX = xPosition
+        dragY = yPosition
+        updateDropInsertIndex(xPosition, yPosition)
     }
 
-    function finishDragKey() {
+    function updateDropInsertIndex(xPosition, yPosition) {
+        dragX = xPosition
+        dragY = yPosition
+        dropInsertIndex = insertIndexAtPoint(xPosition, yPosition)
+    }
+
+    function commitDropInsertIndex() {
+        if (!root.dragActive || dragSourceIndex < 0 || dropInsertIndex < 0) {
+            finishDrag()
+            return
+        }
+        var movedKey = dragSourceKey
+        var nextOrder = visualOrder.slice()
+        var fromOrderIndex = nextOrder.indexOf(movedKey)
+        if (fromOrderIndex >= 0) {
+            nextOrder.splice(fromOrderIndex, 1)
+            var visibleKeys = []
+            for (var proxyIndex = 0; proxyIndex < cameraProxy.count; ++proxyIndex) {
+                var proxyKey = cameraProxy.get(proxyIndex).sourceKey
+                if (proxyKey !== movedKey) {
+                    visibleKeys.push(proxyKey)
+                }
+            }
+            var boundedInsert = Math.max(0, Math.min(
+                dropInsertIndex > dragSourceIndex ? dropInsertIndex - 1 : dropInsertIndex,
+                visibleKeys.length))
+            var anchorKey = boundedInsert < visibleKeys.length ? visibleKeys[boundedInsert] : ""
+            var orderInsertIndex = anchorKey.length > 0 ? nextOrder.indexOf(anchorKey) : nextOrder.length
+            if (orderInsertIndex < 0) {
+                orderInsertIndex = nextOrder.length
+            }
+            nextOrder.splice(orderInsertIndex, 0, movedKey)
+            visualOrder = nextOrder
+            rebuildVisibleCameras()
+        }
+        finishDrag()
+    }
+
+    function finishDrag() {
         dragSourceKey = ""
-    }
-
-    function moveDragTopicTo(targetIndex) {
-        if (dragSourceKey.length === 0 || cameraProxy.count === 0) {
-            return
-        }
-
-        var boundedTarget = Math.max(0, Math.min(targetIndex, cameraProxy.count - 1))
-        moveCamera(findProxyIndex(dragSourceKey), boundedTarget)
-    }
-
-    function dragToPoint(item, itemX, itemY) {
-        if (grid.cellWidth <= 0 || grid.cellHeight <= 0 || grid.columns <= 0) {
-            return
-        }
-
-        var gridPoint = item.mapToItem(grid, itemX, itemY)
-        var column = Math.max(0, Math.min(grid.columns - 1, Math.floor(gridPoint.x / grid.cellWidth)))
-        var row = Math.max(0, Math.floor(gridPoint.y / grid.cellHeight))
-        moveDragTopicTo((row * grid.columns) + column)
+        dragSourceIndex = -1
+        dropInsertIndex = -1
     }
 
     ListModel {
@@ -275,54 +399,92 @@ Panel {
         rebuildVisibleCameras()
     }
 
-    GridView {
-        id: grid
+    Item {
+        id: previewArea
 
         anchors.fill: parent
         anchors.margins: 4
         clip: true
-        interactive: false
-        model: cameraProxy
 
-        readonly property int columns: Math.max(1, Math.ceil(Math.sqrt(Math.max(1, root.visibleCameraCount) * width / Math.max(1, height))))
-        readonly property int rows: Math.max(1, Math.ceil(Math.max(1, root.visibleCameraCount) / columns))
+        Repeater {
+            model: cameraProxy
 
-        cellWidth: width / columns
-        cellHeight: height / rows
+            delegate: Item {
+                id: cameraCell
 
-        delegate: Item {
-            id: cameraCell
+                required property int index
+                required property string sourceKey
+                required property string topicName
+                required property string resolutionText
+                required property color seriesColor
 
-            width: grid.cellWidth
-            height: grid.cellHeight
+                readonly property var cellLayout: root.layoutForIndex(index)
 
-            CameraPreviewTile {
-                anchors.fill: parent
-                anchors.margins: 2
-                topicName: model.topicName
-                resolutionText: model.resolutionText
-                seriesColor: model.seriesColor
-                dragActive: root.dragSourceKey === model.sourceKey
-            }
+                x: cellLayout.x
+                y: cellLayout.y
+                width: cellLayout.width
+                height: cellLayout.height
+                visible: root.dragSourceKey !== sourceKey
 
-            MouseArea {
-                anchors.fill: parent
-                preventStealing: true
-
-                onPressed: function(mouse) {
-                    root.startDragKey(model.sourceKey)
-                    root.dragToPoint(cameraCell, mouse.x, mouse.y)
+                CameraPreviewTile {
+                    anchors.fill: parent
+                    topicName: cameraCell.topicName
+                    resolutionText: cameraCell.resolutionText
+                    seriesColor: cameraCell.seriesColor
                 }
 
-                onPositionChanged: function(mouse) {
-                    if (pressed) {
-                        root.dragToPoint(cameraCell, mouse.x, mouse.y)
+                MouseArea {
+                    anchors.fill: parent
+                    preventStealing: true
+
+                    onPressed: function(mouse) {
+                        var point = cameraCell.mapToItem(previewArea, mouse.x, mouse.y)
+                        root.startDrag(cameraCell.sourceKey, cameraCell.index, point.x, point.y)
                     }
-                }
 
-                onReleased: root.finishDragKey()
-                onCanceled: root.finishDragKey()
+                    onPositionChanged: function(mouse) {
+                        if (pressed) {
+                            var point = cameraCell.mapToItem(previewArea, mouse.x, mouse.y)
+                            root.updateDropInsertIndex(point.x, point.y)
+                        }
+                    }
+
+                    onReleased: root.commitDropInsertIndex()
+                    onCanceled: root.finishDrag()
+                }
             }
+        }
+
+        Rectangle {
+            id: dropPlaceholder
+
+            readonly property var targetLayout: root.placeholderLayout()
+
+            visible: root.dragActive
+            x: targetLayout.x
+            y: targetLayout.y
+            width: targetLayout.width
+            height: targetLayout.height
+            color: "transparent"
+            border.color: "#2563eb"
+            border.width: 2
+            opacity: 0.85
+        }
+
+        CameraPreviewTile {
+            id: floatingPreview
+
+            visible: root.dragActive && root.dragSourceIndex >= 0
+            width: root.dragSourceIndex >= 0 ? root.layoutForIndex(root.dragSourceIndex).width : 1
+            height: root.dragSourceIndex >= 0 ? root.layoutForIndex(root.dragSourceIndex).height : 1
+            x: Math.max(0, Math.min(previewArea.width - width, root.dragX - width / 2))
+            y: Math.max(0, Math.min(previewArea.height - height, root.dragY - height / 2))
+            z: 10
+            opacity: 0.92
+            topicName: root.dragSourceIndex >= 0 ? cameraProxy.get(root.dragSourceIndex).topicName : ""
+            resolutionText: root.dragSourceIndex >= 0 ? cameraProxy.get(root.dragSourceIndex).resolutionText : ""
+            seriesColor: root.dragSourceIndex >= 0 ? cameraProxy.get(root.dragSourceIndex).seriesColor : "#2563eb"
+            dragActive: true
         }
     }
 }
