@@ -87,6 +87,11 @@ if(BUILD_TESTING)
     DATA_RECORDER_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
   )
 
+  ament_add_gtest(test_qml_structure test/test_qml_structure.cpp)
+  target_compile_definitions(test_qml_structure PRIVATE
+    DATA_RECORDER_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
+  )
+
   ament_add_gtest(test_ui_models test/test_ui_models.cpp)
   target_link_libraries(test_ui_models data_recorder_core)
 endif()

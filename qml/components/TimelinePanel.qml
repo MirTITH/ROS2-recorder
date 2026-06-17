@@ -74,7 +74,7 @@ Panel {
     SplitView {
         anchors.fill: parent
         orientation: Qt.Horizontal
-        handle: ResizeHandle { vertical: true }
+        handle: ResizeHandle { lineOrientation: Qt.Vertical }
 
         ColumnLayout {
             SplitView.preferredWidth: 300

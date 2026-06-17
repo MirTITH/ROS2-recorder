@@ -51,6 +51,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 orientation: Qt.Vertical
+                handle: ResizeHandle { lineOrientation: Qt.Horizontal }
                 padding: 8
 
                 CameraGridPanel {
@@ -62,12 +63,14 @@ ApplicationWindow {
                     SplitView.fillHeight: true
                     SplitView.minimumHeight: 320
                     orientation: Qt.Horizontal
+                    handle: ResizeHandle { lineOrientation: Qt.Vertical }
 
                     SplitView {
                         SplitView.preferredWidth: 268
                         SplitView.minimumWidth: 220
                         SplitView.maximumWidth: 390
                         orientation: Qt.Vertical
+                        handle: ResizeHandle { lineOrientation: Qt.Horizontal }
 
                         RecordingSessionsPanel {
                             SplitView.preferredHeight: 284
@@ -85,6 +88,7 @@ ApplicationWindow {
                     SplitView {
                         SplitView.fillWidth: true
                         orientation: Qt.Vertical
+                        handle: ResizeHandle { lineOrientation: Qt.Horizontal }
 
                         EventMarkersPanel {
                             SplitView.preferredHeight: 82

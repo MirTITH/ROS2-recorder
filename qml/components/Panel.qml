@@ -22,7 +22,6 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 20
             color: root.active ? "#dbeafe" : "#eef2f7"
-            radius: 6
 
             RowLayout {
                 anchors.fill: parent

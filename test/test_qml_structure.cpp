@@ -1,0 +1,79 @@
+#include <gtest/gtest.h>
+
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <string>
+
+namespace
+{
+
+std::filesystem::path qml_dir()
+{
+  return std::filesystem::path(DATA_RECORDER_QML_DIR);
+}
+
+std::string read_text(const std::filesystem::path & path)
+{
+  std::ifstream input(path);
+  if (!input.is_open()) {
+    ADD_FAILURE() << "Failed to open " << path;
+    return {};
+  }
+  std::ostringstream buffer;
+  buffer << input.rdbuf();
+  return buffer.str();
+}
+
+std::size_t count_token(const std::string & text, const std::string & token)
+{
+  std::size_t count = 0;
+  std::size_t position = 0;
+  while ((position = text.find(token, position)) != std::string::npos) {
+    ++count;
+    position += token.size();
+  }
+  return count;
+}
+
+void expect_contains(const std::string & text, const std::string & token)
+{
+  EXPECT_NE(text.find(token), std::string::npos) << token;
+}
+
+void expect_not_contains(const std::string & text, const std::string & token)
+{
+  EXPECT_EQ(text.find(token), std::string::npos) << token;
+}
+
+}  // namespace
+
+TEST(QmlStructure, EverySplitViewUsesCustomResizeHandle)
+{
+  const std::filesystem::path main_path = qml_dir() / "Main.qml";
+  const std::filesystem::path timeline_path = qml_dir() / "components" / "TimelinePanel.qml";
+
+  const std::string main_text = read_text(main_path);
+  const std::string timeline_text = read_text(timeline_path);
+
+  EXPECT_EQ(count_token(main_text, "SplitView {"), count_token(main_text, "handle: ResizeHandle"));
+  EXPECT_EQ(
+    count_token(timeline_text, "SplitView {"), count_token(timeline_text, "handle: ResizeHandle"));
+  expect_contains(read_text(qml_dir() / "components" / "ResizeHandle.qml"), "property int lineOrientation");
+}
+
+TEST(QmlStructure, PanelChromeHasOnlyOuterRoundedCorners)
+{
+  const std::string panel_text = read_text(qml_dir() / "components" / "Panel.qml");
+
+  EXPECT_EQ(count_token(panel_text, "radius:"), 1U);
+  expect_contains(panel_text, "radius: 6");
+}
+
+TEST(QmlStructure, CameraPreviewTileIsSquareCornered)
+{
+  const std::string tile_text = read_text(qml_dir() / "components" / "CameraPreviewTile.qml");
+
+  expect_not_contains(tile_text, "radius:");
+}

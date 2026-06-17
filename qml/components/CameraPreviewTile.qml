@@ -11,7 +11,6 @@ Rectangle {
     property bool dragActive: false
 
     color: dragActive ? "#172554" : "#0f172a"
-    radius: 3
     clip: true
     border.color: dragActive ? seriesColor : "#334155"
     border.width: 1
