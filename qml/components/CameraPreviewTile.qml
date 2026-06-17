@@ -45,9 +45,14 @@ Rectangle {
                 }
 
                 Label {
+                    Layout.minimumWidth: 0
+                    Layout.preferredWidth: Math.min(70, implicitWidth)
+                    Layout.maximumWidth: Math.min(70, Math.max(0, root.width * 0.32))
                     text: root.resolutionText
                     color: "#cbd5e1"
                     font.pixelSize: 10
+                    elide: Text.ElideRight
+                    visible: root.width >= 150 && root.resolutionText.length > 0
                 }
             }
         }
@@ -60,6 +65,8 @@ Rectangle {
                 id: previewCanvas
 
                 anchors.fill: parent
+                onWidthChanged: requestPaint()
+                onHeightChanged: requestPaint()
 
                 onPaint: {
                     var ctx = getContext("2d")
