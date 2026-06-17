@@ -7,7 +7,7 @@ Panel {
     property var model
     property int visibleCameraCount: 0
     property var visualOrder: []
-    property string dragTopicName: ""
+    property string dragSourceKey: ""
     property bool sourceRefreshActive: false
 
     title: "相机预览"
@@ -17,37 +17,54 @@ Panel {
     SplitView.minimumHeight: visible ? 140 : 0
     SplitView.maximumHeight: visible ? 520 : 0
 
-    function cameraObject(topicName, resolutionText, seriesColor, isVisible) {
+    function makeSourceKey(sourceRow, topicName, backendName) {
+        return sourceRow + "|" + topicName + "|" + backendName
+    }
+
+    function cameraObject(sourceKey, sourceRow, topicName, backendName, resolutionText, seriesColor, isVisible) {
         return {
+            sourceKey: sourceKey,
+            sourceRow: sourceRow,
             topicName: topicName,
+            backendName: backendName,
             resolutionText: resolutionText,
             seriesColor: seriesColor,
             isVisible: isVisible
         }
     }
 
-    function findSourceIndex(topicName) {
+    function findSourceIndex(sourceKey) {
         for (var index = 0; index < sourceCameras.count; ++index) {
-            if (sourceCameras.get(index).topicName === topicName) {
+            if (sourceCameras.get(index).sourceKey === sourceKey) {
                 return index
             }
         }
         return -1
     }
 
-    function findProxyIndex(topicName) {
+    function findProxyIndex(sourceKey) {
         for (var index = 0; index < cameraProxy.count; ++index) {
-            if (cameraProxy.get(index).topicName === topicName) {
+            if (cameraProxy.get(index).sourceKey === sourceKey) {
                 return index
             }
         }
         return -1
     }
 
-    function visibleTopicOrder() {
+    function findSourceRowIndex(sourceRow) {
+        for (var index = 0; index < sourceCameras.count; ++index) {
+            if (sourceCameras.get(index).sourceRow === sourceRow) {
+                return index
+            }
+        }
+        return -1
+    }
+
+    function visibleDebugOrder() {
         var order = []
         for (var index = 0; index < cameraProxy.count; ++index) {
-            order.push(cameraProxy.get(index).topicName)
+            var camera = cameraProxy.get(index)
+            order.push(camera.topicName + "@" + camera.backendName)
         }
         return order
     }
@@ -57,19 +74,19 @@ Panel {
         var seen = ({})
 
         for (var orderedIndex = 0; orderedIndex < visualOrder.length; ++orderedIndex) {
-            var orderedTopic = visualOrder[orderedIndex]
-            var sourceIndex = findSourceIndex(orderedTopic)
-            if (sourceIndex >= 0 && !seen[orderedTopic]) {
-                nextOrder.push(orderedTopic)
-                seen[orderedTopic] = true
+            var orderedKey = visualOrder[orderedIndex]
+            var sourceIndex = findSourceIndex(orderedKey)
+            if (sourceIndex >= 0 && !seen[orderedKey]) {
+                nextOrder.push(orderedKey)
+                seen[orderedKey] = true
             }
         }
 
         for (var sourceCameraIndex = 0; sourceCameraIndex < sourceCameras.count; ++sourceCameraIndex) {
             var sourceCamera = sourceCameras.get(sourceCameraIndex)
-            if (!seen[sourceCamera.topicName]) {
-                nextOrder.push(sourceCamera.topicName)
-                seen[sourceCamera.topicName] = true
+            if (!seen[sourceCamera.sourceKey]) {
+                nextOrder.push(sourceCamera.sourceKey)
+                seen[sourceCamera.sourceKey] = true
             }
         }
 
@@ -81,7 +98,10 @@ Panel {
                 var proxyCamera = sourceCameras.get(proxySourceIndex)
                 if (proxyCamera.isVisible) {
                     cameraProxy.append(root.cameraObject(
+                        proxyCamera.sourceKey,
+                        proxyCamera.sourceRow,
                         proxyCamera.topicName,
+                        proxyCamera.backendName,
                         proxyCamera.resolutionText,
                         proxyCamera.seriesColor,
                         proxyCamera.isVisible))
@@ -96,39 +116,39 @@ Panel {
             return
         }
 
-        var movedTopic = cameraProxy.get(fromIndex).topicName
-        var targetTopic = cameraProxy.get(toIndex).topicName
+        var movedKey = cameraProxy.get(fromIndex).sourceKey
+        var targetKey = cameraProxy.get(toIndex).sourceKey
         var nextOrder = visualOrder.slice()
-        var movedOrderIndex = nextOrder.indexOf(movedTopic)
+        var movedOrderIndex = nextOrder.indexOf(movedKey)
         if (movedOrderIndex < 0) {
             return
         }
         nextOrder.splice(movedOrderIndex, 1)
 
-        var targetOrderIndex = nextOrder.indexOf(targetTopic)
+        var targetOrderIndex = nextOrder.indexOf(targetKey)
         if (targetOrderIndex < 0) {
             return
         }
-        nextOrder.splice(targetOrderIndex + (toIndex > fromIndex ? 1 : 0), 0, movedTopic)
+        nextOrder.splice(targetOrderIndex + (toIndex > fromIndex ? 1 : 0), 0, movedKey)
         visualOrder = nextOrder
         rebuildVisibleCameras()
     }
 
-    function startDragTopic(topicName) {
-        dragTopicName = topicName
+    function startDragKey(sourceKey) {
+        dragSourceKey = sourceKey
     }
 
-    function finishDragTopic() {
-        dragTopicName = ""
+    function finishDragKey() {
+        dragSourceKey = ""
     }
 
     function moveDragTopicTo(targetIndex) {
-        if (dragTopicName.length === 0 || cameraProxy.count === 0) {
+        if (dragSourceKey.length === 0 || cameraProxy.count === 0) {
             return
         }
 
         var boundedTarget = Math.max(0, Math.min(targetIndex, cameraProxy.count - 1))
-        moveCamera(findProxyIndex(dragTopicName), boundedTarget)
+        moveCamera(findProxyIndex(dragSourceKey), boundedTarget)
     }
 
     function dragToPoint(item, itemX, itemY) {
@@ -156,23 +176,48 @@ Panel {
         model: root.model
 
         delegate: QtObject {
+            property int sourceRow: model.index
+            property string backendName: model.backendName || ""
             property string topicName: model.topicName || ""
             property string resolutionText: model.resolutionText || ""
             property string seriesColor: model.seriesColor || "#2563eb"
             property bool isCamera: Boolean(model.isCamera)
             property bool isVisible: Boolean(model.isVisible)
+            property string sourceKey: root.makeSourceKey(sourceRow, topicName, backendName)
+            property string syncedSourceKey: ""
 
             function syncToSourceList() {
-                var sourceIndex = root.findSourceIndex(topicName)
-                if (isCamera) {
-                    var camera = root.cameraObject(topicName, resolutionText, seriesColor, isVisible)
+                if (syncedSourceKey.length > 0 && syncedSourceKey !== sourceKey) {
+                    var previousIndex = root.findSourceIndex(syncedSourceKey)
+                    if (previousIndex >= 0) {
+                        sourceCameras.remove(previousIndex)
+                    }
+                    syncedSourceKey = ""
+                }
+
+                var sourceIndex = root.findSourceIndex(sourceKey)
+                if (isCamera && topicName.length > 0) {
+                    var camera = root.cameraObject(
+                        sourceKey,
+                        sourceRow,
+                        topicName,
+                        backendName,
+                        resolutionText,
+                        seriesColor,
+                        isVisible)
                     if (sourceIndex >= 0) {
                         sourceCameras.set(sourceIndex, camera)
                     } else {
+                        var sourceRowIndex = root.findSourceRowIndex(sourceRow)
+                        if (sourceRowIndex >= 0) {
+                            sourceCameras.remove(sourceRowIndex)
+                        }
                         sourceCameras.append(camera)
                     }
+                    syncedSourceKey = sourceKey
                 } else if (sourceIndex >= 0) {
                     sourceCameras.remove(sourceIndex)
+                    syncedSourceKey = ""
                 }
                 if (!root.sourceRefreshActive) {
                     root.rebuildVisibleCameras()
@@ -181,17 +226,20 @@ Panel {
 
             Component.onCompleted: syncToSourceList()
             Component.onDestruction: {
-                var sourceIndex = root.findSourceIndex(topicName)
+                var sourceIndex = root.findSourceIndex(syncedSourceKey)
                 if (sourceIndex >= 0) {
                     sourceCameras.remove(sourceIndex)
                     root.rebuildVisibleCameras()
                 }
             }
+            onBackendNameChanged: syncToSourceList()
             onTopicNameChanged: syncToSourceList()
             onResolutionTextChanged: syncToSourceList()
             onSeriesColorChanged: syncToSourceList()
+            onSourceRowChanged: syncToSourceList()
             onIsCameraChanged: syncToSourceList()
             onIsVisibleChanged: syncToSourceList()
+            onSourceKeyChanged: syncToSourceList()
         }
     }
 
@@ -259,7 +307,7 @@ Panel {
                 topicName: model.topicName
                 resolutionText: model.resolutionText
                 seriesColor: model.seriesColor
-                dragActive: root.dragTopicName === model.topicName
+                dragActive: root.dragSourceKey === model.sourceKey
             }
 
             MouseArea {
@@ -267,7 +315,7 @@ Panel {
                 preventStealing: true
 
                 onPressed: function(mouse) {
-                    root.startDragTopic(model.topicName)
+                    root.startDragKey(model.sourceKey)
                     root.dragToPoint(cameraCell, mouse.x, mouse.y)
                 }
 
@@ -277,8 +325,8 @@ Panel {
                     }
                 }
 
-                onReleased: root.finishDragTopic()
-                onCanceled: root.finishDragTopic()
+                onReleased: root.finishDragKey()
+                onCanceled: root.finishDragKey()
             }
         }
     }
