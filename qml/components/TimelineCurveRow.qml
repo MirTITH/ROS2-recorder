@@ -14,6 +14,8 @@ Rectangle {
     color: trackKind === "empty" ? "#f8fafc" : "#ffffff"
 
     ChartView {
+        id: chart
+
         anchors.fill: parent
         visible: root.trackKind === "numeric"
         antialiasing: true
@@ -29,23 +31,32 @@ Rectangle {
         ValueAxis { id: axisX; min: 0; max: 80 / Math.max(0.2, root.timeScale); labelsVisible: false; gridVisible: true }
         ValueAxis { id: axisY; min: -1.4; max: 2.4; labelsVisible: false; gridVisible: false }
 
-        Repeater {
-            model: root.seriesList
-            delegate: LineSeries {
-                axisX: axisX
-                axisY: axisY
-                color: modelData.color
-                width: 1.5
-                Component.onCompleted: {
-                    clear()
-                    var points = modelData.points || []
-                    for (var i = 0; i < points.length; ++i) {
-                        append(points[i].x, points[i].y)
-                    }
+        function rebuildSeries() {
+            removeAllSeries()
+            if (root.trackKind !== "numeric") {
+                return
+            }
+
+            var entries = root.seriesList || []
+            for (var seriesIndex = 0; seriesIndex < entries.length; ++seriesIndex) {
+                var entry = entries[seriesIndex] || {}
+                var lineSeries = createSeries(ChartView.SeriesTypeLine, "series-" + seriesIndex, axisX, axisY)
+                lineSeries.color = entry.color
+                lineSeries.width = 1.5
+
+                var points = entry.points || []
+                for (var pointIndex = 0; pointIndex < points.length; ++pointIndex) {
+                    lineSeries.append(points[pointIndex].x, points[pointIndex].y)
                 }
             }
         }
+
+        Component.onCompleted: rebuildSeries()
     }
+
+    onTrackKindChanged: chart.rebuildSeries()
+    onSeriesListChanged: chart.rebuildSeries()
+    onTimeScaleChanged: chart.rebuildSeries()
 
     Rectangle {
         anchors.left: parent.left
