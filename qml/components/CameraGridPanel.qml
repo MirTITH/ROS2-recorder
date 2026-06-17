@@ -70,23 +70,18 @@ Panel {
     }
 
     function rebuildVisibleCameras() {
-        var nextOrder = []
-        var seen = ({})
-
+        var knownOrder = ({})
         for (var orderedIndex = 0; orderedIndex < visualOrder.length; ++orderedIndex) {
-            var orderedKey = visualOrder[orderedIndex]
-            var sourceIndex = findSourceIndex(orderedKey)
-            if (sourceIndex >= 0 && !seen[orderedKey]) {
-                nextOrder.push(orderedKey)
-                seen[orderedKey] = true
-            }
+            knownOrder[visualOrder[orderedIndex]] = true
         }
+
+        var nextOrder = visualOrder.slice()
 
         for (var sourceCameraIndex = 0; sourceCameraIndex < sourceCameras.count; ++sourceCameraIndex) {
             var sourceCamera = sourceCameras.get(sourceCameraIndex)
-            if (!seen[sourceCamera.sourceKey]) {
+            if (!knownOrder[sourceCamera.sourceKey]) {
                 nextOrder.push(sourceCamera.sourceKey)
-                seen[sourceCamera.sourceKey] = true
+                knownOrder[sourceCamera.sourceKey] = true
             }
         }
 
