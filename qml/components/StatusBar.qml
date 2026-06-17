@@ -7,7 +7,6 @@ Rectangle {
 
     property var controller
     readonly property string outputDirectory: controller && controller.outputDirectory ? controller.outputDirectory : "未设置"
-    readonly property string displayTime: controller ? Number(controller.playheadSeconds).toFixed(1) + "s" : "0.0s"
 
     implicitHeight: 28
     color: "#ffffff"
@@ -26,18 +25,6 @@ Rectangle {
             color: "#475569"
             font.pixelSize: 11
             elide: Text.ElideMiddle
-        }
-
-        Label {
-            text: "时间: " + root.displayTime
-            color: "#334155"
-            font.pixelSize: 11
-        }
-
-        Label {
-            text: "缩放 1.0x"
-            color: "#334155"
-            font.pixelSize: 11
         }
 
         Label {
