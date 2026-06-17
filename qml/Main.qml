@@ -29,40 +29,9 @@ ApplicationWindow {
             orientation: Qt.Vertical
             padding: 8
 
-            Item {
-                SplitView.preferredHeight: 284
-                SplitView.minimumHeight: 180
-
-                ScrollView {
-                    id: cameraScroll
-
-                    anchors.fill: parent
-                    clip: true
-                    contentWidth: cameraRow.implicitWidth
-                    contentHeight: availableHeight
-
-                    RowLayout {
-                        id: cameraRow
-
-                        height: cameraScroll.availableHeight
-                        spacing: 8
-
-                        Repeater {
-                            model: appController.cameraModel
-
-                            delegate: CameraPreviewPanel {
-                                Layout.preferredWidth: 470
-                                Layout.minimumWidth: 320
-                                Layout.fillHeight: true
-                                topicName: model.topicName
-                                backendName: model.backendName
-                                frequencyText: model.frequencyText
-                                seriesColor: model.seriesColor
-                                visibleState: model.isVisible
-                            }
-                        }
-                    }
-                }
+            CameraGridPanel {
+                model: appController.topicModel
+                visibleCameraCount: appController.visibleCameraCount
             }
 
             SplitView {
