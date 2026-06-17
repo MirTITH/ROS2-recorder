@@ -29,32 +29,29 @@ Panel {
                     id: tagButton
 
                     text: model.name
-                    implicitHeight: 30
-                    leftPadding: 12
-                    rightPadding: 12
-                    font.pixelSize: 12
-                    font.bold: model.isSelected
+                    implicitHeight: 22
+                    padding: 0
+                    leftPadding: 0
+                    rightPadding: 0
+                    checkable: true
+                    checked: model.isSelected
+                    Accessible.name: model.name
+
+                    background: Rectangle {
+                        color: model.isSelected ? "#dbeafe" : "transparent"
+                        radius: 4
+                    }
+
+                    contentItem: TagChip {
+                        label: model.name
+                        chipColor: model.color
+                        maxTextWidth: 72
+                    }
 
                     onClicked: {
                         if (root.model && root.model.select) {
                             root.model.select(index)
                         }
-                    }
-
-                    contentItem: Label {
-                        text: tagButton.text
-                        color: model.isSelected ? "#ffffff" : model.color
-                        font: tagButton.font
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        elide: Text.ElideRight
-                    }
-
-                    background: Rectangle {
-                        radius: 15
-                        color: model.isSelected ? model.color : "#ffffff"
-                        border.color: model.color
-                        border.width: 1
                     }
                 }
             }

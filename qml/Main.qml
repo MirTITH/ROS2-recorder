@@ -14,74 +14,97 @@ ApplicationWindow {
     title: "DataRecorder"
     color: "#e9edf3"
 
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 0
+    Shortcut {
+        sequence: "Space"
+        context: Qt.ApplicationShortcut
+        onActivated: appController.toggleRecording()
+    }
 
-        AppHeader {
-            Layout.fillWidth: true
-            controller: appController
+    FocusScope {
+        id: windowRoot
+
+        anchors.fill: parent
+        focus: true
+
+        Component.onCompleted: forceActiveFocus()
+
+        Keys.onPressed: function(event) {
+            if (event.text && event.text.length === 1 && event.key !== Qt.Key_Space) {
+                if (appController.triggerMarkerShortcut(event.text)) {
+                    event.accepted = true
+                }
+            }
         }
 
-        SplitView {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            orientation: Qt.Vertical
-            padding: 8
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 0
 
-            CameraGridPanel {
-                model: appController.topicModel
-                visibleCameraCount: appController.visibleCameraCount
+            AppHeader {
+                Layout.fillWidth: true
+                controller: appController
             }
 
             SplitView {
-                SplitView.fillHeight: true
-                SplitView.minimumHeight: 320
-                orientation: Qt.Horizontal
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                orientation: Qt.Vertical
+                padding: 8
 
-                SplitView {
-                    SplitView.preferredWidth: 268
-                    SplitView.minimumWidth: 220
-                    SplitView.maximumWidth: 390
-                    orientation: Qt.Vertical
-
-                    RecordingSessionsPanel {
-                        SplitView.preferredHeight: 284
-                        SplitView.minimumHeight: 160
-                        model: appController.recordingSessionModel
-                    }
-
-                    RecordingTagsPanel {
-                        SplitView.fillHeight: true
-                        SplitView.minimumHeight: 120
-                        model: appController.tagModel
-                    }
+                CameraGridPanel {
+                    model: appController.topicModel
+                    visibleCameraCount: appController.visibleCameraCount
                 }
 
                 SplitView {
-                    SplitView.fillWidth: true
-                    orientation: Qt.Vertical
+                    SplitView.fillHeight: true
+                    SplitView.minimumHeight: 320
+                    orientation: Qt.Horizontal
 
-                    EventMarkersPanel {
-                        SplitView.preferredHeight: 82
-                        SplitView.minimumHeight: 70
-                        SplitView.maximumHeight: 112
-                        model: appController.eventMarkerModel
+                    SplitView {
+                        SplitView.preferredWidth: 268
+                        SplitView.minimumWidth: 220
+                        SplitView.maximumWidth: 390
+                        orientation: Qt.Vertical
+
+                        RecordingSessionsPanel {
+                            SplitView.preferredHeight: 284
+                            SplitView.minimumHeight: 160
+                            model: appController.recordingSessionModel
+                        }
+
+                        RecordingTagsPanel {
+                            SplitView.fillHeight: true
+                            SplitView.minimumHeight: 120
+                            model: appController.tagModel
+                        }
                     }
 
-                    TimelinePanel {
-                        SplitView.fillHeight: true
+                    SplitView {
                         SplitView.fillWidth: true
-                        controller: appController
-                        model: appController.topicModel
+                        orientation: Qt.Vertical
+
+                        EventMarkersPanel {
+                            SplitView.preferredHeight: 82
+                            SplitView.minimumHeight: 70
+                            SplitView.maximumHeight: 112
+                            model: appController.eventMarkerModel
+                        }
+
+                        TimelinePanel {
+                            SplitView.fillHeight: true
+                            SplitView.fillWidth: true
+                            controller: appController
+                            model: appController.topicModel
+                        }
                     }
                 }
             }
-        }
 
-        StatusBar {
-            Layout.fillWidth: true
-            controller: appController
+            StatusBar {
+                Layout.fillWidth: true
+                controller: appController
+            }
         }
     }
 }

@@ -28,38 +28,30 @@ Panel {
                 delegate: Button {
                     id: markerButton
 
-                    Layout.preferredWidth: Math.max(104, markerText.implicitWidth + 24)
+                    Layout.preferredWidth: Math.max(112, markerText.implicitWidth + (model.kind === "range" ? 52 : 38))
                     Layout.preferredHeight: Math.max(34, Math.min(48, markerRow.height))
                     font.pixelSize: 12
                     font.bold: model.isSelected
 
-                    onClicked: {
-                        if (root.model && root.model.select) {
-                            root.model.select(index)
-                        }
-                    }
+                    onClicked: root.model.select(index)
 
-                    contentItem: ColumnLayout {
-                        spacing: 2
+                    contentItem: RowLayout {
+                        spacing: 6
+
+                        Rectangle {
+                            Layout.preferredWidth: model.kind === "range" ? 22 : 8
+                            Layout.preferredHeight: model.kind === "range" ? 6 : 8
+                            radius: model.kind === "range" ? 3 : 4
+                            color: model.color
+                        }
 
                         Label {
                             id: markerText
-
                             Layout.fillWidth: true
                             text: model.shortcut + "  " + model.name
                             color: model.isSelected ? "#ffffff" : "#162033"
                             font.pixelSize: 12
                             font.bold: true
-                            horizontalAlignment: Text.AlignHCenter
-                            elide: Text.ElideRight
-                        }
-
-                        Label {
-                            Layout.fillWidth: true
-                            text: model.kind
-                            color: model.isSelected ? "#e2e8f0" : "#64748b"
-                            font.pixelSize: 10
-                            horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
                         }
                     }

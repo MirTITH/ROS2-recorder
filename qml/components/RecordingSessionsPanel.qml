@@ -15,52 +15,58 @@ Panel {
         anchors.fill: parent
         anchors.margins: 10
         clip: true
-        spacing: 8
+        spacing: 0
         model: root.model
 
         delegate: Rectangle {
             width: ListView.view.width
-            height: 58
-            radius: 6
+            height: 46
             color: "#ffffff"
-            border.color: "#dbe3ef"
-            border.width: 1
 
-            RowLayout {
+            ToolTip.visible: hoverHandler.hovered
+            ToolTip.text: model.folderName + "\n时长: " + model.fullDuration + "\n磁盘: " + model.sizeText
+
+            HoverHandler {
+                id: hoverHandler
+            }
+
+            ColumnLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                spacing: 10
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: 4
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: model.name
-                        color: "#162033"
-                        font.pixelSize: 13
-                        font.bold: true
-                        elide: Text.ElideRight
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: "时长 " + model.duration
-                        color: "#64748b"
-                        font.pixelSize: 11
-                        elide: Text.ElideRight
-                    }
-                }
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                spacing: 2
 
                 Label {
-                    text: model.size
-                    color: "#334155"
+                    Layout.fillWidth: true
+                    text: model.folderName
+                    color: "#111827"
                     font.pixelSize: 12
                     font.bold: true
-                    elide: Text.ElideRight
+                    elide: Text.ElideMiddle
                 }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        Layout.fillWidth: true
+                        text: model.shortDuration
+                        color: "#64748b"
+                        font.pixelSize: 11
+                    }
+                    TagChip {
+                        label: model.tagName
+                        chipColor: model.tagColor
+                        maxTextWidth: 54
+                    }
+                }
+            }
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: "#e2e8f0"
             }
         }
 
