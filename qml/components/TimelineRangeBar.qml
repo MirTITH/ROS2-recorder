@@ -12,10 +12,10 @@ Rectangle {
     readonly property real boundedDuration: Math.max(0.001, Math.min(boundedTotal, Number(visibleDurationSeconds) || boundedTotal))
     readonly property real boundedStart: Math.max(0, Math.min(boundedTotal - boundedDuration, Number(visibleStartSeconds) || 0))
     readonly property real thumbX: (boundedStart / boundedTotal) * track.width
-    readonly property real thumbWidth: Math.max(36, (boundedDuration / boundedTotal) * track.width)
+    readonly property real thumbWidth: Math.max(44, (boundedDuration / boundedTotal) * track.width)
 
-    height: 18
-    color: "#f8fafc"
+    height: 16
+    color: "#f1f5f9"
 
     function requestWindow(startSeconds, durationSeconds) {
         var nextDuration = Math.max(0.001, Math.min(root.boundedTotal, durationSeconds))
@@ -29,9 +29,9 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        height: 8
-        color: "#e2e8f0"
-        border.color: "#cbd5e1"
+        height: 5
+        color: "#d7dde5"
+        border.color: "#b8c2cf"
         border.width: 1
     }
 
@@ -39,15 +39,27 @@ Rectangle {
         id: thumb
 
         x: Math.max(0, Math.min(track.width - width, root.thumbX))
-        y: track.y - 3
+        y: track.y - 5
         width: Math.min(track.width, root.thumbWidth)
-        height: 14
-        color: "#cbd5e1"
-        border.color: "#94a3b8"
-        border.width: 1
+        height: 15
+        color: "transparent"
+
+        Rectangle {
+            id: thumbBody
+
+            anchors.fill: parent
+            anchors.leftMargin: 7
+            anchors.rightMargin: 7
+            anchors.topMargin: 2
+            anchors.bottomMargin: 2
+            color: "#9aa8ba"
+            border.color: "#718096"
+            border.width: 1
+        }
 
         MouseArea {
             anchors.fill: parent
+            cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
             property real pressTrackX: 0
             property real pressStart: 0
             property real pressDuration: 0
@@ -73,10 +85,19 @@ Rectangle {
         Rectangle {
             id: leftHandle
 
-            width: 5
+            width: 7
             height: parent.height
             color: "#64748b"
             anchors.left: parent.left
+
+            Rectangle {
+                id: leftHandleGrip
+
+                width: 1
+                height: parent.height - 4
+                anchors.centerIn: parent
+                color: "#c6d0dc"
+            }
 
             MouseArea {
                 anchors.fill: parent
@@ -107,10 +128,19 @@ Rectangle {
         Rectangle {
             id: rightHandle
 
-            width: 5
+            width: 7
             height: parent.height
             color: "#64748b"
             anchors.right: parent.right
+
+            Rectangle {
+                id: rightHandleGrip
+
+                width: 1
+                height: parent.height - 4
+                anchors.centerIn: parent
+                color: "#c6d0dc"
+            }
 
             MouseArea {
                 anchors.fill: parent
