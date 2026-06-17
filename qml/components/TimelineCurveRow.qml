@@ -10,6 +10,7 @@ Rectangle {
     property real visibleDurationSeconds: 80
     property real plotTopPadding: 4
     property real plotBottomPadding: 4
+    property real sampleMarkerSpacingThreshold: 12
 
     height: 48
     color: trackKind === "empty" ? "#f8fafc" : "#ffffff"
@@ -29,6 +30,127 @@ Rectangle {
 
     function plotHeight() {
         return Math.max(1, height - plotTop() - Math.max(0, plotBottomPadding))
+    }
+
+    function visibleEndSeconds() {
+        return visibleStartSeconds + boundedDuration()
+    }
+
+    function numericPoint(point) {
+        var xValue = Number(point.x)
+        var yValue = Number(point.y)
+        if (!isFinite(xValue) || !isFinite(yValue)) {
+            return null
+        }
+        return { x: xValue, y: yValue, boundary: false }
+    }
+
+    function interpolateBoundaryPoint(leftPoint, rightPoint, targetX) {
+        var span = rightPoint.x - leftPoint.x
+        if (!isFinite(span) || Math.abs(span) < 0.000000001) {
+            return null
+        }
+        var ratio = (targetX - leftPoint.x) / span
+        return {
+            x: targetX,
+            y: leftPoint.y + (rightPoint.y - leftPoint.y) * ratio,
+            boundary: true
+        }
+    }
+
+    function collectDrawablePoints(points) {
+        var start = visibleStartSeconds
+        var end = visibleEndSeconds()
+        var before = null
+        var after = null
+        var inside = []
+
+        for (var index = 0; index < points.length; ++index) {
+            var candidate = numericPoint(points[index])
+            if (candidate === null) {
+                continue
+            }
+            if (candidate.x < start) {
+                before = candidate
+            } else if (candidate.x > end) {
+                after = candidate
+                break
+            } else {
+                inside.push(candidate)
+            }
+        }
+
+        var drawable = []
+        var leftSource = inside.length > 0 ? inside[0] : after
+        if (before !== null && leftSource !== null && before.x < start && leftSource.x > start) {
+            var leftBoundary = interpolateBoundaryPoint(before, leftSource, start)
+            if (leftBoundary !== null) {
+                drawable.push(leftBoundary)
+            }
+        }
+
+        for (var insideIndex = 0; insideIndex < inside.length; ++insideIndex) {
+            drawable.push(inside[insideIndex])
+        }
+
+        var rightSource = inside.length > 0 ? inside[inside.length - 1] : before
+        if (rightSource !== null && after !== null && rightSource.x < end && after.x > end) {
+            var rightBoundary = interpolateBoundaryPoint(rightSource, after, end)
+            if (rightBoundary !== null) {
+                drawable.push(rightBoundary)
+            }
+        }
+
+        return drawable
+    }
+
+    function collectVisibleSamples(points) {
+        var start = visibleStartSeconds
+        var end = visibleEndSeconds()
+        var samples = []
+        for (var index = 0; index < points.length; ++index) {
+            var candidate = numericPoint(points[index])
+            if (candidate !== null && candidate.x >= start && candidate.x <= end) {
+                samples.push(candidate)
+            }
+        }
+        return samples
+    }
+
+    function xToPixel(xValue, widthValue) {
+        return ((xValue - visibleStartSeconds) / boundedDuration()) * widthValue
+    }
+
+    function yToPixel(yValue, minY, maxY, top, plotHeightValue) {
+        return top + (1 - ((yValue - minY) / Math.max(0.001, maxY - minY))) * plotHeightValue
+    }
+
+    function averageSampleSpacing(samples, widthValue) {
+        if (samples.length < 2) {
+            return widthValue
+        }
+        var firstX = xToPixel(samples[0].x, widthValue)
+        var lastX = xToPixel(samples[samples.length - 1].x, widthValue)
+        return Math.abs(lastX - firstX) / Math.max(1, samples.length - 1)
+    }
+
+    function shouldDrawSampleMarkers(samples, widthValue) {
+        return samples.length === 1 || averageSampleSpacing(samples, widthValue) >= sampleMarkerSpacingThreshold
+    }
+
+    function drawSampleMarkers(ctx, samples, color, minY, maxY, top, plotHeightValue, widthValue) {
+        ctx.fillStyle = "#ffffff"
+        ctx.strokeStyle = color
+        ctx.lineWidth = 1
+        for (var index = 0; index < samples.length; ++index) {
+            var sample = samples[index]
+            var x = xToPixel(sample.x, widthValue)
+            var y = yToPixel(sample.y, minY, maxY, top, plotHeightValue)
+            ctx.beginPath()
+            ctx.arc(x, y, 2, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.stroke()
+        }
     }
 
     Canvas {
@@ -77,32 +199,30 @@ Rectangle {
 
             for (var drawSeriesIndex = 0; drawSeriesIndex < entries.length; ++drawSeriesIndex) {
                 var entry = entries[drawSeriesIndex] || {}
-                var drawPoints = entry.points || []
-                var started = false
-                ctx.beginPath()
-                ctx.strokeStyle = root.seriesColor(entry.color)
-                ctx.lineWidth = 1.5
-                for (var drawPointIndex = 0; drawPointIndex < drawPoints.length; ++drawPointIndex) {
-                    var point = drawPoints[drawPointIndex]
-                    var xValue = Number(point.x)
-                    var y = Number(point.y)
-                    if (!isFinite(xValue) || !isFinite(y)) {
-                        continue
+                var sourcePoints = entry.points || []
+                var color = root.seriesColor(entry.color)
+                var drawablePoints = root.collectDrawablePoints(sourcePoints)
+
+                if (drawablePoints.length >= 2) {
+                    ctx.beginPath()
+                    ctx.strokeStyle = color
+                    ctx.lineWidth = 1.5
+                    for (var drawPointIndex = 0; drawPointIndex < drawablePoints.length; ++drawPointIndex) {
+                        var point = drawablePoints[drawPointIndex]
+                        var x = root.xToPixel(point.x, width)
+                        var yPixel = root.yToPixel(point.y, minY, maxY, top, plotHeight)
+                        if (drawPointIndex === 0) {
+                            ctx.moveTo(x, yPixel)
+                        } else {
+                            ctx.lineTo(x, yPixel)
+                        }
                     }
-                    if (xValue < root.visibleStartSeconds || xValue > root.visibleStartSeconds + root.boundedDuration()) {
-                        continue
-                    }
-                    var x = ((xValue - root.visibleStartSeconds) / root.boundedDuration()) * width
-                    var yPixel = top + (1 - ((y - minY) / Math.max(0.001, maxY - minY))) * plotHeight
-                    if (!started) {
-                        ctx.moveTo(x, yPixel)
-                        started = true
-                    } else {
-                        ctx.lineTo(x, yPixel)
-                    }
-                }
-                if (started) {
                     ctx.stroke()
+                }
+
+                var visibleSamples = root.collectVisibleSamples(sourcePoints)
+                if (root.shouldDrawSampleMarkers(visibleSamples, width)) {
+                    root.drawSampleMarkers(ctx, visibleSamples, color, minY, maxY, top, plotHeight, width)
                 }
             }
         }
