@@ -11,6 +11,19 @@ Rectangle {
     property real xMax: 80
     property real timeScale: 1.0
 
+    function boundedXMax() {
+        return isFinite(xMax) ? Math.max(1, xMax) : 80
+    }
+
+    function boundedTimeScale() {
+        return isFinite(timeScale) ? Math.max(0.2, timeScale) : 1.0
+    }
+
+    function seriesColor(value) {
+        var text = String(value || "")
+        return /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(text) ? text : "#2563eb"
+    }
+
     height: 48
     color: trackKind === "empty" ? "#f8fafc" : "#ffffff"
 
@@ -29,7 +42,7 @@ Rectangle {
         margins.top: 0
         margins.bottom: 0
 
-        ValueAxis { id: axisX; min: 0; max: Math.max(1, root.xMax) / Math.max(0.2, root.timeScale); labelsVisible: false; gridVisible: true }
+        ValueAxis { id: axisX; min: 0; max: root.boundedXMax() / root.boundedTimeScale(); labelsVisible: false; gridVisible: true }
         ValueAxis { id: axisY; min: -1.4; max: 2.4; labelsVisible: false; gridVisible: false }
 
         function rebuildSeries() {
@@ -42,13 +55,18 @@ Rectangle {
             for (var seriesIndex = 0; seriesIndex < entries.length; ++seriesIndex) {
                 var entry = entries[seriesIndex] || {}
                 var lineSeries = createSeries(ChartView.SeriesTypeLine, "series-" + seriesIndex, axisX, axisY)
-                lineSeries.color = entry.color
+                lineSeries.color = root.seriesColor(entry.color)
                 lineSeries.width = 1.5
 
                 var points = entry.points || []
                 for (var pointIndex = 0; pointIndex < points.length; ++pointIndex) {
-                    var x = Number(points[pointIndex].x)
-                    var y = Number(points[pointIndex].y)
+                    var point = points[pointIndex]
+                    if (!point || typeof point !== "object") {
+                        continue
+                    }
+
+                    var x = Number(point.x)
+                    var y = Number(point.y)
                     if (isFinite(x) && isFinite(y)) {
                         lineSeries.append(x, y)
                     }
