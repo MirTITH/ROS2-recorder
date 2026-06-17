@@ -9,6 +9,7 @@ Rectangle {
     property int maxTextWidth: 72
     readonly property real luminance: 0.2126 * chipColor.r + 0.7152 * chipColor.g + 0.0722 * chipColor.b
     readonly property bool dotOnly: labelText.implicitWidth > maxTextWidth
+    readonly property bool textOverflows: labelText.truncated
 
     implicitWidth: dotOnly ? 10 : Math.min(maxTextWidth, labelText.implicitWidth) + 12
     implicitHeight: 18
@@ -28,7 +29,8 @@ Rectangle {
         verticalAlignment: Text.AlignVCenter
     }
 
-    ToolTip.visible: hoverHandler.hovered && root.label.length > 0
+    ToolTip.delay: 350
+    ToolTip.visible: hoverHandler.hovered && root.label.length > 0 && (root.dotOnly || root.textOverflows)
     ToolTip.text: root.label
 
     HoverHandler {

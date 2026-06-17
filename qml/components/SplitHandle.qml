@@ -4,7 +4,7 @@ Item {
     id: root
 
     property bool vertical: true
-    property bool hovered: hoverHandler.hovered
+    readonly property bool hovered: hoverHandler.hovered
 
     implicitWidth: vertical ? 5 : 1
     implicitHeight: vertical ? 1 : 5

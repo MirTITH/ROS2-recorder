@@ -8,6 +8,7 @@ Rectangle {
 
     property string trackKind: "empty"
     property var seriesList: []
+    property real xMax: 80
     property real timeScale: 1.0
 
     height: 48
@@ -28,7 +29,7 @@ Rectangle {
         margins.top: 0
         margins.bottom: 0
 
-        ValueAxis { id: axisX; min: 0; max: 80 / Math.max(0.2, root.timeScale); labelsVisible: false; gridVisible: true }
+        ValueAxis { id: axisX; min: 0; max: Math.max(1, root.xMax) / Math.max(0.2, root.timeScale); labelsVisible: false; gridVisible: true }
         ValueAxis { id: axisY; min: -1.4; max: 2.4; labelsVisible: false; gridVisible: false }
 
         function rebuildSeries() {
@@ -46,7 +47,11 @@ Rectangle {
 
                 var points = entry.points || []
                 for (var pointIndex = 0; pointIndex < points.length; ++pointIndex) {
-                    lineSeries.append(points[pointIndex].x, points[pointIndex].y)
+                    var x = Number(points[pointIndex].x)
+                    var y = Number(points[pointIndex].y)
+                    if (isFinite(x) && isFinite(y)) {
+                        lineSeries.append(x, y)
+                    }
                 }
             }
         }
@@ -56,7 +61,6 @@ Rectangle {
 
     onTrackKindChanged: chart.rebuildSeries()
     onSeriesListChanged: chart.rebuildSeries()
-    onTimeScaleChanged: chart.rebuildSeries()
 
     Rectangle {
         anchors.left: parent.left

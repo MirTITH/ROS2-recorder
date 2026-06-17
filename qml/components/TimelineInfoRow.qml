@@ -30,6 +30,9 @@ Rectangle {
             Layout.preferredHeight: 24
             text: root.isVisible ? "◉" : "○"
             font.pixelSize: 13
+            Accessible.name: root.isVisible ? "隐藏相机预览" : "显示相机预览"
+            ToolTip.visible: hovered
+            ToolTip.text: root.isVisible ? "隐藏相机预览" : "显示相机预览"
             onClicked: root.toggleVisibleRequested()
         }
 
