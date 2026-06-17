@@ -51,7 +51,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 orientation: Qt.Vertical
-                handle: ResizeHandle { lineOrientation: Qt.Horizontal; lineGravity: Qt.AlignBottom }
+                handle: ResizeHandle { lineOrientation: Qt.Horizontal }
 
                 CameraGridPanel {
                     model: appController.topicModel
