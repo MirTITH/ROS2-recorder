@@ -367,3 +367,82 @@ TEST(AppController, TriggerMarkerShortcutSelectsMarker)
   EXPECT_FALSE(controller.triggerMarkerShortcut("missing"));
   EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
 }
+
+TEST(AppController, DirectTopicModelToggleEmitsVisibleCameraCountChanged)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  int signal_count = 0;
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::visibleCameraCountChanged,
+    [&signal_count]() {
+      ++signal_count;
+    });
+
+  EXPECT_EQ(controller.visibleCameraCount(), 1);
+  controller.topicModel()->toggleVisible(1);
+
+  EXPECT_EQ(controller.visibleCameraCount(), 0);
+  EXPECT_EQ(signal_count, 1);
+}
+
+TEST(AppController, ToggleTopicVisibleEmitsVisibleCameraCountChangedOnce)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  int signal_count = 0;
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::visibleCameraCountChanged,
+    [&signal_count]() {
+      ++signal_count;
+    });
+
+  controller.toggleTopicVisible(1);
+
+  EXPECT_EQ(controller.visibleCameraCount(), 0);
+  EXPECT_EQ(signal_count, 1);
+}
+
+TEST(AppController, DirectEventMarkerSelectionUpdatesSelectedMarkerShortcut)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  int signal_count = 0;
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::selectedMarkerShortcutChanged,
+    [&signal_count]() {
+      ++signal_count;
+    });
+
+  controller.eventMarkerModel()->select(0);
+
+  EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
+  EXPECT_EQ(signal_count, 1);
+}
+
+TEST(AppController, MissingMarkerShortcutPreservesSelectionAndDoesNotEmit)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  ASSERT_TRUE(controller.triggerMarkerShortcut("1"));
+
+  int signal_count = 0;
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::selectedMarkerShortcutChanged,
+    [&signal_count]() {
+      ++signal_count;
+    });
+
+  EXPECT_FALSE(controller.triggerMarkerShortcut("missing"));
+
+  EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
+  EXPECT_EQ(signal_count, 0);
+}

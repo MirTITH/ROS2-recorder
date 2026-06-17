@@ -120,7 +120,12 @@ public:
 
   void set_markers(std::vector<EventMarkerEntry> markers);
 
+signals:
+  void selectedShortcutChanged(const QString & shortcut);
+
 private:
+  QString selectedShortcut() const;
+
   std::vector<EventMarkerEntry> markers_;
   int selected_row_{-1};
 };

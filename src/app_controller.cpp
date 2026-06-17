@@ -11,10 +11,31 @@ AppController::AppController(const ConfigData & config, QObject * parent)
   output_directory_(QString::fromStdString(config.output_dir))
 {
   topic_model_.set_topics(config.topics);
+  visible_camera_count_ = topic_model_.visibleCameraCount();
+  connect(
+    &topic_model_,
+    &TopicListModel::dataChanged,
+    this,
+    [this](const QModelIndex &, const QModelIndex &, const QList<int> &) {
+      refreshVisibleCameraCount();
+    });
+  connect(
+    &topic_model_,
+    &TopicListModel::modelReset,
+    this,
+    [this]() {
+      refreshVisibleCameraCount();
+    });
+
   camera_model_.set_topics(config.camera_topics);
   track_model_.set_topics(config.track_topics);
   tag_model_.set_tags(config.tags);
   event_marker_model_.set_markers(config.event_markers);
+  connect(
+    &event_marker_model_,
+    &EventMarkerModel::selectedShortcutChanged,
+    this,
+    &AppController::updateSelectedMarkerShortcut);
 }
 
 QString AppController::configPath() const
@@ -67,7 +88,7 @@ QString AppController::selectedMarkerShortcut() const
 
 int AppController::visibleCameraCount() const
 {
-  return topic_model_.visibleCameraCount();
+  return visible_camera_count_;
 }
 
 TopicListModel * AppController::topicModel()
@@ -166,19 +187,30 @@ bool AppController::triggerMarkerShortcut(const QString & shortcut)
   if (!event_marker_model_.selectByShortcut(shortcut)) {
     return false;
   }
-  selected_marker_shortcut_ = shortcut.toLower();
-  emit selectedMarkerShortcutChanged();
   return true;
 }
 
 void AppController::toggleTopicVisible(int row)
 {
-  const int previous_count = visibleCameraCount();
   topic_model_.toggleVisible(row);
-  const int next_count = visibleCameraCount();
-  if (previous_count != next_count) {
+}
+
+void AppController::refreshVisibleCameraCount()
+{
+  const int next_count = topic_model_.visibleCameraCount();
+  if (visible_camera_count_ != next_count) {
+    visible_camera_count_ = next_count;
     emit visibleCameraCountChanged();
   }
+}
+
+void AppController::updateSelectedMarkerShortcut(const QString & shortcut)
+{
+  if (selected_marker_shortcut_ == shortcut) {
+    return;
+  }
+  selected_marker_shortcut_ = shortcut;
+  emit selectedMarkerShortcutChanged();
 }
 
 }  // namespace data_recorder

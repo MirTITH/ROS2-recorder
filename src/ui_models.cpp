@@ -357,6 +357,7 @@ void EventMarkerModel::select(int row)
   }
   const auto next_index = index(selected_row_, 0);
   emit dataChanged(next_index, next_index, {IsSelectedRole});
+  emit selectedShortcutChanged(selectedShortcut());
 }
 
 bool EventMarkerModel::selectByShortcut(const QString & shortcut)
@@ -371,6 +372,15 @@ bool EventMarkerModel::selectByShortcut(const QString & shortcut)
     }
   }
   return false;
+}
+
+QString EventMarkerModel::selectedShortcut() const
+{
+  if (!valid_row(selected_row_, static_cast<int>(markers_.size()))) {
+    return {};
+  }
+  return QString::fromStdString(markers_.at(static_cast<std::size_t>(selected_row_)).shortcut)
+    .toLower();
 }
 
 void EventMarkerModel::set_markers(std::vector<EventMarkerEntry> markers)

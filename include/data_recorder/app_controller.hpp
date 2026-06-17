@@ -67,6 +67,9 @@ signals:
   void visibleCameraCountChanged();
 
 private:
+  void refreshVisibleCameraCount();
+  void updateSelectedMarkerShortcut(const QString & shortcut);
+
   QString config_path_;
   QString output_directory_;
   QString status_text_{"就绪"};
@@ -75,6 +78,7 @@ private:
   double live_edge_seconds_{0.0};
   bool following_live_edge_{false};
   QString selected_marker_shortcut_;
+  int visible_camera_count_{0};
   TopicListModel topic_model_;
   TopicListModel camera_model_;
   TopicListModel track_model_;
