@@ -49,6 +49,7 @@ Rectangle {
             Button {
                 id: cameraVisibilityButton
 
+                objectName: "cameraVisibilityButton_" + root.topicName
                 visible: root.isCamera
                 Layout.preferredWidth: 24
                 Layout.preferredHeight: 20

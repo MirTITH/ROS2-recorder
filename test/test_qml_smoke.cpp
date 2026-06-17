@@ -187,3 +187,19 @@ TEST_F(QmlSmokeTest, MarkerShortcutSelectsMatchingMarker)
   EXPECT_EQ(marker_spy.count(), 1);
   EXPECT_EQ(controller_->selectedMarkerShortcut().toStdString(), "c");
 }
+
+TEST_F(QmlSmokeTest, CameraVisibilityButtonTogglesPreview)
+{
+  QObject * camera_visibility_button =
+    find_required(root_, "cameraVisibilityButton_/camera/image_raw");
+  ASSERT_NE(camera_visibility_button, nullptr);
+
+  EXPECT_EQ(controller_->visibleCameraCount(), 1);
+  QSignalSpy visible_camera_spy(
+    controller_.get(), &data_recorder::AppController::visibleCameraCountChanged);
+
+  ASSERT_TRUE(QMetaObject::invokeMethod(camera_visibility_button, "clicked"));
+
+  EXPECT_EQ(visible_camera_spy.count(), 1);
+  EXPECT_EQ(controller_->visibleCameraCount(), 0);
+}

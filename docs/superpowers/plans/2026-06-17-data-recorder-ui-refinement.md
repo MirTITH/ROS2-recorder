@@ -68,7 +68,7 @@ cd /home/nros/Documents/Woosh/ros2_recorder_ws/src/data_recorder && qmllint -I q
 Launch UI for manual verification:
 
 ```bash
-cd /home/nros/Documents/Woosh/ros2_recorder_ws && source ~/.local/ros2_rc && rs && ros2 run data_recorder data_recorder --ros-args -p config_path:=/home/nros/Documents/Woosh/ros2_recorder_ws/src/data_recorder/config/example_config.yaml
+cd /home/nros/Documents/Woosh/ros2_recorder_ws && source ~/.local/ros2_rc && rs && ros2 run data_recorder data_recorder --ros-args -p config_file:=/home/nros/Documents/Woosh/ros2_recorder_ws/src/data_recorder/config/example_config.yaml
 ```
 
 ---
@@ -1433,7 +1433,7 @@ Expected: all `data_recorder` tests pass, including `test_qml_structure` and `te
 Run:
 
 ```bash
-cd /home/nros/Documents/Woosh/ros2_recorder_ws && source ~/.local/ros2_rc && rs && ros2 run data_recorder data_recorder --ros-args -p config_path:=/home/nros/Documents/Woosh/ros2_recorder_ws/src/data_recorder/config/example_config.yaml
+cd /home/nros/Documents/Woosh/ros2_recorder_ws && source ~/.local/ros2_rc && rs && ros2 run data_recorder data_recorder --ros-args -p config_file:=/home/nros/Documents/Woosh/ros2_recorder_ws/src/data_recorder/config/example_config.yaml
 ```
 
 Expected: the Qt window opens with the example config.
