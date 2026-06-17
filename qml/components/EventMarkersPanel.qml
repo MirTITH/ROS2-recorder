@@ -28,6 +28,7 @@ Panel {
                 delegate: Button {
                     id: markerButton
 
+                    objectName: "eventMarkerButton_" + model.shortcut
                     Layout.preferredWidth: Math.max(112, markerText.implicitWidth + (model.kind === "range" ? 52 : 38))
                     Layout.preferredHeight: Math.max(34, Math.min(48, markerRow.height))
                     font.pixelSize: 12

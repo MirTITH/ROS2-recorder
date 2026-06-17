@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <QAbstractItemModel>
+#include <QKeyEvent>
 #include <QModelIndex>
 #include <QObject>
 #include <QVector>
@@ -445,4 +446,35 @@ TEST(AppController, MissingMarkerShortcutPreservesSelectionAndDoesNotEmit)
 
   EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
   EXPECT_EQ(signal_count, 0);
+}
+
+TEST(AppController, EventFilterHandlesRecordingAndMarkerShortcuts)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  QKeyEvent space_event(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier, QStringLiteral(" "));
+  EXPECT_TRUE(controller.eventFilter(nullptr, &space_event));
+  EXPECT_TRUE(controller.recording());
+  EXPECT_TRUE(space_event.isAccepted());
+
+  QKeyEvent marker_event(QEvent::KeyPress, Qt::Key_1, Qt::NoModifier, QStringLiteral("1"));
+  EXPECT_TRUE(controller.eventFilter(nullptr, &marker_event));
+  EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
+  EXPECT_TRUE(marker_event.isAccepted());
+}
+
+TEST(AppController, EventFilterIgnoresAutoRepeatAndUnknownKeys)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  QKeyEvent repeat_space_event(
+    QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier, QStringLiteral(" "), true);
+  EXPECT_FALSE(controller.eventFilter(nullptr, &repeat_space_event));
+  EXPECT_FALSE(controller.recording());
+
+  QKeyEvent unknown_event(QEvent::KeyPress, Qt::Key_Z, Qt::NoModifier, QStringLiteral("z"));
+  EXPECT_FALSE(controller.eventFilter(nullptr, &unknown_event));
+  EXPECT_TRUE(controller.selectedMarkerShortcut().isEmpty());
 }

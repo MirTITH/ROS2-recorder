@@ -68,6 +68,7 @@ int main(int argc, char ** argv)
   int qt_argc = static_cast<int>(qt_argv.size());
   QApplication app(qt_argc, qt_argv.data());
   data_recorder::AppController controller(config);
+  app.installEventFilter(&controller);
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("appController", &controller);
   QTimer ros_shutdown_timer;

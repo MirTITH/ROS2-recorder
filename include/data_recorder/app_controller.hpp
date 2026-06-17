@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QString>
 
+class QEvent;
+
 #include "data_recorder/config_model.hpp"
 #include "data_recorder/ui_models.hpp"
 
@@ -55,6 +57,8 @@ public:
   Q_INVOKABLE void returnToLiveEdge();
   Q_INVOKABLE bool triggerMarkerShortcut(const QString & shortcut);
   Q_INVOKABLE void toggleTopicVisible(int row);
+
+  bool eventFilter(QObject * watched, QEvent * event) override;
 
 signals:
   void statusTextChanged();

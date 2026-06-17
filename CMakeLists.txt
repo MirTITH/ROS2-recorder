@@ -14,7 +14,7 @@ find_package(ament_cmake_gtest REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(yaml-cpp REQUIRED)
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Charts Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Charts Widgets Test)
 
 set(DATA_RECORDER_HEADERS
   include/data_recorder/app_controller.hpp
@@ -77,6 +77,14 @@ if(BUILD_TESTING)
   ament_add_gtest(test_usage_help test/test_usage_help.cpp)
   target_compile_definitions(test_usage_help PRIVATE
     DATA_RECORDER_EXECUTABLE_PATH="$<TARGET_FILE:data_recorder>"
+  )
+
+  ament_add_gtest(test_qml_smoke test/test_qml_smoke.cpp
+    ENV "QT_QPA_PLATFORM=offscreen"
+  )
+  target_link_libraries(test_qml_smoke data_recorder_core Qt6::Widgets Qt6::Test)
+  target_compile_definitions(test_qml_smoke PRIVATE
+    DATA_RECORDER_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
   )
 
   ament_add_gtest(test_ui_models test/test_ui_models.cpp)

@@ -63,6 +63,7 @@ Rectangle {
         }
 
         Button {
+            objectName: "recordButton"
             text: root.isRecording ? "停止" : "录制"
             enabled: !!root.controller
             onClicked: root.controller.toggleRecording()

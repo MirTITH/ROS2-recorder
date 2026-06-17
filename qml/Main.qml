@@ -14,6 +14,12 @@ ApplicationWindow {
     title: "DataRecorder"
     color: "#e9edf3"
 
+    onActiveChanged: {
+        if (active) {
+            windowRoot.forceActiveFocus()
+        }
+    }
+
     Timer {
         id: liveEdgeTimer
         interval: 100
@@ -22,27 +28,15 @@ ApplicationWindow {
         onTriggered: appController.advanceLiveEdge(appController.liveEdgeSeconds + interval / 1000.0)
     }
 
-    Shortcut {
-        sequence: "Space"
-        context: Qt.ApplicationShortcut
-        onActivated: appController.toggleRecording()
-    }
-
     FocusScope {
         id: windowRoot
 
+        objectName: "windowRoot"
         anchors.fill: parent
         focus: true
+        activeFocusOnTab: true
 
         Component.onCompleted: forceActiveFocus()
-
-        Keys.onPressed: function(event) {
-            if (event.text && event.text.length === 1 && event.key !== Qt.Key_Space) {
-                if (appController.triggerMarkerShortcut(event.text)) {
-                    event.accepted = true
-                }
-            }
-        }
 
         ColumnLayout {
             anchors.fill: parent

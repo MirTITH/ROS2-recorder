@@ -1,5 +1,7 @@
 #include "data_recorder/app_controller.hpp"
 
+#include <QKeyEvent>
+
 #include <algorithm>
 
 namespace data_recorder
@@ -193,6 +195,32 @@ bool AppController::triggerMarkerShortcut(const QString & shortcut)
 void AppController::toggleTopicVisible(int row)
 {
   topic_model_.toggleVisible(row);
+}
+
+bool AppController::eventFilter(QObject * watched, QEvent * event)
+{
+  if (event->type() != QEvent::KeyPress) {
+    return QObject::eventFilter(watched, event);
+  }
+
+  auto * key_event = static_cast<QKeyEvent *>(event);
+  if (key_event->isAutoRepeat()) {
+    return QObject::eventFilter(watched, event);
+  }
+
+  if (key_event->key() == Qt::Key_Space) {
+    toggleRecording();
+    event->accept();
+    return true;
+  }
+
+  const QString text = key_event->text();
+  if (text.size() == 1 && !text.at(0).isSpace() && triggerMarkerShortcut(text)) {
+    event->accept();
+    return true;
+  }
+
+  return QObject::eventFilter(watched, event);
 }
 
 void AppController::refreshVisibleCameraCount()
