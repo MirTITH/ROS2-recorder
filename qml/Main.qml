@@ -14,6 +14,14 @@ ApplicationWindow {
     title: "DataRecorder"
     color: "#e9edf3"
 
+    Timer {
+        id: liveEdgeTimer
+        interval: 100
+        repeat: true
+        running: appController.recording
+        onTriggered: appController.advanceLiveEdge(appController.liveEdgeSeconds + interval / 1000.0)
+    }
+
     Shortcut {
         sequence: "Space"
         context: Qt.ApplicationShortcut
