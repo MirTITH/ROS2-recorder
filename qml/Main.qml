@@ -67,10 +67,10 @@ ApplicationWindow {
                         handle: ResizeHandle { lineOrientation: Qt.Horizontal }
 
                         RecordingSessionsPanel {
-                            // SplitView.preferredHeight: 
                             SplitView.fillHeight: true
-                            SplitView.minimumHeight: 160
+                            SplitView.minimumHeight: 80
                             model: appController.recordingSessionModel
+                            controller: appController
                         }
 
                         RecordingTagsPanel {

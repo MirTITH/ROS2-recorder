@@ -187,6 +187,25 @@ TEST(QmlStructure, RecordingTagsPanelCanCollapseToTitleBar)
   expect_contains(main_text, "SplitView.minimumHeight: 20");
 }
 
+TEST(QmlStructure, RecordingSessionsPanelActsAsDataSourceSelector)
+{
+  const std::string main_text = read_text(qml_dir() / "Main.qml");
+  const std::string panel_text = read_text(qml_dir() / "components" / "RecordingSessionsPanel.qml");
+
+  expect_contains(main_text, "controller: appController");
+  expect_contains(panel_text, "title: \"数据\"");
+  expect_contains(panel_text, "property var controller");
+  expect_contains(panel_text, "objectName: \"onlineDataSourceRow\"");
+  expect_contains(panel_text, "text: \"在线数据\"");
+  expect_contains(panel_text, "root.controller.selectOnlineData()");
+  expect_contains(panel_text, "root.controller.selectHistorySession(index)");
+  expect_contains(panel_text, "root.controller.selectedSessionRow === index");
+  expect_contains(panel_text, "root.controller.historyMode");
+  expect_contains(panel_text, "height: 32");
+  expect_contains(panel_text, "color: selected ? \"#e8f1ff\"");
+  expect_not_contains(panel_text, "当前 ROS topics");
+}
+
 TEST(QmlStructure, CameraPreviewTileIsSquareCornered)
 {
   const std::string tile_text = read_text(qml_dir() / "components" / "CameraPreviewTile.qml");
