@@ -224,16 +224,21 @@ TEST_F(QmlSmokeTest, RecordButtonAndSpaceToggleRecording)
   EXPECT_FALSE(controller_->recording());
 }
 
-TEST_F(QmlSmokeTest, MarkerShortcutSelectsMatchingMarker)
+TEST_F(QmlSmokeTest, MarkerShortcutAddsMatchingMarker)
 {
-  QSignalSpy marker_spy(
-    controller_.get(), &data_recorder::AppController::selectedMarkerShortcutChanged);
-
   QKeyEvent marker_event(QEvent::KeyPress, Qt::Key_C, Qt::NoModifier, QStringLiteral("c"));
   EXPECT_TRUE(QCoreApplication::sendEvent(window_, &marker_event));
 
-  EXPECT_EQ(marker_spy.count(), 1);
-  EXPECT_EQ(controller_->selectedMarkerShortcut().toStdString(), "c");
+  const auto row = controller_->eventMarkerModel()->index(1, 0);
+  EXPECT_EQ(
+    controller_->eventMarkerModel()->data(row, data_recorder::EventMarkerModel::CountRole).toInt(),
+    1);
+
+  const QVariantList instances =
+    controller_->eventMarkerModel()->data(row, data_recorder::EventMarkerModel::InstancesRole)
+      .toList();
+  ASSERT_EQ(instances.size(), 1);
+  EXPECT_EQ(instances.at(0).toMap().value(QStringLiteral("kind")).toString().toStdString(), "point");
 }
 
 TEST_F(QmlSmokeTest, CameraVisibilityButtonTogglesPreview)
