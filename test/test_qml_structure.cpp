@@ -100,6 +100,49 @@ TEST(QmlStructure, AppChromeUsesStatusBarForRecording)
   expect_not_contains(status_text, "保存目录");
 }
 
+TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
+{
+  const std::string main_text = read_text(qml_dir() / "Main.qml");
+  const std::string panel_text = read_text(qml_dir() / "components" / "TimelinePanel.qml");
+
+  expect_not_contains(main_text, "EventMarkersPanel");
+  EXPECT_FALSE(std::filesystem::exists(qml_dir() / "components" / "EventMarkersPanel.qml"));
+  expect_contains(main_text, "eventMarkerModel: appController.eventMarkerModel");
+  expect_contains(panel_text, "property var eventMarkerModel");
+  expect_contains(panel_text, "model: root.eventMarkerModel");
+  expect_contains(panel_text, "EventTrackInfoRow {");
+  expect_contains(panel_text, "EventTrackRow {");
+
+  const auto event_position = panel_text.find("model: root.eventMarkerModel");
+  const auto topic_position = panel_text.find("model: root.model");
+  ASSERT_NE(event_position, std::string::npos);
+  ASSERT_NE(topic_position, std::string::npos);
+  EXPECT_LT(event_position, topic_position);
+
+  const std::filesystem::path info_row_path = qml_dir() / "components" / "EventTrackInfoRow.qml";
+  const std::filesystem::path track_row_path = qml_dir() / "components" / "EventTrackRow.qml";
+  EXPECT_TRUE(std::filesystem::exists(info_row_path));
+  EXPECT_TRUE(std::filesystem::exists(track_row_path));
+
+  const std::string info_text = read_text(info_row_path);
+  expect_contains(info_text, "objectName: \"eventMarkerActionButton_\" + root.shortcut");
+  expect_contains(info_text, "root.eventName + \"（共 \" + root.count + \" 个）\"");
+  expect_contains(info_text, "signal actionRequested()");
+
+  const std::string track_text = read_text(track_row_path);
+  expect_contains(track_text, "property var viewport");
+  expect_contains(track_text, "property var markerModel");
+  expect_contains(track_text, "id: pendingRangePreview");
+  expect_contains(track_text, "rotation: 45");
+  expect_contains(track_text, "id: leftResizeHandle");
+  expect_contains(track_text, "id: rightResizeHandle");
+  expect_contains(track_text, "root.markerModel.movePoint");
+  expect_contains(track_text, "root.markerModel.moveRange");
+  expect_contains(track_text, "root.markerModel.deleteInstance");
+  expect_contains(track_text, "MenuItem");
+  expect_contains(track_text, "text: \"删除\"");
+}
+
 TEST(QmlStructure, ResizeHandleUsesCompactUnifiedHitArea)
 {
   const std::string handle_text = read_text(qml_dir() / "components" / "ResizeHandle.qml");

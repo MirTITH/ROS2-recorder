@@ -48,6 +48,7 @@ data_recorder::ConfigData make_config_fixture()
   config.tags = {{"成功", "#2f9e44"}};
   config.event_markers = {
     {"1", "拿起水杯", "point", "#1763c9"},
+    {"2", "倒水", "range", "#2f9e44"},
     {"c", "碰撞", "point", "#e03131"},
   };
   return config;
@@ -205,7 +206,7 @@ std::unique_ptr<QApplication> QmlSmokeTest::app_;
 TEST_F(QmlSmokeTest, LoadsMainWindowAndInteractiveControls)
 {
   ASSERT_NE(find_required(root_, "recordButton"), nullptr);
-  ASSERT_NE(find_required(root_, "eventMarkerButton_c"), nullptr);
+  ASSERT_NE(find_required(root_, "eventMarkerActionButton_c"), nullptr);
 }
 
 TEST_F(QmlSmokeTest, RecordButtonAndSpaceToggleRecording)
@@ -224,21 +225,51 @@ TEST_F(QmlSmokeTest, RecordButtonAndSpaceToggleRecording)
   EXPECT_FALSE(controller_->recording());
 }
 
-TEST_F(QmlSmokeTest, MarkerShortcutAddsMatchingMarker)
+TEST_F(QmlSmokeTest, MarkerShortcutAddsPointAtPlayhead)
 {
+  controller_->setPlayheadSeconds(6.25);
+
   QKeyEvent marker_event(QEvent::KeyPress, Qt::Key_C, Qt::NoModifier, QStringLiteral("c"));
   EXPECT_TRUE(QCoreApplication::sendEvent(window_, &marker_event));
 
-  const auto row = controller_->eventMarkerModel()->index(1, 0);
+  const auto row = controller_->eventMarkerModel()->index(2, 0);
   EXPECT_EQ(
     controller_->eventMarkerModel()->data(row, data_recorder::EventMarkerModel::CountRole).toInt(),
     1);
-
   const QVariantList instances =
-    controller_->eventMarkerModel()->data(row, data_recorder::EventMarkerModel::InstancesRole)
-      .toList();
+    controller_->eventMarkerModel()->data(row, data_recorder::EventMarkerModel::InstancesRole).toList();
   ASSERT_EQ(instances.size(), 1);
-  EXPECT_EQ(instances.at(0).toMap().value(QStringLiteral("kind")).toString().toStdString(), "point");
+  EXPECT_DOUBLE_EQ(
+    instances.at(0).toMap().value(QStringLiteral("startSeconds")).toDouble(), 6.25);
+}
+
+TEST_F(QmlSmokeTest, RangeActionButtonAddsStartAndEnd)
+{
+  QObject * range_button = find_required(root_, "eventMarkerActionButton_2");
+  ASSERT_NE(range_button, nullptr);
+
+  controller_->setPlayheadSeconds(1.0);
+  ASSERT_TRUE(QMetaObject::invokeMethod(range_button, "clicked"));
+
+  const auto row = controller_->eventMarkerModel()->index(1, 0);
+  EXPECT_TRUE(
+    controller_->eventMarkerModel()
+      ->data(row, data_recorder::EventMarkerModel::HasPendingRangeStartRole)
+      .toBool());
+  EXPECT_EQ(
+    controller_->eventMarkerModel()->data(row, data_recorder::EventMarkerModel::CountRole).toInt(),
+    0);
+
+  controller_->setPlayheadSeconds(3.0);
+  ASSERT_TRUE(QMetaObject::invokeMethod(range_button, "clicked"));
+
+  EXPECT_FALSE(
+    controller_->eventMarkerModel()
+      ->data(row, data_recorder::EventMarkerModel::HasPendingRangeStartRole)
+      .toBool());
+  EXPECT_EQ(
+    controller_->eventMarkerModel()->data(row, data_recorder::EventMarkerModel::CountRole).toInt(),
+    1);
 }
 
 TEST_F(QmlSmokeTest, CameraVisibilityButtonTogglesPreview)
