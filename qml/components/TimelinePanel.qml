@@ -7,11 +7,13 @@ Panel {
 
     property var controller
     property var model
+    property var eventMarkerModel
     property real durationSeconds: 80
     property bool listsReady: false
     property int rulerLabelTickStride: 10
     readonly property real effectiveDurationSeconds: Math.max(1, Number(durationSeconds) || 1)
     readonly property real playheadSeconds: controller ? Number(controller.playheadSeconds) : 0
+    readonly property var timelineViewport: viewport
     readonly property real visibleStartSeconds: viewport.visibleStartSeconds
     readonly property real visibleDurationSeconds: viewport.boundedVisibleDuration
 
@@ -120,26 +122,58 @@ Panel {
                 }
             }
 
-            ListView {
+            Flickable {
                 id: infoList
 
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                model: root.model
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
+                contentWidth: width
+                contentHeight: infoColumn.implicitHeight
                 onContentYChanged: root.syncCurveToInfo()
 
-                delegate: TimelineInfoRow {
-                    width: ListView.view.width
-                    topicName: model.topicName
-                    frequencyText: model.frequencyText
-                    backendName: model.backendName
-                    isVisible: model.isVisible
-                    isCamera: model.isCamera
-                    onToggleVisibleRequested: {
-                        if (root.controller && root.controller.toggleTopicVisible) {
-                            root.controller.toggleTopicVisible(index)
+                Column {
+                    id: infoColumn
+
+                    width: infoList.width
+
+                    Repeater {
+                        id: eventInfoRepeater
+                        model: root.eventMarkerModel
+
+                        EventTrackInfoRow {
+                            width: infoColumn.width
+                            eventName: model.name
+                            shortcut: model.shortcut
+                            markerColor: model.color
+                            count: model.count
+                            actionText: model.actionText
+                            onActionRequested: root.eventMarkerModel.triggerRowAction(index, root.playheadSeconds)
+                        }
+                    }
+
+                    Rectangle {
+                        width: infoColumn.width
+                        height: 1
+                        color: "#cbd5e1"
+                    }
+
+                    Repeater {
+                        model: root.model
+
+                        TimelineInfoRow {
+                            width: infoColumn.width
+                            topicName: model.topicName
+                            frequencyText: model.frequencyText
+                            backendName: model.backendName
+                            isVisible: model.isVisible
+                            isCamera: model.isCamera
+                            onToggleVisibleRequested: {
+                                if (root.controller && root.controller.toggleTopicVisible) {
+                                    root.controller.toggleTopicVisible(index)
+                                }
+                            }
                         }
                     }
                 }
@@ -225,29 +259,10 @@ Panel {
                 Layout.fillHeight: true
                 clip: true
 
-                ListView {
-                    id: curveList
-
-                    anchors.fill: parent
-                    model: root.model
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    interactive: false
-                    onContentYChanged: root.syncInfoToCurve()
-
-                    delegate: TimelineCurveRow {
-                        width: ListView.view.width
-                        trackKind: model.trackKind
-                        seriesList: model.seriesList
-                        xMax: root.effectiveDurationSeconds
-                        visibleStartSeconds: viewport.visibleStartSeconds
-                        visibleDurationSeconds: viewport.boundedVisibleDuration
-                    }
-                }
-
                 MouseArea {
                     objectName: "timelineCurveMouseArea"
                     anchors.fill: parent
+                    z: 0
                     acceptedButtons: Qt.LeftButton
                     onPressed: root.seekFromCurveX(mouse.x)
                     onPositionChanged: {
@@ -262,6 +277,62 @@ Panel {
                             viewport.zoomAt(wheel.x, curveViewport.width, wheel.angleDelta.y)
                         }
                         wheel.accepted = true
+                    }
+                }
+
+                Flickable {
+                    id: curveList
+
+                    anchors.fill: parent
+                    z: 1
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    contentWidth: width
+                    contentHeight: curveColumn.implicitHeight
+                    interactive: false
+                    onContentYChanged: root.syncInfoToCurve()
+
+                    Column {
+                        id: curveColumn
+
+                        width: curveList.width
+
+                        Repeater {
+                            id: eventCurveRepeater
+                            model: root.eventMarkerModel
+
+                            EventTrackRow {
+                                width: curveColumn.width
+                                rowIndex: index
+                                kind: model.kind
+                                markerColor: model.color
+                                instances: model.instances
+                                hasPendingRangeStart: model.hasPendingRangeStart
+                                pendingStartSeconds: model.pendingStartSeconds
+                                playheadSeconds: root.playheadSeconds
+                                viewport: root.timelineViewport
+                                markerModel: root.eventMarkerModel
+                            }
+                        }
+
+                        Rectangle {
+                            width: curveColumn.width
+                            height: 1
+                            color: "#cbd5e1"
+                        }
+
+                        Repeater {
+                            model: root.model
+
+                            TimelineCurveRow {
+                                width: curveColumn.width
+                                trackKind: model.trackKind
+                                seriesList: model.seriesList
+                                xMax: root.effectiveDurationSeconds
+                                visibleStartSeconds: viewport.visibleStartSeconds
+                                visibleDurationSeconds: viewport.boundedVisibleDuration
+                            }
+                        }
                     }
                 }
 

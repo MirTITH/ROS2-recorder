@@ -80,24 +80,12 @@ ApplicationWindow {
                         }
                     }
 
-                    SplitView {
+                    TimelinePanel {
                         SplitView.fillWidth: true
-                        orientation: Qt.Vertical
-                        handle: ResizeHandle { lineOrientation: Qt.Horizontal }
-
-                        EventMarkersPanel {
-                            SplitView.preferredHeight: 70
-                            SplitView.minimumHeight: 70
-                            SplitView.maximumHeight: 112
-                            model: appController.eventMarkerModel
-                        }
-
-                        TimelinePanel {
-                            SplitView.fillHeight: true
-                            SplitView.fillWidth: true
-                            controller: appController
-                            model: appController.topicModel
-                        }
+                        SplitView.fillHeight: true
+                        controller: appController
+                        model: appController.topicModel
+                        eventMarkerModel: appController.eventMarkerModel
                     }
                 }
             }
