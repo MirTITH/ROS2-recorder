@@ -4,6 +4,8 @@
 #include <QKeyEvent>
 #include <QModelIndex>
 #include <QObject>
+#include <QVariantList>
+#include <QVariantMap>
 #include <QVector>
 
 #include "data_recorder/app_controller.hpp"
@@ -199,29 +201,129 @@ TEST(TagListModel, SelectsOneTag)
   EXPECT_TRUE(model.data(model.index(1, 0), data_recorder::TagListModel::IsSelectedRole).toBool());
 }
 
-TEST(EventMarkerModel, ExposesShortcutAndKind)
+TEST(EventMarkerModel, ExposesTrackRoles)
+{
+  data_recorder::EventMarkerModel model;
+  model.set_markers({
+    {"1", "拿起水杯", "point", "#1763c9"},
+    {"2", "倒水", "range", "#2f9e44"},
+  });
+
+  ASSERT_EQ(model.rowCount(), 2);
+
+  const auto point = model.index(0, 0);
+  EXPECT_EQ(
+    model.data(point, data_recorder::EventMarkerModel::ShortcutRole).toString().toStdString(),
+    "1");
+  EXPECT_EQ(
+    model.data(point, data_recorder::EventMarkerModel::NameRole).toString().toStdString(),
+    "拿起水杯");
+  EXPECT_EQ(
+    model.data(point, data_recorder::EventMarkerModel::KindRole).toString().toStdString(),
+    "point");
+  EXPECT_EQ(
+    model.data(point, data_recorder::EventMarkerModel::ColorRole).toString().toStdString(),
+    "#1763c9");
+  EXPECT_EQ(model.data(point, data_recorder::EventMarkerModel::CountRole).toInt(), 0);
+  EXPECT_EQ(
+    model.data(point, data_recorder::EventMarkerModel::ActionTextRole).toString().toStdString(),
+    "添加 (1)");
+  EXPECT_FALSE(
+    model.data(point, data_recorder::EventMarkerModel::HasPendingRangeStartRole).toBool());
+  EXPECT_TRUE(
+    model.data(point, data_recorder::EventMarkerModel::InstancesRole).toList().isEmpty());
+
+  const auto range = model.index(1, 0);
+  EXPECT_EQ(
+    model.data(range, data_recorder::EventMarkerModel::ActionTextRole).toString().toStdString(),
+    "添加起点 (2)");
+}
+
+TEST(EventMarkerModel, AddsMovesAndDeletesPointInstances)
 {
   data_recorder::EventMarkerModel model;
   model.set_markers({{"1", "拿起水杯", "point", "#1763c9"}});
 
-  ASSERT_EQ(model.rowCount(), 1);
-  EXPECT_EQ(
-    model.data(model.index(0, 0), data_recorder::EventMarkerModel::ShortcutRole).toString().toStdString(),
-    "1");
-  EXPECT_EQ(
-    model.data(model.index(0, 0), data_recorder::EventMarkerModel::KindRole).toString().toStdString(),
-    "point");
+  ASSERT_TRUE(model.triggerRowAction(0, 3.25));
+
+  const auto row = model.index(0, 0);
+  EXPECT_EQ(model.data(row, data_recorder::EventMarkerModel::CountRole).toInt(), 1);
+  QVariantList instances =
+    model.data(row, data_recorder::EventMarkerModel::InstancesRole).toList();
+  ASSERT_EQ(instances.size(), 1);
+  QVariantMap instance = instances.at(0).toMap();
+  const int instance_id = instance.value(QStringLiteral("id")).toInt();
+  EXPECT_GT(instance_id, 0);
+  EXPECT_EQ(instance.value(QStringLiteral("kind")).toString().toStdString(), "point");
+  EXPECT_DOUBLE_EQ(instance.value(QStringLiteral("startSeconds")).toDouble(), 3.25);
+  EXPECT_DOUBLE_EQ(instance.value(QStringLiteral("endSeconds")).toDouble(), 3.25);
+  EXPECT_EQ(instance.value(QStringLiteral("color")).toString().toStdString(), "#1763c9");
+
+  ASSERT_TRUE(model.movePoint(0, instance_id, 4.5));
+  instances = model.data(row, data_recorder::EventMarkerModel::InstancesRole).toList();
+  instance = instances.at(0).toMap();
+  EXPECT_DOUBLE_EQ(instance.value(QStringLiteral("startSeconds")).toDouble(), 4.5);
+  EXPECT_DOUBLE_EQ(instance.value(QStringLiteral("endSeconds")).toDouble(), 4.5);
+
+  ASSERT_TRUE(model.deleteInstance(0, instance_id));
+  EXPECT_EQ(model.data(row, data_recorder::EventMarkerModel::CountRole).toInt(), 0);
+  EXPECT_TRUE(model.data(row, data_recorder::EventMarkerModel::InstancesRole).toList().isEmpty());
 }
 
-TEST(EventMarkerModel, StartsWithNoSelection)
+TEST(EventMarkerModel, CreatesPendingAndCompletedRangeInstances)
 {
   data_recorder::EventMarkerModel model;
-  model.set_markers({{"1", "拿起水杯", "point", "#1763c9"}, {"2", "倒水", "range", "#2f9e44"}});
+  model.set_markers({{"2", "倒水", "range", "#2f9e44"}});
+
+  ASSERT_TRUE(model.triggerRowAction(0, 8.0));
+
+  const auto row = model.index(0, 0);
+  EXPECT_TRUE(
+    model.data(row, data_recorder::EventMarkerModel::HasPendingRangeStartRole).toBool());
+  EXPECT_DOUBLE_EQ(
+    model.data(row, data_recorder::EventMarkerModel::PendingStartSecondsRole).toDouble(), 8.0);
+  EXPECT_EQ(model.data(row, data_recorder::EventMarkerModel::CountRole).toInt(), 0);
+  EXPECT_EQ(
+    model.data(row, data_recorder::EventMarkerModel::ActionTextRole).toString().toStdString(),
+    "设置终点 (2)");
+
+  ASSERT_TRUE(model.triggerRowAction(0, 6.5));
 
   EXPECT_FALSE(
-    model.data(model.index(0, 0), data_recorder::EventMarkerModel::IsSelectedRole).toBool());
-  EXPECT_FALSE(
-    model.data(model.index(1, 0), data_recorder::EventMarkerModel::IsSelectedRole).toBool());
+    model.data(row, data_recorder::EventMarkerModel::HasPendingRangeStartRole).toBool());
+  EXPECT_EQ(model.data(row, data_recorder::EventMarkerModel::CountRole).toInt(), 1);
+  EXPECT_EQ(
+    model.data(row, data_recorder::EventMarkerModel::ActionTextRole).toString().toStdString(),
+    "添加起点 (2)");
+
+  QVariantList instances =
+    model.data(row, data_recorder::EventMarkerModel::InstancesRole).toList();
+  ASSERT_EQ(instances.size(), 1);
+  QVariantMap instance = instances.at(0).toMap();
+  const int instance_id = instance.value(QStringLiteral("id")).toInt();
+  EXPECT_EQ(instance.value(QStringLiteral("kind")).toString().toStdString(), "range");
+  EXPECT_DOUBLE_EQ(instance.value(QStringLiteral("startSeconds")).toDouble(), 6.5);
+  EXPECT_DOUBLE_EQ(instance.value(QStringLiteral("endSeconds")).toDouble(), 8.0);
+
+  ASSERT_TRUE(model.moveRange(0, instance_id, 1.25, 2.75));
+  instances = model.data(row, data_recorder::EventMarkerModel::InstancesRole).toList();
+  instance = instances.at(0).toMap();
+  EXPECT_DOUBLE_EQ(instance.value(QStringLiteral("startSeconds")).toDouble(), 1.25);
+  EXPECT_DOUBLE_EQ(instance.value(QStringLiteral("endSeconds")).toDouble(), 2.75);
+}
+
+TEST(EventMarkerModel, TriggerShortcutIsCaseInsensitive)
+{
+  data_recorder::EventMarkerModel model;
+  model.set_markers({
+    {"1", "拿起水杯", "point", "#1763c9"},
+    {"c", "碰撞", "point", "#e03131"},
+  });
+
+  EXPECT_TRUE(model.triggerShortcut(QStringLiteral("C"), 5.0));
+  EXPECT_EQ(model.data(model.index(1, 0), data_recorder::EventMarkerModel::CountRole).toInt(), 1);
+  EXPECT_FALSE(model.triggerShortcut(QStringLiteral("missing"), 9.0));
+  EXPECT_EQ(model.data(model.index(0, 0), data_recorder::EventMarkerModel::CountRole).toInt(), 0);
 }
 
 TEST(AppController, ExposesInitialState)
