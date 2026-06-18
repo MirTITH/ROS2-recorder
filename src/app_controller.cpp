@@ -55,6 +55,21 @@ bool AppController::recording() const
   return recording_;
 }
 
+bool AppController::historyMode() const
+{
+  return history_mode_;
+}
+
+int AppController::selectedSessionRow() const
+{
+  return selected_session_row_;
+}
+
+bool AppController::canRecord() const
+{
+  return !history_mode_;
+}
+
 double AppController::playheadSeconds() const
 {
   return playhead_seconds_;
@@ -72,10 +87,13 @@ bool AppController::followingLiveEdge() const
 
 QString AppController::modeText() const
 {
-  if (recording_) {
-    return following_live_edge_ ? QStringLiteral("录制中") : QStringLiteral("查看");
+  if (history_mode_) {
+    return QStringLiteral("历史查看");
   }
-  return QStringLiteral("查看");
+  if (recording_) {
+    return following_live_edge_ ? QStringLiteral("录制中") : QStringLiteral("录制中回看");
+  }
+  return QStringLiteral("实时查看");
 }
 
 int AppController::visibleCameraCount() const
@@ -115,18 +133,72 @@ RecordingSessionModel * AppController::recordingSessionModel()
 
 void AppController::toggleRecording()
 {
+  if (!canRecord()) {
+    return;
+  }
+
   recording_ = !recording_;
   if (recording_) {
     following_live_edge_ = true;
     playhead_seconds_ = live_edge_seconds_;
-    status_text_ = QStringLiteral("录制中（界面原型）");
   } else {
     following_live_edge_ = false;
-    status_text_ = QStringLiteral("已停止");
   }
+  status_text_ = statusTextForCurrentState();
   emit recordingChanged();
   emit followingLiveEdgeChanged();
   emit playheadSecondsChanged();
+  emit statusTextChanged();
+  emit modeTextChanged();
+}
+
+void AppController::selectOnlineData()
+{
+  if (!history_mode_ && selected_session_row_ == -1) {
+    return;
+  }
+
+  const bool was_recordable = canRecord();
+  history_mode_ = false;
+  selected_session_row_ = -1;
+  status_text_ = statusTextForCurrentState();
+  emit dataSourceChanged();
+  if (was_recordable != canRecord()) {
+    emit canRecordChanged();
+  }
+  emit statusTextChanged();
+  emit modeTextChanged();
+}
+
+void AppController::selectHistorySession(int row)
+{
+  if (recording_ || row < 0 || row >= recording_session_model_.rowCount()) {
+    return;
+  }
+
+  const auto session_index = recording_session_model_.index(row, 0);
+  const QString folder_name =
+    recording_session_model_.data(session_index, RecordingSessionModel::FolderNameRole).toString();
+  if (folder_name.isEmpty()) {
+    return;
+  }
+
+  const bool was_recordable = canRecord();
+  const bool was_following = following_live_edge_;
+  const bool data_source_changed = !history_mode_ || selected_session_row_ != row;
+  history_mode_ = true;
+  selected_session_row_ = row;
+  following_live_edge_ = false;
+  status_text_ = QStringLiteral("历史查看：%1").arg(folder_name);
+  if (data_source_changed) {
+    emit dataSourceChanged();
+  }
+  if (was_recordable != canRecord()) {
+    emit canRecordChanged();
+  }
+  if (was_following != following_live_edge_) {
+    emit followingLiveEdgeChanged();
+  }
   emit statusTextChanged();
   emit modeTextChanged();
 }
@@ -143,6 +215,7 @@ void AppController::setPlayheadSeconds(double seconds)
     emit playheadSecondsChanged();
   }
   if (was_following != following_live_edge_) {
+    refreshStatusText();
     emit followingLiveEdgeChanged();
     emit modeTextChanged();
   }
@@ -168,6 +241,7 @@ void AppController::returnToLiveEdge()
   following_live_edge_ = recording_;
   playhead_seconds_ = live_edge_seconds_;
   if (was_following != following_live_edge_) {
+    refreshStatusText();
     emit followingLiveEdgeChanged();
     emit modeTextChanged();
   }
@@ -226,6 +300,28 @@ void AppController::refreshVisibleCameraCount()
     visible_camera_count_ = next_count;
     emit visibleCameraCountChanged();
   }
+}
+
+QString AppController::statusTextForCurrentState() const
+{
+  if (history_mode_) {
+    const auto session_index = recording_session_model_.index(selected_session_row_, 0);
+    const QString folder_name =
+      recording_session_model_.data(session_index, RecordingSessionModel::FolderNameRole).toString();
+    return QStringLiteral("历史查看：%1").arg(folder_name);
+  }
+  return modeText();
+}
+
+void AppController::refreshStatusText()
+{
+  const QString next_status_text = statusTextForCurrentState();
+  if (status_text_ == next_status_text) {
+    return;
+  }
+
+  status_text_ = next_status_text;
+  emit statusTextChanged();
 }
 
 }  // namespace data_recorder

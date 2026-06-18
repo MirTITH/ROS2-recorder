@@ -398,9 +398,72 @@ TEST(AppController, ExposesInitialState)
 
   EXPECT_EQ(controller.configPath().toStdString(), config.config_path);
   EXPECT_EQ(controller.outputDirectory().toStdString(), config.output_dir);
-  EXPECT_EQ(controller.statusText().toStdString(), "就绪");
+  EXPECT_EQ(controller.statusText().toStdString(), "实时查看");
   EXPECT_FALSE(controller.recording());
   EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 0.0);
+}
+
+TEST(AppController, StartsInOnlineDataSourceState)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  EXPECT_FALSE(controller.historyMode());
+  EXPECT_EQ(controller.selectedSessionRow(), -1);
+  EXPECT_TRUE(controller.canRecord());
+  EXPECT_EQ(controller.statusText().toStdString(), "实时查看");
+  EXPECT_EQ(controller.modeText().toStdString(), "实时查看");
+}
+
+TEST(AppController, SelectingHistoryDisablesRecordingAndUpdatesStatus)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  controller.selectHistorySession(0);
+
+  EXPECT_TRUE(controller.historyMode());
+  EXPECT_EQ(controller.selectedSessionRow(), 0);
+  EXPECT_FALSE(controller.canRecord());
+  EXPECT_EQ(controller.statusText().toStdString(), "历史查看：2026-05-31_07-46-20");
+  EXPECT_EQ(controller.modeText().toStdString(), "历史查看");
+
+  controller.toggleRecording();
+  EXPECT_FALSE(controller.recording());
+}
+
+TEST(AppController, SelectingOnlineDataRestoresRecordingAvailability)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  controller.selectHistorySession(1);
+  controller.selectOnlineData();
+
+  EXPECT_FALSE(controller.historyMode());
+  EXPECT_EQ(controller.selectedSessionRow(), -1);
+  EXPECT_TRUE(controller.canRecord());
+  EXPECT_EQ(controller.statusText().toStdString(), "实时查看");
+}
+
+TEST(AppController, RecordingReviewStateHasDistinctStatusText)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  controller.toggleRecording();
+  EXPECT_EQ(controller.statusText().toStdString(), "录制中");
+  EXPECT_EQ(controller.modeText().toStdString(), "录制中");
+
+  controller.setPlayheadSeconds(0.0);
+  EXPECT_TRUE(controller.recording());
+  EXPECT_FALSE(controller.followingLiveEdge());
+  EXPECT_EQ(controller.statusText().toStdString(), "录制中回看");
+  EXPECT_EQ(controller.modeText().toStdString(), "录制中回看");
+
+  controller.returnToLiveEdge();
+  EXPECT_TRUE(controller.followingLiveEdge());
+  EXPECT_EQ(controller.statusText().toStdString(), "录制中");
 }
 
 TEST(AppController, ExposesPopulatedModels)
@@ -462,7 +525,7 @@ TEST(AppController, ToggleRecordingUpdatesStateAndEmitsSignals)
   controller.toggleRecording();
 
   EXPECT_TRUE(controller.recording());
-  EXPECT_EQ(controller.statusText().toStdString(), "录制中（界面原型）");
+  EXPECT_EQ(controller.statusText().toStdString(), "录制中");
   EXPECT_EQ(recording_changed_count, 1);
   EXPECT_EQ(status_text_changed_count, 1);
 }

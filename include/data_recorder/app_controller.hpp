@@ -18,6 +18,9 @@ class AppController : public QObject
   Q_PROPERTY(QString outputDirectory READ outputDirectory CONSTANT)
   Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
   Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+  Q_PROPERTY(bool historyMode READ historyMode NOTIFY dataSourceChanged)
+  Q_PROPERTY(int selectedSessionRow READ selectedSessionRow NOTIFY dataSourceChanged)
+  Q_PROPERTY(bool canRecord READ canRecord NOTIFY canRecordChanged)
   Q_PROPERTY(double playheadSeconds READ playheadSeconds NOTIFY playheadSecondsChanged)
   Q_PROPERTY(double liveEdgeSeconds READ liveEdgeSeconds NOTIFY liveEdgeSecondsChanged)
   Q_PROPERTY(bool followingLiveEdge READ followingLiveEdge NOTIFY followingLiveEdgeChanged)
@@ -37,6 +40,9 @@ public:
   QString outputDirectory() const;
   QString statusText() const;
   bool recording() const;
+  bool historyMode() const;
+  int selectedSessionRow() const;
+  bool canRecord() const;
   double playheadSeconds() const;
   double liveEdgeSeconds() const;
   bool followingLiveEdge() const;
@@ -50,6 +56,8 @@ public:
   RecordingSessionModel * recordingSessionModel();
 
   Q_INVOKABLE void toggleRecording();
+  Q_INVOKABLE void selectOnlineData();
+  Q_INVOKABLE void selectHistorySession(int row);
   Q_INVOKABLE void setPlayheadSeconds(double seconds);
   Q_INVOKABLE void advanceLiveEdge(double seconds);
   Q_INVOKABLE void returnToLiveEdge();
@@ -61,6 +69,8 @@ public:
 signals:
   void statusTextChanged();
   void recordingChanged();
+  void dataSourceChanged();
+  void canRecordChanged();
   void playheadSecondsChanged();
   void liveEdgeSecondsChanged();
   void followingLiveEdgeChanged();
@@ -69,11 +79,15 @@ signals:
 
 private:
   void refreshVisibleCameraCount();
+  QString statusTextForCurrentState() const;
+  void refreshStatusText();
 
   QString config_path_;
   QString output_directory_;
-  QString status_text_{"就绪"};
+  QString status_text_{"实时查看"};
   bool recording_{false};
+  bool history_mode_{false};
+  int selected_session_row_{-1};
   double playhead_seconds_{0.0};
   double live_edge_seconds_{0.0};
   bool following_live_edge_{false};
