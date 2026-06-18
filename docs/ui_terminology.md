@@ -7,6 +7,8 @@
 | 采集记录 | Recording Sessions | `RecordingSessions` | 历史采集 session 列表 |
 | 记录标签 | Recording Tags | `RecordingTags` | 成功、失败、碰撞等整段记录标签 |
 | 事件标记 | Event Markers | `EventMarkers` | 快捷键触发的 point/range 时间标记 |
+| 事件标记轨道 | Event Marker Track | `EventMarkerTrack` | 时间轴中每个事件标记对应的一行 |
+| 事件标记实例 | Event Marker Instance | `EventMarkerInstance` | 时间轴中一个具体的点事件或区间事件 |
 | 话题列表 | Topic List | `TopicList` | 配置中的 ROS topics 列表 |
 | 话题轨道 | Topic Track | `TopicTrack` | 时间轴中每个 topic 对应的一行 |
 | 时间轴 | Timeline | `Timeline` | 播放头、刻度、曲线、轨道所在区域 |
