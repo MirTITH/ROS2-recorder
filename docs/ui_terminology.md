@@ -4,6 +4,11 @@
 | --- | --- | --- | --- |
 | 相机预览 | Camera Preview | `CameraPreview` | Image topic 的画面预览区域 |
 | 相机预览区 | Camera Preview Area | `CameraPreviewArea` | 多路相机预览所在的上方面板组 |
+| 数据 | Data | `Data` | 在线数据源和历史采集记录所在的左侧面板 |
+| 数据源选择器 | Data Source Selector | `DataSourceSelector` | 在在线数据和历史记录之间切换当前查看数据源的列表 |
+| 在线数据 | Online Data | `OnlineData` | 当前连接的 ROS topic 数据源 |
+| 历史查看 | Historical Review | `HistoricalReview` | 查看已完成采集记录的 UI 状态 |
+| 录制中回看 | Recording Review | `RecordingReview` | 录制仍在继续但播放头脱离实时端的 UI 状态 |
 | 采集记录 | Recording Sessions | `RecordingSessions` | 历史采集 session 列表 |
 | 记录标签 | Recording Tags | `RecordingTags` | 成功、失败、碰撞等整段记录标签 |
 | 事件标记 | Event Markers | `EventMarkers` | 快捷键触发的 point/range 时间标记 |
