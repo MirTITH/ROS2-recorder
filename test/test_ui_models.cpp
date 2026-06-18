@@ -316,6 +316,67 @@ TEST(EventMarkerModel, CreatesPendingAndCompletedRangeInstances)
   EXPECT_DOUBLE_EQ(instance.value(QStringLiteral("endSeconds")).toDouble(), 2.75);
 }
 
+TEST(EventMarkerModel, IgnoresDuplicatePointAndRangeInstances)
+{
+  data_recorder::EventMarkerModel model;
+  model.set_markers({
+    {"1", "拿起水杯", "point", "#1763c9"},
+    {"2", "倒水", "range", "#2f9e44"},
+  });
+
+  ASSERT_TRUE(model.addPoint(0, 3.25));
+  ASSERT_TRUE(model.addPoint(0, 3.25));
+
+  const auto point_row = model.index(0, 0);
+  EXPECT_EQ(model.data(point_row, data_recorder::EventMarkerModel::CountRole).toInt(), 1);
+  EXPECT_EQ(
+    model.data(point_row, data_recorder::EventMarkerModel::InstancesRole).toList().size(), 1);
+
+  ASSERT_TRUE(model.toggleRange(1, 9.0));
+  ASSERT_TRUE(model.toggleRange(1, 4.0));
+  ASSERT_TRUE(model.toggleRange(1, 4.0));
+  ASSERT_TRUE(model.toggleRange(1, 9.0));
+
+  const auto range_row = model.index(1, 0);
+  EXPECT_FALSE(
+    model.data(range_row, data_recorder::EventMarkerModel::HasPendingRangeStartRole).toBool());
+  EXPECT_EQ(model.data(range_row, data_recorder::EventMarkerModel::CountRole).toInt(), 1);
+
+  const QVariantList ranges =
+    model.data(range_row, data_recorder::EventMarkerModel::InstancesRole).toList();
+  ASSERT_EQ(ranges.size(), 1);
+  EXPECT_DOUBLE_EQ(
+    ranges.at(0).toMap().value(QStringLiteral("startSeconds")).toDouble(), 4.0);
+  EXPECT_DOUBLE_EQ(ranges.at(0).toMap().value(QStringLiteral("endSeconds")).toDouble(), 9.0);
+}
+
+TEST(EventMarkerModel, DeleteAllInstancesClearsInstancesAndPendingRangeStart)
+{
+  data_recorder::EventMarkerModel model;
+  model.set_markers({{"2", "倒水", "range", "#2f9e44"}});
+
+  ASSERT_TRUE(model.toggleRange(0, 2.0));
+  ASSERT_TRUE(model.toggleRange(0, 5.0));
+  ASSERT_TRUE(model.toggleRange(0, 7.0));
+
+  const auto row = model.index(0, 0);
+  EXPECT_TRUE(
+    model.data(row, data_recorder::EventMarkerModel::HasPendingRangeStartRole).toBool());
+  EXPECT_EQ(model.data(row, data_recorder::EventMarkerModel::CountRole).toInt(), 1);
+
+  ASSERT_TRUE(model.deleteAllInstances(0));
+
+  EXPECT_FALSE(
+    model.data(row, data_recorder::EventMarkerModel::HasPendingRangeStartRole).toBool());
+  EXPECT_DOUBLE_EQ(
+    model.data(row, data_recorder::EventMarkerModel::PendingStartSecondsRole).toDouble(), 0.0);
+  EXPECT_EQ(model.data(row, data_recorder::EventMarkerModel::CountRole).toInt(), 0);
+  EXPECT_TRUE(model.data(row, data_recorder::EventMarkerModel::InstancesRole).toList().isEmpty());
+  EXPECT_EQ(
+    model.data(row, data_recorder::EventMarkerModel::ActionTextRole).toString().toStdString(),
+    "添加起点 (2)");
+}
+
 TEST(EventMarkerModel, TriggerShortcutIsCaseInsensitive)
 {
   data_recorder::EventMarkerModel model;

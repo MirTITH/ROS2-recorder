@@ -146,6 +146,7 @@ Panel {
                             width: infoColumn.width
                             eventName: model.name
                             shortcut: model.shortcut
+                            kind: model.kind
                             markerColor: model.color
                             count: model.count
                             actionText: model.actionText
@@ -304,6 +305,7 @@ Panel {
                             EventTrackRow {
                                 width: curveColumn.width
                                 rowIndex: index
+                                eventName: model.name
                                 kind: model.kind
                                 markerColor: model.color
                                 instances: model.instances

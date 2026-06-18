@@ -128,6 +128,7 @@ public:
   Q_INVOKABLE bool moveRange(
     int row, int instance_id, double start_seconds, double end_seconds);
   Q_INVOKABLE bool deleteInstance(int row, int instance_id);
+  Q_INVOKABLE bool deleteAllInstances(int row);
 
   void set_markers(std::vector<EventMarkerEntry> markers);
 

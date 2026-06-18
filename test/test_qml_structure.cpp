@@ -125,19 +125,31 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   EXPECT_TRUE(std::filesystem::exists(track_row_path));
 
   const std::string info_text = read_text(info_row_path);
+  expect_contains(info_text, "property string kind");
+  expect_contains(info_text, "id: pointTypeIndicator");
+  expect_contains(info_text, "id: rangeTypeIndicator");
+  expect_contains(info_text, "visible: root.kind === \"point\"");
+  expect_contains(info_text, "visible: root.kind === \"range\"");
+  expect_contains(info_text, "radius: width / 2");
   expect_contains(info_text, "objectName: \"eventMarkerActionButton_\" + root.shortcut");
   expect_contains(info_text, "root.eventName + \"（共 \" + root.count + \" 个）\"");
   expect_contains(info_text, "signal actionRequested()");
 
   const std::string track_text = read_text(track_row_path);
+  expect_contains(panel_text, "eventName: model.name");
+  expect_contains(panel_text, "kind: model.kind");
   expect_contains(track_text, "property var viewport");
   expect_contains(track_text, "property var markerModel");
+  expect_contains(track_text, "property string eventName");
   expect_contains(track_text, "id: pendingRangePreview");
   expect_contains(track_text, "rotation: 45");
   expect_contains(track_text, "id: leftResizeHandle");
   expect_contains(track_text, "id: rightResizeHandle");
   expect_contains(track_text, "id: leftRangeBorder");
   expect_contains(track_text, "id: rightRangeBorder");
+  expect_contains(track_text, "opacity: 0.68");
+  EXPECT_GE(count_token(track_text, "cursorShape: Qt.PointingHandCursor"), 2U);
+  EXPECT_GE(count_token(track_text, "cursorShape: Qt.SizeHorCursor"), 2U);
   expect_contains(track_text, "function startDrag(mode, instanceId, startSeconds, endSeconds, rootX)");
   expect_contains(track_text, "function updateDrag(rootX)");
   expect_contains(track_text, "function finishDrag()");
@@ -147,8 +159,12 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   expect_contains(track_text, "root.markerModel.deleteInstance");
   expect_contains(track_text, "function requestDelete(instanceId, localX, localY)");
   expect_contains(track_text, "deleteMenu.popup(root, localX, localY)");
+  expect_contains(track_text, "function requestDeleteAll(localX, localY)");
+  expect_contains(track_text, "deleteAllMenu.popup(root, localX, localY)");
   expect_contains(track_text, "MenuItem");
   expect_contains(track_text, "text: \"删除\"");
+  expect_contains(track_text, "text: \"删除所有“\" + root.eventName + \"”\"");
+  expect_contains(track_text, "root.markerModel.deleteAllInstances(root.rowIndex)");
   expect_not_contains(track_text, "width: 3\n                    height: 14\n                    color: \"#ffffff\"");
   expect_contains(panel_text, "height: eventInfoRepeater.count > 0 ? 1 : 0");
   expect_contains(panel_text, "height: eventCurveRepeater.count > 0 ? 1 : 0");

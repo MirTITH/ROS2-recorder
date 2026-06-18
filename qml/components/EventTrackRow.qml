@@ -5,6 +5,7 @@ Rectangle {
     id: root
 
     property int rowIndex: -1
+    property string eventName: ""
     property string kind: "point"
     property string markerColor: "#2563eb"
     property var instances: []
@@ -70,6 +71,10 @@ Rectangle {
     function requestDelete(instanceId, localX, localY) {
         root.contextInstanceId = instanceId
         deleteMenu.popup(root, localX, localY)
+    }
+
+    function requestDeleteAll(localX, localY) {
+        deleteAllMenu.popup(root, localX, localY)
     }
 
     function startDrag(mode, instanceId, startSeconds, endSeconds, rootX) {
@@ -138,6 +143,20 @@ Rectangle {
         color: "#e2e8f0"
     }
 
+    MouseArea {
+        id: trackBackgroundMouseArea
+
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        z: 1
+        onPressed: function(mouse) {
+            if (mouse.button === Qt.RightButton) {
+                root.requestDeleteAll(mouse.x, mouse.y)
+                mouse.accepted = true
+            }
+        }
+    }
+
     Rectangle {
         id: pendingRangePreview
 
@@ -204,6 +223,7 @@ Rectangle {
                 visible: instanceDelegate.instanceKind === "point"
                 anchors.fill: parent
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
+                cursorShape: Qt.PointingHandCursor
                 onWheel: function(wheel) {
                     root.zoomAtLocalX(root.localXFromMouse(pointMouseArea, wheel), wheel)
                 }
@@ -243,6 +263,7 @@ Rectangle {
                 anchors.right: parent.right
                 height: 12
                 color: instanceDelegate.instanceColor
+                opacity: 0.68
 
                 Rectangle {
                     id: leftRangeBorder
@@ -271,6 +292,7 @@ Rectangle {
                 visible: instanceDelegate.instanceKind === "range"
                 anchors.fill: rangeBody
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
+                cursorShape: Qt.PointingHandCursor
                 z: 10
                 onWheel: function(wheel) {
                     root.zoomAtLocalX(root.localXFromMouse(rangeBodyMouseArea, wheel), wheel)
@@ -394,6 +416,19 @@ Rectangle {
             onTriggered: {
                 if (root.markerModel && root.markerModel.deleteInstance) {
                     root.markerModel.deleteInstance(root.rowIndex, root.contextInstanceId)
+                }
+            }
+        }
+    }
+
+    Menu {
+        id: deleteAllMenu
+
+        MenuItem {
+            text: "删除所有“" + root.eventName + "”"
+            onTriggered: {
+                if (root.markerModel && root.markerModel.deleteAllInstances) {
+                    root.markerModel.deleteAllInstances(root.rowIndex)
                 }
             }
         }

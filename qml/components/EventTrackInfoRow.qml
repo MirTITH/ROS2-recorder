@@ -7,6 +7,7 @@ Rectangle {
 
     property string eventName: ""
     property string shortcut: ""
+    property string kind: "point"
     property string markerColor: "#2563eb"
     property int count: 0
     property string actionText: ""
@@ -22,10 +23,28 @@ Rectangle {
         anchors.rightMargin: 6
         spacing: 6
 
-        Rectangle {
+        Item {
             Layout.preferredWidth: 8
             Layout.preferredHeight: 16
-            color: root.markerColor
+
+            Rectangle {
+                id: pointTypeIndicator
+
+                visible: root.kind === "point"
+                anchors.centerIn: parent
+                width: 8
+                height: 8
+                radius: width / 2
+                color: root.markerColor
+            }
+
+            Rectangle {
+                id: rangeTypeIndicator
+
+                visible: root.kind === "range"
+                anchors.fill: parent
+                color: root.markerColor
+            }
         }
 
         Label {

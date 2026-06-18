@@ -104,6 +104,11 @@ void normalize_range(double & start_seconds, double & end_seconds)
   }
 }
 
+bool same_time(double lhs, double rhs)
+{
+  return lhs == rhs;
+}
+
 }  // namespace
 
 TopicListModel::TopicListModel(QObject * parent)
@@ -425,6 +430,17 @@ bool EventMarkerModel::addPoint(int row, double time_seconds)
   }
 
   const double normalized_seconds = non_negative_seconds(time_seconds);
+  const auto duplicate = std::find_if(
+    marker_row.instances.cbegin(), marker_row.instances.cend(),
+    [normalized_seconds](const EventInstance & instance) {
+      return instance.kind == QStringLiteral("point") &&
+             same_time(instance.start_seconds, normalized_seconds) &&
+             same_time(instance.end_seconds, normalized_seconds);
+    });
+  if (duplicate != marker_row.instances.cend()) {
+    return true;
+  }
+
   EventInstance instance;
   instance.id = marker_row.next_instance_id++;
   instance.kind = QStringLiteral("point");
@@ -462,6 +478,24 @@ bool EventMarkerModel::toggleRange(int row, double time_seconds)
   double start_seconds = marker_row.pending_start_seconds;
   double end_seconds = time_seconds;
   normalize_range(start_seconds, end_seconds);
+
+  const auto duplicate = std::find_if(
+    marker_row.instances.cbegin(), marker_row.instances.cend(),
+    [start_seconds, end_seconds](const EventInstance & instance) {
+      return instance.kind == QStringLiteral("range") &&
+             same_time(instance.start_seconds, start_seconds) &&
+             same_time(instance.end_seconds, end_seconds);
+    });
+  if (duplicate != marker_row.instances.cend()) {
+    marker_row.has_pending_range_start = false;
+    marker_row.pending_start_seconds = 0.0;
+
+    const auto model_index = index(row, 0);
+    emit dataChanged(
+      model_index, model_index,
+      {ActionTextRole, HasPendingRangeStartRole, PendingStartSecondsRole});
+    return true;
+  }
 
   EventInstance instance;
   instance.id = marker_row.next_instance_id++;
@@ -553,6 +587,30 @@ bool EventMarkerModel::deleteInstance(int row, int instance_id)
 
   const auto model_index = index(row, 0);
   emit dataChanged(model_index, model_index, {CountRole, InstancesRole});
+  return true;
+}
+
+bool EventMarkerModel::deleteAllInstances(int row)
+{
+  if (!valid_row(row, static_cast<int>(markers_.size()))) {
+    return false;
+  }
+
+  auto & marker_row = markers_.at(static_cast<std::size_t>(row));
+  const bool had_instances = !marker_row.instances.isEmpty();
+  const bool had_pending_range_start = marker_row.has_pending_range_start;
+  if (!had_instances && !had_pending_range_start) {
+    return false;
+  }
+
+  marker_row.instances.clear();
+  marker_row.has_pending_range_start = false;
+  marker_row.pending_start_seconds = 0.0;
+
+  const auto model_index = index(row, 0);
+  emit dataChanged(
+    model_index, model_index,
+    {CountRole, ActionTextRole, HasPendingRangeStartRole, PendingStartSecondsRole, InstancesRole});
   return true;
 }
 
