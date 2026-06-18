@@ -1,171 +1,157 @@
-# Data Recorder Event Marker Tracks Design
+# 数据采集软件事件标记轨道设计
 
-Date: 2026-06-18
+日期：2026-06-18
 
-## Goal
+## 目标
 
-Move event markers from the standalone event marker panel into the Timeline as their own compact
-track group. Each event definition becomes one timeline row. The left information pane shows the
-event name, completed instance count, and add action. The right timeline area shows point and range
-event instances aligned to the same ruler, viewport, playhead, zoom, and horizontal range bar used
-by topic tracks.
+将事件标记从独立的事件标记面板移动到时间轴中，作为一组紧凑的独立轨道。每个事件定义对应时间轴中的一行。左侧信息面板显示事件名称、已完成实例数量和添加动作；右侧时间轴区域显示点事件和区间事件实例，并与话题轨道共用同一套时间尺、视窗、播放头、缩放和底部时间滚动条。
 
-This spec is UI-only. It adds in-memory marker instances for the prototype, but it does not add
-recording backend persistence, rosbag metadata writing, or YAML hot reload behavior.
+这份设计文档只覆盖 UI。它会为原型增加内存态的事件标记实例，但不增加录制后端持久化、rosbag 元数据写入或 YAML 热重载行为。
 
-## Current Problems
+## 当前问题
 
-The current `EventMarkersPanel` is a separate horizontal button strip above the Timeline. It only
-selects an event marker definition. It does not show where events occurred, does not support
-multiple instances, and does not use the Timeline viewport.
+当前的 `EventMarkersPanel` 是时间轴上方的一条独立横向按钮栏。它只能选中某个事件标记定义，不能显示事件发生在什么时间，不能支持一个事件的多个实例，也没有使用时间轴视窗。
 
-That separation makes event annotations feel detached from the time-based data they describe. It
-also duplicates timeline-like controls: users add events with one UI region, but must inspect time
-in another.
+这种分离会让事件标注与它描述的时间数据脱节，也会造成类似时间轴的控制重复：用户在一个区域添加事件，却要到另一个区域查看时间。
 
-## Chosen Approach
+## 选定方案
 
-Use event marker tracks as an independent row group inside `TimelinePanel`.
+将事件标记轨道作为 `TimelinePanel` 内部的一组独立行。
 
-The Timeline will contain two vertical groups:
+时间轴包含两个垂直分组：
 
-- Event marker tracks at the top.
-- Topic tracks below the event tracks.
+- 顶部是事件标记轨道。
+- 事件轨道下方是话题轨道。
 
-Both groups share the same time ruler, curve area, visible time window, playhead, row scrolling, and
-bottom range bar. Event tracks are not represented as fake topics. They use their own model roles and
-QML row components so event-specific state does not leak into `TopicListModel`.
+两个分组共享同一套时间尺、曲线区、可见时间窗口、播放头、垂直行滚动和底部时间滚动条。事件轨道不伪装成话题轨道，而是使用自己的模型角色和 QML 行组件，避免事件特有状态泄漏到 `TopicListModel` 中。
 
-The standalone `EventMarkersPanel` is removed from the main layout.
+主布局中删除独立的 `EventMarkersPanel`。
 
-## Timeline Layout
+## 时间轴布局
 
-The Timeline keeps its current split layout:
+时间轴保留当前的左右分割布局：
 
-- Left: `TimelineInfoPane`.
-- Right: ruler, timeline content area, and range bar.
+- 左侧：`TimelineInfoPane`。
+- 右侧：时间尺、时间轴内容区域和底部时间滚动条。
 
-Within the scrollable row area, event rows appear before topic rows.
+在可滚动行区域中，事件行显示在话题行之前。
 
-Event rows:
+事件行：
 
-- Height is one compact row: `32` px.
-- A subtle group divider separates the event rows from topic rows.
-- Row height is fixed for all event tracks.
-- Event rows scroll vertically together with topic rows.
+- 高度固定为一行紧凑行：`32` px。
+- 事件行和话题行之间使用一条轻量分组分隔线。
+- 所有事件轨道使用固定行高。
+- 事件行和话题行一起垂直滚动。
 
-The time ruler remains above the right-side timeline content only. It does not extend over the left
-information pane.
+时间尺仍然只位于右侧时间轴内容区域上方，不延伸到左侧信息面板上方。
 
-## Event Track Information Row
+## 事件轨道信息行
 
-Each event information row contains:
+每个事件信息行包含：
 
-- A small color swatch using the event marker color.
-- The event name and completed count, left-aligned.
-- A compact action button, right-aligned.
+- 一个使用事件标记颜色的小色块。
+- 左对齐的事件名称和已完成数量。
+- 右对齐的紧凑动作按钮。
 
-Display text format:
+显示文本格式：
 
-- Point event: `拿起水杯（共 0 个）`
-- Range event: `倒水（共 1 个）`
+- 点事件：`拿起水杯（共 0 个）`
+- 区间事件：`倒水（共 1 个）`
 
-Action button text:
+动作按钮文本：
 
-- Point event: `添加 (1)`
-- Range event without pending start: `添加起点 (2)`
-- Range event with pending start: `设置终点 (2)`
+- 点事件：`添加 (1)`
+- 没有待完成起点的区间事件：`添加起点 (2)`
+- 已有待完成起点的区间事件：`设置终点 (2)`
 
-Counts include completed instances only:
+数量只统计已完成实例：
 
-- A point event counts immediately after it is added.
-- A range event counts only after both start and end are set.
-- A pending range start does not increase the count.
+- 点事件添加后立即计数。
+- 区间事件只有同时设置起点和终点后才计数。
+- 待完成的区间起点不增加计数。
 
-## Event Track Timeline Row
+## 事件轨道时间轴行
 
-The right-side event row renders marker instances instead of numeric curves.
+右侧事件行渲染事件标记实例，而不是数值曲线。
 
-Point event instances:
+点事件实例：
 
-- Render as an `8` px diamond centered on the event time.
-- Use the event color.
-- Keep a minimum `16` px hit target so the marker can be selected and dragged when zoomed out.
+- 渲染为以事件时间为中心的 `8` px 菱形。
+- 使用事件颜色。
+- 保留最小 `16` px 命中区域，确保缩放较小时仍可选中和拖动。
 
-Range event instances:
+区间事件实例：
 
-- Render as a horizontal segment from start time to end time.
-- Use the event color with a subtle border.
-- Preserve a minimum visible height inside the one-row track.
-- Render visible left and right resize handles.
-- Each edge handle uses a `3` px visual width and at least a `10` px horizontal hit target.
+- 渲染为从起点时间延伸到终点时间的水平段。
+- 使用事件颜色，并带有轻微边框。
+- 在单行轨道内保留最小可见高度。
+- 渲染可见的左右尺寸调整手柄。
+- 每个边缘手柄的视觉宽度为 `3` px，水平命中区域至少为 `10` px。
 
-Pending range start:
+待完成区间起点：
 
-- Render as a temporary, semi-transparent segment from the pending start to the current playhead
-  time.
-- If the playhead is before the pending start, render the temporary segment between the two times
-  and keep the start visually identifiable.
-- The pending segment uses the event color at lower opacity.
+- 渲染为从待完成起点延伸到当前播放头时间的临时半透明区间。
+- 如果播放头位于待完成起点之前，则在这两个时间之间渲染临时区间，并保持起点本身清晰可辨。
+- 待完成区间使用事件颜色并降低不透明度。
 
-## Add And Shortcut Behavior
+## 添加和快捷键行为
 
-The row action button and keyboard shortcut perform the same action at the current playhead time.
+行内动作按钮和键盘快捷键在当前播放头时间执行同一个动作。
 
-Point event:
+点事件：
 
-- Click `添加 (shortcut)` or press the shortcut.
-- Add a point instance at `playheadSeconds`.
-- Increment the completed count.
+- 点击 `添加 (快捷键)` 或按下快捷键。
+- 在 `playheadSeconds` 添加一个点实例。
+- 已完成数量加一。
 
-Range event:
+区间事件：
 
-- First click or shortcut press stores a pending start at `playheadSeconds`.
-- The button changes to `设置终点 (shortcut)`.
-- Second click or shortcut press completes the range with the current `playheadSeconds`.
-- If the end time is earlier than the start time, store the range with normalized `start <= end`.
-- Clear pending state and increment the completed count.
+- 第一次点击或按下快捷键时，在 `playheadSeconds` 保存待完成起点。
+- 按钮变为 `设置终点 (快捷键)`。
+- 第二次点击或按下快捷键时，使用当前 `playheadSeconds` 完成区间。
+- 如果终点时间早于起点时间，则按 `start <= end` 归一化保存区间。
+- 清除待完成状态，并让已完成数量加一。
 
-The previous behavior where shortcuts only select an event marker definition is removed.
+原先“快捷键只选中事件标记定义”的行为删除。
 
-## Editing Interactions
+## 编辑交互
 
-Event instances are editable directly in the timeline content area.
+事件实例可以直接在时间轴内容区域中编辑。
 
-Point drag:
+点拖动：
 
-- Dragging a point moves it horizontally.
-- The new time is computed with the shared `TimelineViewport.timeAtX()` conversion.
-- The time is clamped to the total timeline range.
+- 拖动点事件会水平移动该点。
+- 新时间使用共享的 `TimelineViewport.timeAtX()` 换算。
+- 时间会被限制在总时间轴范围内。
 
-Range drag:
+区间整体拖动：
 
-- Dragging the body of a completed range moves both start and end by the same delta.
-- Duration is preserved.
-- The range is clamped to the total timeline range.
+- 拖动已完成区间的主体时，起点和终点按相同增量一起移动。
+- 区间时长保持不变。
+- 区间会被限制在总时间轴范围内。
 
-Range resize:
+区间边缘调整：
 
-- Dragging the left edge changes only the start time.
-- Dragging the right edge changes only the end time.
-- If a resize crosses the opposite edge, normalize the stored range so `start <= end`.
-- Resize uses the same time conversion and clamping as point drag.
+- 拖动左边缘只修改起点时间。
+- 拖动右边缘只修改终点时间。
+- 如果调整时穿过了另一侧边缘，则按 `start <= end` 归一化保存区间。
+- 边缘调整使用与点拖动相同的时间换算和范围限制。
 
-Context menu:
+右键菜单：
 
-- Right-clicking a point or range opens a small context menu.
-- The initial menu contains `删除`.
-- Choosing `删除` removes that instance and updates the completed count.
+- 右键点击点事件或区间事件时打开一个小型上下文菜单。
+- 初版菜单只包含 `删除`。
+- 选择 `删除` 会移除该实例，并更新已完成数量。
 
-## Data Model
+## 数据模型
 
-Extend event marker state beyond definitions.
+扩展事件标记状态，使它不再只有定义。
 
-Each event marker row should expose:
+每个事件标记行应暴露：
 
 - `shortcut`
 - `name`
-- `kind` (`point` or `range`)
+- `kind`（`point` 或 `range`）
 - `color`
 - `count`
 - `actionText`
@@ -173,97 +159,96 @@ Each event marker row should expose:
 - `pendingStartSeconds`
 - `instances`
 
-Each instance should expose enough data for QML rendering:
+每个实例应暴露足够 QML 渲染使用的数据：
 
-- Stable instance id.
-- Kind.
-- Start time.
-- End time for ranges.
-- Color.
+- 稳定的实例 id。
+- 类型。
+- 起点时间。
+- 区间事件的终点时间。
+- 颜色。
 
-Required model/controller operations:
+需要的模型或控制器操作：
 
-- Add point at time.
-- Toggle range start/end at time.
-- Move point instance.
-- Move range instance.
-- Resize range start.
-- Resize range end.
-- Delete instance.
-- Trigger shortcut at playhead time.
+- 在指定时间添加点事件。
+- 在指定时间切换区间起点和终点。
+- 移动点事件实例。
+- 移动区间事件实例。
+- 调整区间起点。
+- 调整区间终点。
+- 删除实例。
+- 在播放头时间触发快捷键。
 
-Implementation may extend `EventMarkerModel` directly for the prototype. It should not overload
-`TopicListModel` with event-specific roles.
+原型实现可以直接扩展 `EventMarkerModel`。不应向 `TopicListModel` 添加事件特有角色。
 
-## Component Boundaries
+## 组件边界
 
-Expected QML component split:
+预期的 QML 组件拆分：
 
-- `TimelinePanel.qml`: owns viewport, ruler, playhead, range bar, and combined row layout.
-- `EventTrackInfoRow.qml`: renders the left event information row and action button.
-- `EventTrackRow.qml`: renders point/range instances and handles drag/resize/context menu.
-- Existing `TimelineInfoRow.qml` and `TimelineCurveRow.qml`: continue handling topic tracks.
+- `TimelinePanel.qml`：拥有视窗、时间尺、播放头、底部时间滚动条和组合行布局。
+- `EventTrackInfoRow.qml`：渲染左侧事件信息行和动作按钮。
+- `EventTrackRow.qml`：渲染点/区间实例，并处理拖动、边缘调整和右键菜单。
+- 现有 `TimelineInfoRow.qml` 和 `TimelineCurveRow.qml`：继续处理话题轨道。
 
-This keeps event editing isolated from numeric curve rendering.
+这样可以让事件编辑与数值曲线渲染保持隔离。
 
-## Visual Style
+## 视觉风格
 
-Event tracks should feel related to topic tracks, but distinct:
+事件轨道应该与话题轨道风格相关，但保持可区分：
 
-- Use the same row grid and divider language as topic tracks.
-- Use a lighter event-row background or a subtle left color swatch to signal annotation rows.
-- Keep buttons compact and right-aligned.
-- Avoid large cards, rounded panels, or a second toolbar-like event marker strip.
-- Use event color for the marker glyphs, not for the whole row background.
+- 使用与话题轨道相同的行网格和分隔语言。
+- 使用更浅的事件行背景，或使用轻量左侧色块来提示这是标注行。
+- 按钮保持紧凑并右对齐。
+- 避免大卡片、圆角面板或第二条类似工具栏的事件标记区域。
+- 事件颜色用于标记图形本身，不用于整行背景。
 
-The result should read like a video editor timeline annotation lane, not a separate form.
+最终效果应该像视频剪辑软件时间轴中的标注轨道，而不是一个独立表单。
 
-## Out Of Scope
+## 不在范围内
 
-- Persisting event marker instances to disk.
-- Writing marker metadata into rosbag or video outputs.
-- Importing marker instances from prior recordings.
-- Undo/redo.
-- Multi-select or bulk delete.
-- Keyboard nudging of selected markers.
-- Snapping markers to samples or ticks.
-- Editing event names, colors, shortcuts, or kinds in the UI.
-- Showing real recorded event data from backend storage.
+- 将事件标记实例持久化到磁盘。
+- 将标记元数据写入 rosbag 或 video 输出。
+- 从已有采集记录导入标记实例。
+- 撤销/重做。
+- 多选或批量删除。
+- 通过键盘微调选中的标记。
+- 将标记吸附到采样点或刻度。
+- 在 UI 中编辑事件名称、颜色、快捷键或类型。
+- 从后端存储中显示真实已记录事件数据。
 
-## Testing
+## 测试
 
-Add or update tests for the UI structure and event marker model behavior.
+新增或更新 UI 结构测试和事件标记模型行为测试。
 
-Expected coverage:
+预期覆盖：
 
-- `Main.qml` no longer instantiates `EventMarkersPanel`.
-- `TimelinePanel.qml` accepts both `topicModel` and `eventMarkerModel`.
-- Event marker rows are rendered before topic rows.
-- Event info rows expose action text for point and range markers.
-- Range action text changes from `添加起点` to `设置终点` while a pending start exists.
-- Shortcut triggering adds a marker at the current playhead time instead of only selecting a marker.
-- Completed counts update after point add, range completion, and deletion.
-- Point drag, range body drag, and range edge resize operations exist in the QML/C++ contract.
-- Right-click context menu includes `删除`.
+- `Main.qml` 不再实例化 `EventMarkersPanel`。
+- `TimelinePanel.qml` 同时接收 `topicModel` 和 `eventMarkerModel`。
+- 事件标记行显示在话题行之前。
+- 事件信息行暴露点事件和区间事件的动作文本。
+- 存在待完成起点时，区间动作文本从 `添加起点` 变为 `设置终点`。
+- 触发快捷键会在当前播放头时间添加标记，而不是只选中标记。
+- 添加点、完成区间和删除实例后，已完成数量会更新。
+- QML/C++ 合约中存在点拖动、区间整体拖动和区间边缘调整操作。
+- 右键菜单包含 `删除`。
 
-Expected verification:
+预期验证：
 
 - `qmllint -I qml/components qml/Main.qml qml/components/*.qml`
 - `colcon build --packages-select data_recorder`
 - `colcon test --packages-select data_recorder`
 
-## Acceptance Criteria
+## 验收标准
 
-- The standalone event marker panel is gone.
-- Each configured event marker appears as one compact event track in the Timeline.
-- Event tracks appear above topic tracks.
-- Event row text is left-aligned and action buttons are right-aligned.
-- Point events can be added at the playhead with either the row button or shortcut.
-- Range events can add a start and then set an end with the same button or shortcut.
-- Pending range rows visibly show their pending state and provisional segment.
-- Completed point and range counts are displayed correctly.
-- Point markers can be dragged horizontally.
-- Range markers can be dragged as a whole.
-- Range marker left and right edges can be resized independently.
-- Point and range markers can be deleted from a right-click menu.
-- Event markers share the existing ruler, zoom, pan, playhead visibility, and range bar behavior.
+- 独立事件标记面板已删除。
+- 每个已配置事件标记在时间轴中显示为一条紧凑事件轨道。
+- 事件轨道显示在话题轨道上方。
+- 事件行文本左对齐，动作按钮右对齐。
+- 点事件可以通过行按钮或快捷键添加到播放头位置。
+- 区间事件可以通过同一个按钮或快捷键先添加起点，再设置终点。
+- 待完成区间行会清晰显示其待完成状态和临时区间。
+- 点事件和区间事件的已完成数量显示正确。
+- 点标记可以水平拖动。
+- 区间标记可以整体拖动。
+- 区间标记的左右边缘可以独立调整。
+- 点标记和区间标记可以通过右键菜单删除。
+- 事件标记共享现有时间尺、缩放、平移、播放头可见性和底部时间滚动条行为。
