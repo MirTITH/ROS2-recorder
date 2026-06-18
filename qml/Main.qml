@@ -68,7 +68,7 @@ ApplicationWindow {
 
                         RecordingSessionsPanel {
                             SplitView.fillHeight: true
-                            SplitView.minimumHeight: 80
+                            SplitView.minimumHeight: 120
                             model: appController.recordingSessionModel
                             controller: appController
                         }

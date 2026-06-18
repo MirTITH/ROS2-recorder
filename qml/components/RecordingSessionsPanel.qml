@@ -87,6 +87,7 @@ Panel {
             model: root.model
 
             delegate: Rectangle {
+                objectName: "historyDataSourceRow_" + index
                 width: ListView.view.width
                 height: 46
                 color: selected ? "#e8f1ff" : "#ffffff"

@@ -47,6 +47,32 @@ void expect_not_contains(const std::string & text, const std::string & token)
   EXPECT_EQ(text.find(token), std::string::npos) << token;
 }
 
+std::string qml_block(const std::string & text, const std::string & block_start)
+{
+  const std::size_t start = text.find(block_start);
+  if (start == std::string::npos) {
+    ADD_FAILURE() << block_start;
+    return {};
+  }
+
+  int brace_depth = 0;
+  bool entered_block = false;
+  for (std::size_t position = start; position < text.size(); ++position) {
+    if (text[position] == '{') {
+      ++brace_depth;
+      entered_block = true;
+    } else if (text[position] == '}') {
+      --brace_depth;
+      if (entered_block && brace_depth == 0) {
+        return text.substr(start, position - start + 1);
+      }
+    }
+  }
+
+  ADD_FAILURE() << "Unclosed QML block: " << block_start;
+  return {};
+}
+
 }  // namespace
 
 TEST(QmlStructure, EverySplitViewUsesCustomResizeHandle)
@@ -190,12 +216,15 @@ TEST(QmlStructure, RecordingTagsPanelCanCollapseToTitleBar)
 TEST(QmlStructure, RecordingSessionsPanelActsAsDataSourceSelector)
 {
   const std::string main_text = read_text(qml_dir() / "Main.qml");
+  const std::string sessions_block = qml_block(main_text, "RecordingSessionsPanel {");
   const std::string panel_text = read_text(qml_dir() / "components" / "RecordingSessionsPanel.qml");
 
-  expect_contains(main_text, "controller: appController");
+  expect_contains(sessions_block, "SplitView.minimumHeight: 120");
+  expect_contains(sessions_block, "controller: appController");
   expect_contains(panel_text, "title: \"数据\"");
   expect_contains(panel_text, "property var controller");
   expect_contains(panel_text, "objectName: \"onlineDataSourceRow\"");
+  expect_contains(panel_text, "objectName: \"historyDataSourceRow_\" + index");
   expect_contains(panel_text, "text: \"在线数据\"");
   expect_contains(panel_text, "root.controller.selectOnlineData()");
   expect_contains(panel_text, "root.controller.selectHistorySession(index)");
