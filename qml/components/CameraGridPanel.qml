@@ -20,6 +20,7 @@ Panel {
     readonly property bool dragActive: dragSourceKey.length > 0
     readonly property real dragStartThreshold: 6
     readonly property real tileGap: 4
+    readonly property string placeholderSourceKey: "__drop_placeholder__"
 
     title: "相机预览"
 
@@ -173,8 +174,8 @@ Panel {
         return best
     }
 
-    function layoutForIndex(itemIndex) {
-        var count = Math.max(1, cameraProxy.count)
+    function layoutForIndex(itemIndex, itemCount) {
+        var count = Math.max(1, itemCount === undefined ? cameraProxy.count : itemCount)
         var availableWidth = Math.max(1, previewArea.width)
         var availableHeight = Math.max(1, previewArea.height)
         var layout = chooseLayout(availableWidth, availableHeight, count)
@@ -191,35 +192,55 @@ Panel {
         }
     }
 
-    function insertIndexAtPoint(xPosition, yPosition) {
-        var count = cameraProxy.count
-        if (count <= 0) {
-            return 0
-        }
-        var bestIndex = count
-        var bestDistance = Number.MAX_VALUE
-        for (var index = 0; index < count; ++index) {
-            var itemLayout = layoutForIndex(index)
-            var centerX = itemLayout.x + itemLayout.width / 2
-            var centerY = itemLayout.y + itemLayout.height / 2
-            var distance = Math.pow(centerX - xPosition, 2) + Math.pow(centerY - yPosition, 2)
-            if (distance < bestDistance) {
-                bestDistance = distance
-                bestIndex = xPosition < centerX ? index : index + 1
+    function previewSequence() {
+        var sequence = []
+        var draggedKey = root.dragActive ? root.dragSourceKey : ""
+        for (var index = 0; index < cameraProxy.count; ++index) {
+            var camera = cameraProxy.get(index)
+            if (camera.sourceKey !== draggedKey) {
+                sequence.push({
+                    sourceKey: camera.sourceKey,
+                    proxyIndex: index
+                })
             }
         }
-        return Math.max(0, Math.min(count, bestIndex))
+
+        if (root.dragActive && root.dropInsertIndex >= 0) {
+            var insertIndex = root.dropInsertIndex
+            if (root.dragSourceIndex >= 0 && insertIndex > root.dragSourceIndex) {
+                insertIndex -= 1
+            }
+            insertIndex = Math.max(0, Math.min(sequence.length, insertIndex))
+            sequence.splice(insertIndex, 0, {
+                sourceKey: root.placeholderSourceKey,
+                proxyIndex: -1
+            })
+        }
+
+        return sequence
     }
 
-    function targetIndexAfterRemovingSource() {
-        if (dropInsertIndex < 0) {
-            return -1
+    function previewIndexForKey(sourceKey, fallbackIndex) {
+        if (!root.dragActive) {
+            return fallbackIndex
         }
-        var targetIndex = dropInsertIndex
-        if (dragSourceIndex >= 0 && targetIndex > dragSourceIndex) {
-            targetIndex -= 1
+        var sequence = root.previewSequence()
+        for (var index = 0; index < sequence.length; ++index) {
+            if (sequence[index].sourceKey === sourceKey) {
+                return index
+            }
         }
-        return Math.max(0, Math.min(Math.max(0, cameraProxy.count - 1), targetIndex))
+        return fallbackIndex
+    }
+
+    function previewLayoutForKey(sourceKey, fallbackIndex) {
+        if (root.dragActive && sourceKey === root.dragSourceKey) {
+            return root.layoutForIndex(fallbackIndex, cameraProxy.count)
+        }
+        var sequence = root.previewSequence()
+        var index = root.dragActive ? previewIndexForKey(sourceKey, fallbackIndex) : fallbackIndex
+        var count = root.dragActive ? Math.max(1, sequence.length) : cameraProxy.count
+        return root.layoutForIndex(index, count)
     }
 
     function placeholderLayout() {
@@ -231,7 +252,39 @@ Panel {
                 height: 0
             }
         }
-        return layoutForIndex(targetIndexAfterRemovingSource())
+        return root.previewLayoutForKey(root.placeholderSourceKey, 0)
+    }
+
+    function floatingPreviewLayout() {
+        if (root.dragSourceIndex < 0) {
+            return {
+                x: 0,
+                y: 0,
+                width: 1,
+                height: 1
+            }
+        }
+        return root.layoutForIndex(root.dragSourceIndex, cameraProxy.count)
+    }
+
+    function insertIndexAtPoint(xPosition, yPosition) {
+        var count = cameraProxy.count
+        if (count <= 0) {
+            return 0
+        }
+        var bestIndex = count
+        var bestDistance = Number.MAX_VALUE
+        for (var index = 0; index < count; ++index) {
+            var itemLayout = root.layoutForIndex(index, count)
+            var centerX = itemLayout.x + itemLayout.width / 2
+            var centerY = itemLayout.y + itemLayout.height / 2
+            var distance = Math.pow(centerX - xPosition, 2) + Math.pow(centerY - yPosition, 2)
+            if (distance < bestDistance) {
+                bestDistance = distance
+                bestIndex = xPosition < centerX ? index : index + 1
+            }
+        }
+        return Math.max(0, Math.min(count, bestIndex))
     }
 
     function beginDragPress(sourceKey, sourceIndex, xPosition, yPosition) {
@@ -462,7 +515,7 @@ Panel {
                 required property string resolutionText
                 required property color seriesColor
 
-                readonly property var cellLayout: root.layoutForIndex(index)
+                readonly property var cellLayout: root.previewLayoutForKey(cameraCell.sourceKey, cameraCell.index)
 
                 x: cellLayout.x
                 y: cellLayout.y
@@ -518,9 +571,11 @@ Panel {
         CameraPreviewTile {
             id: floatingPreview
 
+            readonly property var previewLayout: root.floatingPreviewLayout()
+
             visible: root.dragActive && root.dragSourceIndex >= 0
-            width: root.dragSourceIndex >= 0 ? root.layoutForIndex(root.dragSourceIndex).width : 1
-            height: root.dragSourceIndex >= 0 ? root.layoutForIndex(root.dragSourceIndex).height : 1
+            width: previewLayout.width
+            height: previewLayout.height
             x: Math.max(0, Math.min(previewArea.width - width, root.dragX - width / 2))
             y: Math.max(0, Math.min(previewArea.height - height, root.dragY - height / 2))
             z: 10
