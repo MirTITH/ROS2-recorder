@@ -136,6 +136,12 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   expect_contains(track_text, "rotation: 45");
   expect_contains(track_text, "id: leftResizeHandle");
   expect_contains(track_text, "id: rightResizeHandle");
+  expect_contains(track_text, "id: leftRangeBorder");
+  expect_contains(track_text, "id: rightRangeBorder");
+  expect_contains(track_text, "function startDrag(mode, instanceId, startSeconds, endSeconds, rootX)");
+  expect_contains(track_text, "function updateDrag(rootX)");
+  expect_contains(track_text, "function finishDrag()");
+  expect_contains(track_text, "activeDragCurrentX");
   expect_contains(track_text, "root.markerModel.movePoint");
   expect_contains(track_text, "root.markerModel.moveRange");
   expect_contains(track_text, "root.markerModel.deleteInstance");
@@ -143,6 +149,7 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   expect_contains(track_text, "deleteMenu.popup(root, localX, localY)");
   expect_contains(track_text, "MenuItem");
   expect_contains(track_text, "text: \"删除\"");
+  expect_not_contains(track_text, "width: 3\n                    height: 14\n                    color: \"#ffffff\"");
   expect_contains(panel_text, "height: eventInfoRepeater.count > 0 ? 1 : 0");
   expect_contains(panel_text, "height: eventCurveRepeater.count > 0 ? 1 : 0");
 }
