@@ -225,6 +225,45 @@ TEST_F(QmlSmokeTest, RecordButtonAndSpaceToggleRecording)
   EXPECT_FALSE(controller_->recording());
 }
 
+TEST_F(QmlSmokeTest, DataSourceRowsSwitchBetweenOnlineAndHistoryState)
+{
+  auto * online_row = qobject_cast<QQuickItem *>(find_required(root_, "onlineDataSourceRow"));
+  auto * history_row = qobject_cast<QQuickItem *>(find_required(root_, "historyDataSourceRow_0"));
+  QObject * record_button = find_required(root_, "recordButton");
+  ASSERT_NE(online_row, nullptr);
+  ASSERT_NE(history_row, nullptr);
+  ASSERT_NE(record_button, nullptr);
+
+  EXPECT_FALSE(controller_->historyMode());
+  EXPECT_EQ(controller_->statusText().toStdString(), "实时查看");
+  EXPECT_TRUE(record_button->property("enabled").toBool());
+
+  QPoint history_position =
+    history_row->mapToScene(QPointF(history_row->width() / 2.0, history_row->height() / 2.0))
+      .toPoint();
+  QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, history_position);
+  QCoreApplication::processEvents();
+
+  EXPECT_TRUE(controller_->historyMode());
+  EXPECT_EQ(controller_->selectedSessionRow(), 0);
+  EXPECT_EQ(controller_->statusText().toStdString(), "历史查看：2026-05-31_07-46-20");
+  EXPECT_FALSE(record_button->property("enabled").toBool());
+
+  ASSERT_TRUE(QMetaObject::invokeMethod(record_button, "clicked"));
+  EXPECT_FALSE(controller_->recording());
+
+  QPoint online_position =
+    online_row->mapToScene(QPointF(online_row->width() / 2.0, online_row->height() / 2.0))
+      .toPoint();
+  QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, online_position);
+  QCoreApplication::processEvents();
+
+  EXPECT_FALSE(controller_->historyMode());
+  EXPECT_EQ(controller_->selectedSessionRow(), -1);
+  EXPECT_EQ(controller_->statusText().toStdString(), "实时查看");
+  EXPECT_TRUE(record_button->property("enabled").toBool());
+}
+
 TEST_F(QmlSmokeTest, MarkerShortcutAddsPointAtPlayhead)
 {
   controller_->setPlayheadSeconds(6.25);

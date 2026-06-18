@@ -25,7 +25,7 @@ Rectangle {
             Layout.preferredWidth: 64
             Layout.preferredHeight: 24
             text: root.isRecording ? "停止" : "录制"
-            enabled: !!root.controller
+            enabled: !!root.controller && root.controller.canRecord
             onClicked: root.controller.toggleRecording()
         }
 
