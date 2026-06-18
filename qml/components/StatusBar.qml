@@ -6,25 +6,39 @@ Rectangle {
     id: root
 
     property var controller
-    readonly property string outputDirectory: controller && controller.outputDirectory ? controller.outputDirectory : "未设置"
+    readonly property bool isRecording: !!controller && controller.recording
+    readonly property string statusText: controller && controller.statusText ? controller.statusText : "就绪"
 
-    implicitHeight: 28
+    implicitHeight: 32
     color: "#ffffff"
     border.color: "#d5dce8"
     border.width: 1
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 12
+        anchors.leftMargin: 8
         anchors.rightMargin: 12
-        spacing: 18
+        spacing: 10
+
+        Button {
+            objectName: "recordButton"
+            Layout.preferredWidth: 64
+            Layout.preferredHeight: 24
+            text: root.isRecording ? "停止" : "录制"
+            enabled: !!root.controller
+            onClicked: root.controller.toggleRecording()
+        }
 
         Label {
-            Layout.fillWidth: true
-            text: "保存目录: " + root.outputDirectory
-            color: "#475569"
+            text: root.statusText
+            color: root.isRecording ? "#dc2626" : "#166534"
             font.pixelSize: 11
-            elide: Text.ElideMiddle
+            font.bold: true
+            elide: Text.ElideRight
+        }
+
+        Item {
+            Layout.fillWidth: true
         }
 
         Label {

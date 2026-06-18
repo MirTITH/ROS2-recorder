@@ -42,11 +42,6 @@ ApplicationWindow {
             anchors.fill: parent
             spacing: 0
 
-            AppHeader {
-                Layout.fillWidth: true
-                controller: appController
-            }
-
             SplitView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
