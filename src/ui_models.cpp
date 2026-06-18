@@ -2,6 +2,7 @@
 
 #include <QVariantMap>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <utility>
@@ -87,6 +88,20 @@ QString make_frequency_text(int row, TopicUiCategory category)
 bool valid_row(int row, int size)
 {
   return row >= 0 && row < size;
+}
+
+double non_negative_seconds(double seconds)
+{
+  return std::max(0.0, seconds);
+}
+
+void normalize_range(double & start_seconds, double & end_seconds)
+{
+  start_seconds = non_negative_seconds(start_seconds);
+  end_seconds = non_negative_seconds(end_seconds);
+  if (end_seconds < start_seconds) {
+    std::swap(start_seconds, end_seconds);
+  }
 }
 
 }  // namespace
@@ -315,16 +330,43 @@ QVariant EventMarkerModel::data(const QModelIndex & index, int role) const
     return {};
   }
 
-  const auto & marker = markers_.at(static_cast<std::size_t>(index.row()));
+  const auto & row = markers_.at(static_cast<std::size_t>(index.row()));
   switch (role) {
     case ShortcutRole:
-      return QString::fromStdString(marker.shortcut);
+      return QString::fromStdString(row.marker.shortcut);
     case NameRole:
-      return QString::fromStdString(marker.name);
+      return QString::fromStdString(row.marker.name);
     case KindRole:
-      return QString::fromStdString(marker.kind);
+      return QString::fromStdString(row.marker.kind);
     case ColorRole:
-      return QString::fromStdString(marker.color);
+      return QString::fromStdString(row.marker.color);
+    case CountRole:
+      return row.instances.size();
+    case ActionTextRole:
+      if (row.marker.kind == "range") {
+        return row.has_pending_range_start ?
+          QStringLiteral("设置终点 (%1)").arg(QString::fromStdString(row.marker.shortcut)) :
+          QStringLiteral("添加起点 (%1)").arg(QString::fromStdString(row.marker.shortcut));
+      }
+      return QStringLiteral("添加 (%1)").arg(QString::fromStdString(row.marker.shortcut));
+    case HasPendingRangeStartRole:
+      return row.has_pending_range_start;
+    case PendingStartSecondsRole:
+      return row.pending_start_seconds;
+    case InstancesRole: {
+      QVariantList instances;
+      instances.reserve(row.instances.size());
+      for (const auto & instance : row.instances) {
+        QVariantMap map;
+        map.insert(QStringLiteral("id"), instance.id);
+        map.insert(QStringLiteral("kind"), instance.kind);
+        map.insert(QStringLiteral("startSeconds"), instance.start_seconds);
+        map.insert(QStringLiteral("endSeconds"), instance.end_seconds);
+        map.insert(QStringLiteral("color"), QString::fromStdString(row.marker.color));
+        instances.push_back(map);
+      }
+      return instances;
+    }
     case IsSelectedRole:
       return index.row() == selected_row_;
     default:
@@ -339,8 +381,182 @@ QHash<int, QByteArray> EventMarkerModel::roleNames() const
     {NameRole, "name"},
     {KindRole, "kind"},
     {ColorRole, "color"},
+    {CountRole, "count"},
+    {ActionTextRole, "actionText"},
+    {HasPendingRangeStartRole, "hasPendingRangeStart"},
+    {PendingStartSecondsRole, "pendingStartSeconds"},
+    {InstancesRole, "instances"},
     {IsSelectedRole, "isSelected"},
   };
+}
+
+bool EventMarkerModel::triggerRowAction(int row, double time_seconds)
+{
+  if (!valid_row(row, static_cast<int>(markers_.size()))) {
+    return false;
+  }
+
+  const auto & marker = markers_.at(static_cast<std::size_t>(row)).marker;
+  if (marker.kind == "range") {
+    return toggleRange(row, time_seconds);
+  }
+  return addPoint(row, time_seconds);
+}
+
+bool EventMarkerModel::triggerShortcut(const QString & shortcut, double time_seconds)
+{
+  const auto normalized = shortcut.toLower();
+  for (int row = 0; row < static_cast<int>(markers_.size()); ++row) {
+    if (QString::fromStdString(markers_.at(static_cast<std::size_t>(row)).marker.shortcut)
+        .toLower() == normalized)
+    {
+      return triggerRowAction(row, time_seconds);
+    }
+  }
+  return false;
+}
+
+bool EventMarkerModel::addPoint(int row, double time_seconds)
+{
+  if (!valid_row(row, static_cast<int>(markers_.size()))) {
+    return false;
+  }
+
+  auto & marker_row = markers_.at(static_cast<std::size_t>(row));
+  if (marker_row.marker.kind != "point") {
+    return false;
+  }
+
+  const double normalized_seconds = non_negative_seconds(time_seconds);
+  EventInstance instance;
+  instance.id = marker_row.next_instance_id++;
+  instance.kind = QStringLiteral("point");
+  instance.start_seconds = normalized_seconds;
+  instance.end_seconds = normalized_seconds;
+  marker_row.instances.push_back(instance);
+
+  const auto model_index = index(row, 0);
+  emit dataChanged(model_index, model_index, {CountRole, InstancesRole});
+  return true;
+}
+
+bool EventMarkerModel::toggleRange(int row, double time_seconds)
+{
+  if (!valid_row(row, static_cast<int>(markers_.size()))) {
+    return false;
+  }
+
+  auto & marker_row = markers_.at(static_cast<std::size_t>(row));
+  if (marker_row.marker.kind != "range") {
+    return false;
+  }
+
+  if (!marker_row.has_pending_range_start) {
+    marker_row.has_pending_range_start = true;
+    marker_row.pending_start_seconds = non_negative_seconds(time_seconds);
+
+    const auto model_index = index(row, 0);
+    emit dataChanged(
+      model_index, model_index,
+      {ActionTextRole, HasPendingRangeStartRole, PendingStartSecondsRole});
+    return true;
+  }
+
+  double start_seconds = marker_row.pending_start_seconds;
+  double end_seconds = time_seconds;
+  normalize_range(start_seconds, end_seconds);
+
+  EventInstance instance;
+  instance.id = marker_row.next_instance_id++;
+  instance.kind = QStringLiteral("range");
+  instance.start_seconds = start_seconds;
+  instance.end_seconds = end_seconds;
+  marker_row.instances.push_back(instance);
+  marker_row.has_pending_range_start = false;
+  marker_row.pending_start_seconds = 0.0;
+
+  const auto model_index = index(row, 0);
+  emit dataChanged(
+    model_index, model_index,
+    {CountRole, ActionTextRole, HasPendingRangeStartRole, PendingStartSecondsRole, InstancesRole});
+  return true;
+}
+
+bool EventMarkerModel::movePoint(int row, int instance_id, double time_seconds)
+{
+  if (!valid_row(row, static_cast<int>(markers_.size()))) {
+    return false;
+  }
+
+  auto & marker_row = markers_.at(static_cast<std::size_t>(row));
+  if (marker_row.marker.kind != "point") {
+    return false;
+  }
+
+  const double normalized_seconds = non_negative_seconds(time_seconds);
+  auto instance = std::find_if(
+    marker_row.instances.begin(), marker_row.instances.end(),
+    [instance_id](const EventInstance & candidate) { return candidate.id == instance_id; });
+  if (instance == marker_row.instances.end()) {
+    return false;
+  }
+
+  instance->start_seconds = normalized_seconds;
+  instance->end_seconds = normalized_seconds;
+
+  const auto model_index = index(row, 0);
+  emit dataChanged(model_index, model_index, {InstancesRole});
+  return true;
+}
+
+bool EventMarkerModel::moveRange(
+  int row, int instance_id, double start_seconds, double end_seconds)
+{
+  if (!valid_row(row, static_cast<int>(markers_.size()))) {
+    return false;
+  }
+
+  auto & marker_row = markers_.at(static_cast<std::size_t>(row));
+  if (marker_row.marker.kind != "range") {
+    return false;
+  }
+
+  auto instance = std::find_if(
+    marker_row.instances.begin(), marker_row.instances.end(),
+    [instance_id](const EventInstance & candidate) { return candidate.id == instance_id; });
+  if (instance == marker_row.instances.end()) {
+    return false;
+  }
+
+  normalize_range(start_seconds, end_seconds);
+  instance->start_seconds = start_seconds;
+  instance->end_seconds = end_seconds;
+
+  const auto model_index = index(row, 0);
+  emit dataChanged(model_index, model_index, {InstancesRole});
+  return true;
+}
+
+bool EventMarkerModel::deleteInstance(int row, int instance_id)
+{
+  if (!valid_row(row, static_cast<int>(markers_.size()))) {
+    return false;
+  }
+
+  auto & marker_row = markers_.at(static_cast<std::size_t>(row));
+  const auto previous_size = marker_row.instances.size();
+  marker_row.instances.erase(
+    std::remove_if(
+      marker_row.instances.begin(), marker_row.instances.end(),
+      [instance_id](const EventInstance & instance) { return instance.id == instance_id; }),
+    marker_row.instances.end());
+  if (marker_row.instances.size() == previous_size) {
+    return false;
+  }
+
+  const auto model_index = index(row, 0);
+  emit dataChanged(model_index, model_index, {CountRole, InstancesRole});
+  return true;
 }
 
 void EventMarkerModel::select(int row)
@@ -364,8 +580,8 @@ bool EventMarkerModel::selectByShortcut(const QString & shortcut)
 {
   const auto normalized = shortcut.toLower();
   for (int row = 0; row < static_cast<int>(markers_.size()); ++row) {
-    if (QString::fromStdString(markers_.at(static_cast<std::size_t>(row)).shortcut).toLower() ==
-      normalized)
+    if (QString::fromStdString(markers_.at(static_cast<std::size_t>(row)).marker.shortcut)
+        .toLower() == normalized)
     {
       select(row);
       return true;
@@ -379,14 +595,20 @@ QString EventMarkerModel::selectedShortcut() const
   if (!valid_row(selected_row_, static_cast<int>(markers_.size()))) {
     return {};
   }
-  return QString::fromStdString(markers_.at(static_cast<std::size_t>(selected_row_)).shortcut)
-    .toLower();
+  return QString::fromStdString(
+    markers_.at(static_cast<std::size_t>(selected_row_)).marker.shortcut).toLower();
 }
 
 void EventMarkerModel::set_markers(std::vector<EventMarkerEntry> markers)
 {
   beginResetModel();
-  markers_ = std::move(markers);
+  markers_.clear();
+  markers_.reserve(markers.size());
+  for (auto & marker : markers) {
+    EventMarkerRow row;
+    row.marker = std::move(marker);
+    markers_.push_back(std::move(row));
+  }
   selected_row_ = -1;
   endResetModel();
 }

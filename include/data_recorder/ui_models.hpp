@@ -8,6 +8,7 @@
 #include <QString>
 #include <QVariant>
 #include <QVariantList>
+#include <QVector>
 
 #include <vector>
 
@@ -106,6 +107,11 @@ public:
     NameRole,
     KindRole,
     ColorRole,
+    CountRole,
+    ActionTextRole,
+    HasPendingRangeStartRole,
+    PendingStartSecondsRole,
+    InstancesRole,
     IsSelectedRole,
   };
 
@@ -115,6 +121,14 @@ public:
   QVariant data(const QModelIndex & index, int role = Qt::DisplayRole) const override;
   QHash<int, QByteArray> roleNames() const override;
 
+  Q_INVOKABLE bool triggerRowAction(int row, double time_seconds);
+  Q_INVOKABLE bool triggerShortcut(const QString & shortcut, double time_seconds);
+  Q_INVOKABLE bool addPoint(int row, double time_seconds);
+  Q_INVOKABLE bool toggleRange(int row, double time_seconds);
+  Q_INVOKABLE bool movePoint(int row, int instance_id, double time_seconds);
+  Q_INVOKABLE bool moveRange(
+    int row, int instance_id, double start_seconds, double end_seconds);
+  Q_INVOKABLE bool deleteInstance(int row, int instance_id);
   Q_INVOKABLE void select(int row);
   Q_INVOKABLE bool selectByShortcut(const QString & shortcut);
 
@@ -124,9 +138,26 @@ signals:
   void selectedShortcutChanged(const QString & shortcut);
 
 private:
+  struct EventInstance
+  {
+    int id{0};
+    QString kind;
+    double start_seconds{0.0};
+    double end_seconds{0.0};
+  };
+
+  struct EventMarkerRow
+  {
+    EventMarkerEntry marker;
+    QVector<EventInstance> instances;
+    bool has_pending_range_start{false};
+    double pending_start_seconds{0.0};
+    int next_instance_id{1};
+  };
+
   QString selectedShortcut() const;
 
-  std::vector<EventMarkerEntry> markers_;
+  std::vector<EventMarkerRow> markers_;
   int selected_row_{-1};
 };
 
