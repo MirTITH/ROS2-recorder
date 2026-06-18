@@ -7,7 +7,7 @@ Rectangle {
 
     property string eventName: ""
     property string shortcut: ""
-    property string color: "#2563eb"
+    property string markerColor: "#2563eb"
     property int count: 0
     property string actionText: ""
 
@@ -25,7 +25,7 @@ Rectangle {
         Rectangle {
             Layout.preferredWidth: 8
             Layout.preferredHeight: 16
-            color: root.color
+            color: root.markerColor
         }
 
         Label {

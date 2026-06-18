@@ -6,7 +6,7 @@ Rectangle {
 
     property int rowIndex: -1
     property string kind: "point"
-    property string color: "#2563eb"
+    property string markerColor: "#2563eb"
     property var instances: []
     property bool hasPendingRangeStart: false
     property real pendingStartSeconds: 0
@@ -41,10 +41,12 @@ Rectangle {
         if (!root.viewport) {
             return
         }
-        if (wheel.modifiers & Qt.ShiftModifier) {
+        if ((wheel.modifiers & Qt.ShiftModifier) && root.viewport.panByWheel) {
             root.viewport.panByWheel(wheel.angleDelta.y)
-        } else {
+        } else if (root.viewport.zoomAt) {
             root.viewport.zoomAt(localX, root.width, wheel.angleDelta.y)
+        } else {
+            return
         }
         wheel.accepted = true
     }
@@ -80,9 +82,9 @@ Rectangle {
             3,
             Math.abs(root.xAtTime(root.playheadSeconds) - root.xAtTime(root.pendingStartSeconds)))
         height: 10
-        color: root.color
+        color: root.markerColor
         opacity: 0.32
-        border.color: root.color
+        border.color: root.markerColor
         border.width: 1
     }
 
@@ -98,7 +100,7 @@ Rectangle {
             readonly property string instanceKind: String(modelData.kind || root.kind)
             readonly property real instanceStart: Number(modelData.startSeconds || 0)
             readonly property real instanceEnd: Number(modelData.endSeconds || instanceStart)
-            readonly property string instanceColor: String(modelData.color || root.color)
+            readonly property string instanceColor: String(modelData.color || root.markerColor)
 
             x: instanceKind === "point" ?
                 root.xAtTime(instanceStart) - width / 2 :
@@ -170,9 +172,8 @@ Rectangle {
 
                 visible: instanceDelegate.instanceKind === "range"
                 anchors.fill: rangeBody
-                anchors.leftMargin: 10
-                anchors.rightMargin: 10
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
+                z: 10
                 onWheel: function(wheel) {
                     root.zoomAtLocalX(root.localXFromMouse(rangeBodyMouseArea, wheel), wheel)
                 }
@@ -209,6 +210,7 @@ Rectangle {
                 height: 18
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.SizeHorCursor
+                z: 20
                 onWheel: function(wheel) {
                     root.zoomAtLocalX(root.localXFromMouse(leftResizeHandle, wheel), wheel)
                 }
@@ -248,6 +250,7 @@ Rectangle {
                 height: 18
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.SizeHorCursor
+                z: 20
                 onWheel: function(wheel) {
                     root.zoomAtLocalX(root.localXFromMouse(rightResizeHandle, wheel), wheel)
                 }
