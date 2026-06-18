@@ -206,7 +206,7 @@ Rectangle {
                 visible: instanceDelegate.instanceKind === "range"
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                width: 10
+                width: 4
                 height: 18
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.SizeHorCursor
@@ -246,7 +246,7 @@ Rectangle {
                 visible: instanceDelegate.instanceKind === "range"
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                width: 10
+                width: 4
                 height: 18
                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.SizeHorCursor
