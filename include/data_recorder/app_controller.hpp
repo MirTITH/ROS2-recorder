@@ -22,7 +22,6 @@ class AppController : public QObject
   Q_PROPERTY(double liveEdgeSeconds READ liveEdgeSeconds NOTIFY liveEdgeSecondsChanged)
   Q_PROPERTY(bool followingLiveEdge READ followingLiveEdge NOTIFY followingLiveEdgeChanged)
   Q_PROPERTY(QString modeText READ modeText NOTIFY modeTextChanged)
-  Q_PROPERTY(QString selectedMarkerShortcut READ selectedMarkerShortcut NOTIFY selectedMarkerShortcutChanged)
   Q_PROPERTY(int visibleCameraCount READ visibleCameraCount NOTIFY visibleCameraCountChanged)
   Q_PROPERTY(TopicListModel * topicModel READ topicModel CONSTANT)
   Q_PROPERTY(TopicListModel * cameraModel READ cameraModel CONSTANT)
@@ -42,7 +41,6 @@ public:
   double liveEdgeSeconds() const;
   bool followingLiveEdge() const;
   QString modeText() const;
-  QString selectedMarkerShortcut() const;
   int visibleCameraCount() const;
   TopicListModel * topicModel();
   TopicListModel * cameraModel();
@@ -67,12 +65,10 @@ signals:
   void liveEdgeSecondsChanged();
   void followingLiveEdgeChanged();
   void modeTextChanged();
-  void selectedMarkerShortcutChanged();
   void visibleCameraCountChanged();
 
 private:
   void refreshVisibleCameraCount();
-  void updateSelectedMarkerShortcut(const QString & shortcut);
 
   QString config_path_;
   QString output_directory_;
@@ -81,7 +77,6 @@ private:
   double playhead_seconds_{0.0};
   double live_edge_seconds_{0.0};
   bool following_live_edge_{false};
-  QString selected_marker_shortcut_;
   int visible_camera_count_{0};
   TopicListModel topic_model_;
   TopicListModel camera_model_;

@@ -33,11 +33,6 @@ AppController::AppController(const ConfigData & config, QObject * parent)
   track_model_.set_topics(config.track_topics);
   tag_model_.set_tags(config.tags);
   event_marker_model_.set_markers(config.event_markers);
-  connect(
-    &event_marker_model_,
-    &EventMarkerModel::selectedShortcutChanged,
-    this,
-    &AppController::updateSelectedMarkerShortcut);
 }
 
 QString AppController::configPath() const
@@ -81,11 +76,6 @@ QString AppController::modeText() const
     return following_live_edge_ ? QStringLiteral("录制中") : QStringLiteral("查看");
   }
   return QStringLiteral("查看");
-}
-
-QString AppController::selectedMarkerShortcut() const
-{
-  return selected_marker_shortcut_;
 }
 
 int AppController::visibleCameraCount() const
@@ -186,10 +176,7 @@ void AppController::returnToLiveEdge()
 
 bool AppController::triggerMarkerShortcut(const QString & shortcut)
 {
-  if (!event_marker_model_.selectByShortcut(shortcut)) {
-    return false;
-  }
-  return true;
+  return event_marker_model_.triggerShortcut(shortcut, playhead_seconds_);
 }
 
 void AppController::toggleTopicVisible(int row)
@@ -239,15 +226,6 @@ void AppController::refreshVisibleCameraCount()
     visible_camera_count_ = next_count;
     emit visibleCameraCountChanged();
   }
-}
-
-void AppController::updateSelectedMarkerShortcut(const QString & shortcut)
-{
-  if (selected_marker_shortcut_ == shortcut) {
-    return;
-  }
-  selected_marker_shortcut_ = shortcut;
-  emit selectedMarkerShortcutChanged();
 }
 
 }  // namespace data_recorder
