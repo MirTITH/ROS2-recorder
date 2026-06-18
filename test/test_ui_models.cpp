@@ -33,7 +33,11 @@ data_recorder::ConfigData make_config_fixture()
   config.camera_topics = {camera_topic};
   config.track_topics = {numeric_topic};
   config.tags = {{"成功", "#2f9e44"}, {"失败", "#e03131"}};
-  config.event_markers = {{"1", "拿起水杯", "point", "#1763c9"}};
+  config.event_markers = {
+    {"1", "拿起水杯", "point", "#1763c9"},
+    {"2", "倒水", "range", "#2f9e44"},
+    {"c", "碰撞", "point", "#e03131"},
+  };
   return config;
 }
 
@@ -360,7 +364,7 @@ TEST(AppController, ExposesPopulatedModels)
       .toStdString(),
     "/joint_states");
   EXPECT_EQ(controller.tagModel()->rowCount(), 2);
-  EXPECT_EQ(controller.eventMarkerModel()->rowCount(), 1);
+  EXPECT_EQ(controller.eventMarkerModel()->rowCount(), 3);
   EXPECT_GT(controller.recordingSessionModel()->rowCount(), 0);
 }
 
@@ -460,15 +464,56 @@ TEST(AppController, ScrubbingDuringRecordingDetachesAndCanReturnToLive)
   EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 12.0);
 }
 
-TEST(AppController, TriggerMarkerShortcutSelectsMarker)
+TEST(AppController, TriggerMarkerShortcutAddsPointAtPlayhead)
 {
   const auto config = make_config_fixture();
   data_recorder::AppController controller(config);
 
+  controller.setPlayheadSeconds(7.125);
+
   EXPECT_TRUE(controller.triggerMarkerShortcut("1"));
-  EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
+  const auto row = controller.eventMarkerModel()->index(0, 0);
+  EXPECT_EQ(
+    controller.eventMarkerModel()->data(row, data_recorder::EventMarkerModel::CountRole).toInt(),
+    1);
+
+  const QVariantList instances =
+    controller.eventMarkerModel()->data(row, data_recorder::EventMarkerModel::InstancesRole).toList();
+  ASSERT_EQ(instances.size(), 1);
+  EXPECT_DOUBLE_EQ(
+    instances.at(0).toMap().value(QStringLiteral("startSeconds")).toDouble(), 7.125);
+
   EXPECT_FALSE(controller.triggerMarkerShortcut("missing"));
-  EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
+  EXPECT_EQ(
+    controller.eventMarkerModel()->data(row, data_recorder::EventMarkerModel::CountRole).toInt(),
+    1);
+}
+
+TEST(AppController, TriggerMarkerShortcutCompletesRangeAtPlayhead)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+  const auto range_row = controller.eventMarkerModel()->index(1, 0);
+
+  controller.setPlayheadSeconds(2.0);
+  EXPECT_TRUE(controller.triggerMarkerShortcut("2"));
+  EXPECT_TRUE(
+    controller.eventMarkerModel()
+      ->data(range_row, data_recorder::EventMarkerModel::HasPendingRangeStartRole)
+      .toBool());
+  EXPECT_EQ(
+    controller.eventMarkerModel()->data(range_row, data_recorder::EventMarkerModel::CountRole).toInt(),
+    0);
+
+  controller.setPlayheadSeconds(4.5);
+  EXPECT_TRUE(controller.triggerMarkerShortcut("2"));
+  EXPECT_FALSE(
+    controller.eventMarkerModel()
+      ->data(range_row, data_recorder::EventMarkerModel::HasPendingRangeStartRole)
+      .toBool());
+  EXPECT_EQ(
+    controller.eventMarkerModel()->data(range_row, data_recorder::EventMarkerModel::CountRole).toInt(),
+    1);
 }
 
 TEST(AppController, DirectTopicModelToggleEmitsVisibleCameraCountChanged)
@@ -510,46 +555,6 @@ TEST(AppController, ToggleTopicVisibleEmitsVisibleCameraCountChangedOnce)
   EXPECT_EQ(signal_count, 1);
 }
 
-TEST(AppController, DirectEventMarkerSelectionUpdatesSelectedMarkerShortcut)
-{
-  const auto config = make_config_fixture();
-  data_recorder::AppController controller(config);
-
-  int signal_count = 0;
-  QObject::connect(
-    &controller,
-    &data_recorder::AppController::selectedMarkerShortcutChanged,
-    [&signal_count]() {
-      ++signal_count;
-    });
-
-  controller.eventMarkerModel()->select(0);
-
-  EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
-  EXPECT_EQ(signal_count, 1);
-}
-
-TEST(AppController, MissingMarkerShortcutPreservesSelectionAndDoesNotEmit)
-{
-  const auto config = make_config_fixture();
-  data_recorder::AppController controller(config);
-
-  ASSERT_TRUE(controller.triggerMarkerShortcut("1"));
-
-  int signal_count = 0;
-  QObject::connect(
-    &controller,
-    &data_recorder::AppController::selectedMarkerShortcutChanged,
-    [&signal_count]() {
-      ++signal_count;
-    });
-
-  EXPECT_FALSE(controller.triggerMarkerShortcut("missing"));
-
-  EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
-  EXPECT_EQ(signal_count, 0);
-}
-
 TEST(AppController, EventFilterHandlesRecordingAndMarkerShortcuts)
 {
   const auto config = make_config_fixture();
@@ -562,7 +567,11 @@ TEST(AppController, EventFilterHandlesRecordingAndMarkerShortcuts)
 
   QKeyEvent marker_event(QEvent::KeyPress, Qt::Key_1, Qt::NoModifier, QStringLiteral("1"));
   EXPECT_TRUE(controller.eventFilter(nullptr, &marker_event));
-  EXPECT_EQ(controller.selectedMarkerShortcut().toStdString(), "1");
+  EXPECT_EQ(
+    controller.eventMarkerModel()
+      ->data(controller.eventMarkerModel()->index(0, 0), data_recorder::EventMarkerModel::CountRole)
+      .toInt(),
+    1);
   EXPECT_TRUE(marker_event.isAccepted());
 }
 
@@ -578,7 +587,11 @@ TEST(AppController, EventFilterIgnoresAutoRepeatAndUnknownKeys)
 
   QKeyEvent unknown_event(QEvent::KeyPress, Qt::Key_Z, Qt::NoModifier, QStringLiteral("z"));
   EXPECT_FALSE(controller.eventFilter(nullptr, &unknown_event));
-  EXPECT_TRUE(controller.selectedMarkerShortcut().isEmpty());
+  EXPECT_EQ(
+    controller.eventMarkerModel()
+      ->data(controller.eventMarkerModel()->index(0, 0), data_recorder::EventMarkerModel::CountRole)
+      .toInt(),
+    0);
 }
 
 TEST(AppController, EventFilterIgnoresModifiedShortcuts)
@@ -599,5 +612,9 @@ TEST(AppController, EventFilterIgnoresModifiedShortcuts)
   QKeyEvent ctrl_marker_event(
     QEvent::KeyPress, Qt::Key_1, Qt::ControlModifier, QStringLiteral("1"));
   EXPECT_FALSE(controller.eventFilter(nullptr, &ctrl_marker_event));
-  EXPECT_TRUE(controller.selectedMarkerShortcut().isEmpty());
+  EXPECT_EQ(
+    controller.eventMarkerModel()
+      ->data(controller.eventMarkerModel()->index(0, 0), data_recorder::EventMarkerModel::CountRole)
+      .toInt(),
+    0);
 }
