@@ -446,23 +446,184 @@ TEST(AppController, SelectingOnlineDataRestoresRecordingAvailability)
   EXPECT_EQ(controller.statusText().toStdString(), "实时查看");
 }
 
+TEST(AppController, DataSourceSelectionEmitsOnlyChangedPropertySignals)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  int data_source_changed_count = 0;
+  int can_record_changed_count = 0;
+  int recording_changed_count = 0;
+  int status_text_changed_count = 0;
+  int mode_text_changed_count = 0;
+  int following_live_edge_changed_count = 0;
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::dataSourceChanged,
+    [&data_source_changed_count]() {
+      ++data_source_changed_count;
+    });
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::canRecordChanged,
+    [&can_record_changed_count]() {
+      ++can_record_changed_count;
+    });
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::recordingChanged,
+    [&recording_changed_count]() {
+      ++recording_changed_count;
+    });
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::statusTextChanged,
+    [&status_text_changed_count]() {
+      ++status_text_changed_count;
+    });
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::modeTextChanged,
+    [&mode_text_changed_count]() {
+      ++mode_text_changed_count;
+    });
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::followingLiveEdgeChanged,
+    [&following_live_edge_changed_count]() {
+      ++following_live_edge_changed_count;
+    });
+
+  controller.selectHistorySession(0);
+  EXPECT_TRUE(controller.historyMode());
+  EXPECT_EQ(controller.selectedSessionRow(), 0);
+  EXPECT_FALSE(controller.canRecord());
+  EXPECT_EQ(data_source_changed_count, 1);
+  EXPECT_EQ(can_record_changed_count, 1);
+  EXPECT_EQ(status_text_changed_count, 1);
+  EXPECT_EQ(mode_text_changed_count, 1);
+  EXPECT_EQ(following_live_edge_changed_count, 0);
+
+  controller.toggleRecording();
+  EXPECT_FALSE(controller.recording());
+  EXPECT_EQ(data_source_changed_count, 1);
+  EXPECT_EQ(can_record_changed_count, 1);
+  EXPECT_EQ(recording_changed_count, 0);
+  EXPECT_EQ(status_text_changed_count, 1);
+  EXPECT_EQ(mode_text_changed_count, 1);
+  EXPECT_EQ(following_live_edge_changed_count, 0);
+
+  controller.selectHistorySession(0);
+  controller.selectHistorySession(-1);
+  controller.selectHistorySession(controller.recordingSessionModel()->rowCount());
+  EXPECT_EQ(controller.selectedSessionRow(), 0);
+  EXPECT_EQ(data_source_changed_count, 1);
+  EXPECT_EQ(can_record_changed_count, 1);
+  EXPECT_EQ(status_text_changed_count, 1);
+  EXPECT_EQ(mode_text_changed_count, 1);
+  EXPECT_EQ(following_live_edge_changed_count, 0);
+
+  controller.selectHistorySession(1);
+  EXPECT_TRUE(controller.historyMode());
+  EXPECT_EQ(controller.selectedSessionRow(), 1);
+  EXPECT_EQ(controller.statusText().toStdString(), "历史查看：2026-05-31_07-47-06");
+  EXPECT_EQ(data_source_changed_count, 2);
+  EXPECT_EQ(can_record_changed_count, 1);
+  EXPECT_EQ(status_text_changed_count, 2);
+  EXPECT_EQ(mode_text_changed_count, 1);
+  EXPECT_EQ(following_live_edge_changed_count, 0);
+
+  controller.selectOnlineData();
+  EXPECT_FALSE(controller.historyMode());
+  EXPECT_EQ(controller.selectedSessionRow(), -1);
+  EXPECT_TRUE(controller.canRecord());
+  EXPECT_EQ(controller.statusText().toStdString(), "实时查看");
+  EXPECT_EQ(data_source_changed_count, 3);
+  EXPECT_EQ(can_record_changed_count, 2);
+  EXPECT_EQ(status_text_changed_count, 3);
+  EXPECT_EQ(mode_text_changed_count, 2);
+  EXPECT_EQ(following_live_edge_changed_count, 0);
+
+  controller.selectOnlineData();
+  EXPECT_EQ(data_source_changed_count, 3);
+  EXPECT_EQ(can_record_changed_count, 2);
+  EXPECT_EQ(status_text_changed_count, 3);
+  EXPECT_EQ(mode_text_changed_count, 2);
+  EXPECT_EQ(following_live_edge_changed_count, 0);
+}
+
+TEST(AppController, HistorySelectionNoOpsWhileRecording)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  int data_source_changed_count = 0;
+  int can_record_changed_count = 0;
+  int status_text_changed_count = 0;
+  int mode_text_changed_count = 0;
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::dataSourceChanged,
+    [&data_source_changed_count]() {
+      ++data_source_changed_count;
+    });
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::canRecordChanged,
+    [&can_record_changed_count]() {
+      ++can_record_changed_count;
+    });
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::statusTextChanged,
+    [&status_text_changed_count]() {
+      ++status_text_changed_count;
+    });
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::modeTextChanged,
+    [&mode_text_changed_count]() {
+      ++mode_text_changed_count;
+    });
+
+  controller.toggleRecording();
+  EXPECT_TRUE(controller.recording());
+  EXPECT_TRUE(controller.canRecord());
+  EXPECT_EQ(status_text_changed_count, 1);
+  EXPECT_EQ(mode_text_changed_count, 1);
+
+  controller.selectHistorySession(0);
+
+  EXPECT_FALSE(controller.historyMode());
+  EXPECT_EQ(controller.selectedSessionRow(), -1);
+  EXPECT_TRUE(controller.canRecord());
+  EXPECT_TRUE(controller.recording());
+  EXPECT_EQ(data_source_changed_count, 0);
+  EXPECT_EQ(can_record_changed_count, 0);
+  EXPECT_EQ(status_text_changed_count, 1);
+  EXPECT_EQ(mode_text_changed_count, 1);
+}
+
 TEST(AppController, RecordingReviewStateHasDistinctStatusText)
 {
   const auto config = make_config_fixture();
   data_recorder::AppController controller(config);
 
   controller.toggleRecording();
+  controller.advanceLiveEdge(10.0);
   EXPECT_EQ(controller.statusText().toStdString(), "录制中");
   EXPECT_EQ(controller.modeText().toStdString(), "录制中");
 
-  controller.setPlayheadSeconds(0.0);
+  controller.setPlayheadSeconds(4.0);
   EXPECT_TRUE(controller.recording());
   EXPECT_FALSE(controller.followingLiveEdge());
+  EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 4.0);
   EXPECT_EQ(controller.statusText().toStdString(), "录制中回看");
   EXPECT_EQ(controller.modeText().toStdString(), "录制中回看");
 
   controller.returnToLiveEdge();
   EXPECT_TRUE(controller.followingLiveEdge());
+  EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 10.0);
   EXPECT_EQ(controller.statusText().toStdString(), "录制中");
 }
 

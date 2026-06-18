@@ -158,16 +158,22 @@ void AppController::selectOnlineData()
     return;
   }
 
-  const bool was_recordable = canRecord();
+  const QString previous_status = status_text_;
+  const QString previous_mode = modeText();
+  const bool previous_can_record = canRecord();
   history_mode_ = false;
   selected_session_row_ = -1;
   status_text_ = statusTextForCurrentState();
   emit dataSourceChanged();
-  if (was_recordable != canRecord()) {
+  if (previous_can_record != canRecord()) {
     emit canRecordChanged();
   }
-  emit statusTextChanged();
-  emit modeTextChanged();
+  if (previous_status != status_text_) {
+    emit statusTextChanged();
+  }
+  if (previous_mode != modeText()) {
+    emit modeTextChanged();
+  }
 }
 
 void AppController::selectHistorySession(int row)
@@ -183,24 +189,31 @@ void AppController::selectHistorySession(int row)
     return;
   }
 
-  const bool was_recordable = canRecord();
-  const bool was_following = following_live_edge_;
-  const bool data_source_changed = !history_mode_ || selected_session_row_ != row;
+  const QString previous_status = status_text_;
+  const QString previous_mode = modeText();
+  const bool previous_can_record = canRecord();
+  const bool previous_history_mode = history_mode_;
+  const int previous_selected_row = selected_session_row_;
+  const bool previous_following = following_live_edge_;
   history_mode_ = true;
   selected_session_row_ = row;
   following_live_edge_ = false;
-  status_text_ = QStringLiteral("历史查看：%1").arg(folder_name);
-  if (data_source_changed) {
+  status_text_ = statusTextForCurrentState();
+  if (previous_history_mode != history_mode_ || previous_selected_row != selected_session_row_) {
     emit dataSourceChanged();
   }
-  if (was_recordable != canRecord()) {
+  if (previous_can_record != canRecord()) {
     emit canRecordChanged();
   }
-  if (was_following != following_live_edge_) {
+  if (previous_following != following_live_edge_) {
     emit followingLiveEdgeChanged();
   }
-  emit statusTextChanged();
-  emit modeTextChanged();
+  if (previous_status != status_text_) {
+    emit statusTextChanged();
+  }
+  if (previous_mode != modeText()) {
+    emit modeTextChanged();
+  }
 }
 
 void AppController::setPlayheadSeconds(double seconds)
