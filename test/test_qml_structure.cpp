@@ -82,6 +82,24 @@ TEST(QmlStructure, MainLayoutUsesFlushLeftWorkspace)
   expect_not_contains(main_text, "bottomPadding:");
 }
 
+TEST(QmlStructure, AppChromeUsesStatusBarForRecording)
+{
+  const std::string main_text = read_text(qml_dir() / "Main.qml");
+  const std::string status_text = read_text(qml_dir() / "components" / "StatusBar.qml");
+
+  expect_not_contains(main_text, "AppHeader");
+  EXPECT_FALSE(std::filesystem::exists(qml_dir() / "components" / "AppHeader.qml"));
+  expect_contains(status_text, "implicitHeight: 32");
+  expect_contains(status_text, "objectName: \"recordButton\"");
+  expect_contains(status_text, "root.controller.toggleRecording()");
+  expect_contains(status_text, "readonly property bool isRecording");
+  expect_contains(status_text, "readonly property string statusText");
+  expect_contains(status_text, "text: root.statusText");
+  expect_contains(status_text, "text: \"磁盘 --\"");
+  expect_not_contains(status_text, "outputDirectory");
+  expect_not_contains(status_text, "保存目录");
+}
+
 TEST(QmlStructure, ResizeHandleUsesCompactUnifiedHitArea)
 {
   const std::string handle_text = read_text(qml_dir() / "components" / "ResizeHandle.qml");
@@ -112,9 +130,17 @@ TEST(QmlStructure, CameraGridUsesExplicitLayoutAndDragPreview)
 
   expect_not_contains(grid_text, "GridView {");
   expect_contains(grid_text, "Repeater {");
+  expect_contains(grid_text, "readonly property string placeholderSourceKey");
   expect_contains(grid_text, "function chooseLayout");
   expect_contains(grid_text, "function layoutForIndex");
   expect_contains(grid_text, "function cameraAspectRatio");
+  expect_contains(grid_text, "function previewSequence");
+  expect_contains(grid_text, "function previewLayoutForKey");
+  expect_contains(grid_text, "function placeholderLayout");
+  expect_contains(grid_text, "function floatingPreviewLayout");
+  expect_contains(grid_text, "root.previewLayoutForKey(cameraCell.sourceKey, cameraCell.index)");
+  expect_contains(grid_text, "sourceKey: root.placeholderSourceKey");
+  expect_contains(grid_text, "root.previewSequence()");
   expect_contains(grid_text, "function updateDropInsertIndex");
   expect_contains(grid_text, "function commitDropInsertIndex");
   expect_contains(grid_text, "id: dropPlaceholder");
