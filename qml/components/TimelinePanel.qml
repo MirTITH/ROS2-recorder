@@ -155,7 +155,7 @@ Panel {
 
                     Rectangle {
                         width: infoColumn.width
-                        height: 1
+                        height: eventInfoRepeater.count > 0 ? 1 : 0
                         color: "#cbd5e1"
                     }
 
@@ -317,7 +317,7 @@ Panel {
 
                         Rectangle {
                             width: curveColumn.width
-                            height: 1
+                            height: eventCurveRepeater.count > 0 ? 1 : 0
                             color: "#cbd5e1"
                         }
 

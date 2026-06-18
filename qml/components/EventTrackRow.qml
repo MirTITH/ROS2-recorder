@@ -59,9 +59,9 @@ Rectangle {
         return Math.max(Number(instance.startSeconds || 0), Number(instance.endSeconds || 0))
     }
 
-    function requestDelete(instanceId) {
+    function requestDelete(instanceId, localX, localY) {
         root.contextInstanceId = instanceId
-        deleteMenu.popup()
+        deleteMenu.popup(root, localX, localY)
     }
 
     Rectangle {
@@ -135,7 +135,10 @@ Rectangle {
 
                 onPressed: function(mouse) {
                     if (mouse.button === Qt.RightButton) {
-                        root.requestDelete(instanceDelegate.instanceId)
+                        root.requestDelete(
+                            instanceDelegate.instanceId,
+                            root.localXFromMouse(pointMouseArea, mouse),
+                            pointMouseArea.mapToItem(root, mouse.x, mouse.y).y)
                     }
                 }
 
@@ -180,7 +183,10 @@ Rectangle {
 
                 onPressed: function(mouse) {
                     if (mouse.button === Qt.RightButton) {
-                        root.requestDelete(instanceDelegate.instanceId)
+                        root.requestDelete(
+                            instanceDelegate.instanceId,
+                            root.localXFromMouse(rangeBodyMouseArea, mouse),
+                            rangeBodyMouseArea.mapToItem(root, mouse.x, mouse.y).y)
                         return
                     }
                     pressTrackX = root.localXFromMouse(rangeBodyMouseArea, mouse)
@@ -217,7 +223,10 @@ Rectangle {
 
                 onPressed: function(mouse) {
                     if (mouse.button === Qt.RightButton) {
-                        root.requestDelete(instanceDelegate.instanceId)
+                        root.requestDelete(
+                            instanceDelegate.instanceId,
+                            root.localXFromMouse(leftResizeHandle, mouse),
+                            leftResizeHandle.mapToItem(root, mouse.x, mouse.y).y)
                     }
                 }
 
@@ -257,7 +266,10 @@ Rectangle {
 
                 onPressed: function(mouse) {
                     if (mouse.button === Qt.RightButton) {
-                        root.requestDelete(instanceDelegate.instanceId)
+                        root.requestDelete(
+                            instanceDelegate.instanceId,
+                            root.localXFromMouse(rightResizeHandle, mouse),
+                            rightResizeHandle.mapToItem(root, mouse.x, mouse.y).y)
                     }
                 }
 

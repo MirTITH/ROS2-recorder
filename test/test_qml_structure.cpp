@@ -139,8 +139,12 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   expect_contains(track_text, "root.markerModel.movePoint");
   expect_contains(track_text, "root.markerModel.moveRange");
   expect_contains(track_text, "root.markerModel.deleteInstance");
+  expect_contains(track_text, "function requestDelete(instanceId, localX, localY)");
+  expect_contains(track_text, "deleteMenu.popup(root, localX, localY)");
   expect_contains(track_text, "MenuItem");
   expect_contains(track_text, "text: \"删除\"");
+  expect_contains(panel_text, "height: eventInfoRepeater.count > 0 ? 1 : 0");
+  expect_contains(panel_text, "height: eventCurveRepeater.count > 0 ? 1 : 0");
 }
 
 TEST(QmlStructure, ResizeHandleUsesCompactUnifiedHitArea)
