@@ -83,7 +83,7 @@ Panel {
 
         ColumnLayout {
             SplitView.preferredWidth: 300
-            SplitView.minimumWidth: 190
+            SplitView.minimumWidth: 50
             SplitView.maximumWidth: 520
             spacing: 0
 

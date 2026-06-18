@@ -11,7 +11,7 @@ Panel {
 
     Flickable {
         anchors.fill: parent
-        anchors.margins: 10
+        anchors.margins: 8
         clip: true
         contentWidth: width
         contentHeight: tagFlow.implicitHeight
@@ -20,7 +20,7 @@ Panel {
             id: tagFlow
 
             width: parent.width
-            spacing: 8
+            spacing: 4
 
             Repeater {
                 model: root.model
@@ -29,7 +29,7 @@ Panel {
                     id: tagButton
 
                     text: model.name
-                    implicitHeight: 22
+                    implicitHeight: 18
                     padding: 0
                     leftPadding: 0
                     rightPadding: 0

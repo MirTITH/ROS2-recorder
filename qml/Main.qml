@@ -66,19 +66,20 @@ ApplicationWindow {
 
                     SplitView {
                         SplitView.preferredWidth: 268
-                        SplitView.minimumWidth: 220
+                        SplitView.minimumWidth: 100
                         SplitView.maximumWidth: 390
                         orientation: Qt.Vertical
                         handle: ResizeHandle { lineOrientation: Qt.Horizontal }
 
                         RecordingSessionsPanel {
-                            SplitView.preferredHeight: 284
+                            // SplitView.preferredHeight: 
+                            SplitView.fillHeight: true
                             SplitView.minimumHeight: 160
                             model: appController.recordingSessionModel
                         }
 
                         RecordingTagsPanel {
-                            SplitView.fillHeight: true
+                            SplitView.preferredHeight: 65
                             SplitView.minimumHeight: 20
                             model: appController.tagModel
                         }
@@ -90,7 +91,7 @@ ApplicationWindow {
                         handle: ResizeHandle { lineOrientation: Qt.Horizontal }
 
                         EventMarkersPanel {
-                            SplitView.preferredHeight: 82
+                            SplitView.preferredHeight: 70
                             SplitView.minimumHeight: 70
                             SplitView.maximumHeight: 112
                             model: appController.eventMarkerModel
