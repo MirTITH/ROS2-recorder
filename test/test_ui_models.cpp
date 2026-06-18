@@ -501,6 +501,11 @@ TEST(AppController, TriggerMarkerShortcutCompletesRangeAtPlayhead)
     controller.eventMarkerModel()
       ->data(range_row, data_recorder::EventMarkerModel::HasPendingRangeStartRole)
       .toBool());
+  EXPECT_DOUBLE_EQ(
+    controller.eventMarkerModel()
+      ->data(range_row, data_recorder::EventMarkerModel::PendingStartSecondsRole)
+      .toDouble(),
+    2.0);
   EXPECT_EQ(
     controller.eventMarkerModel()->data(range_row, data_recorder::EventMarkerModel::CountRole).toInt(),
     0);
@@ -514,6 +519,15 @@ TEST(AppController, TriggerMarkerShortcutCompletesRangeAtPlayhead)
   EXPECT_EQ(
     controller.eventMarkerModel()->data(range_row, data_recorder::EventMarkerModel::CountRole).toInt(),
     1);
+
+  const QVariantList instances =
+    controller.eventMarkerModel()
+      ->data(range_row, data_recorder::EventMarkerModel::InstancesRole)
+      .toList();
+  ASSERT_EQ(instances.size(), 1);
+  const QVariantMap instance = instances.at(0).toMap();
+  EXPECT_DOUBLE_EQ(instance.value(QStringLiteral("startSeconds")).toDouble(), 2.0);
+  EXPECT_DOUBLE_EQ(instance.value(QStringLiteral("endSeconds")).toDouble(), 4.5);
 }
 
 TEST(AppController, DirectTopicModelToggleEmitsVisibleCameraCountChanged)
