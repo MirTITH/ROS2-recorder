@@ -367,8 +367,6 @@ QVariant EventMarkerModel::data(const QModelIndex & index, int role) const
       }
       return instances;
     }
-    case IsSelectedRole:
-      return index.row() == selected_row_;
     default:
       return {};
   }
@@ -386,7 +384,6 @@ QHash<int, QByteArray> EventMarkerModel::roleNames() const
     {HasPendingRangeStartRole, "hasPendingRangeStart"},
     {PendingStartSecondsRole, "pendingStartSeconds"},
     {InstancesRole, "instances"},
-    {IsSelectedRole, "isSelected"},
   };
 }
 
@@ -559,46 +556,6 @@ bool EventMarkerModel::deleteInstance(int row, int instance_id)
   return true;
 }
 
-void EventMarkerModel::select(int row)
-{
-  if (!valid_row(row, static_cast<int>(markers_.size())) || row == selected_row_) {
-    return;
-  }
-
-  const int previous = selected_row_;
-  selected_row_ = row;
-  if (valid_row(previous, static_cast<int>(markers_.size()))) {
-    const auto previous_index = index(previous, 0);
-    emit dataChanged(previous_index, previous_index, {IsSelectedRole});
-  }
-  const auto next_index = index(selected_row_, 0);
-  emit dataChanged(next_index, next_index, {IsSelectedRole});
-  emit selectedShortcutChanged(selectedShortcut());
-}
-
-bool EventMarkerModel::selectByShortcut(const QString & shortcut)
-{
-  const auto normalized = shortcut.toLower();
-  for (int row = 0; row < static_cast<int>(markers_.size()); ++row) {
-    if (QString::fromStdString(markers_.at(static_cast<std::size_t>(row)).marker.shortcut)
-        .toLower() == normalized)
-    {
-      select(row);
-      return true;
-    }
-  }
-  return false;
-}
-
-QString EventMarkerModel::selectedShortcut() const
-{
-  if (!valid_row(selected_row_, static_cast<int>(markers_.size()))) {
-    return {};
-  }
-  return QString::fromStdString(
-    markers_.at(static_cast<std::size_t>(selected_row_)).marker.shortcut).toLower();
-}
-
 void EventMarkerModel::set_markers(std::vector<EventMarkerEntry> markers)
 {
   beginResetModel();
@@ -609,7 +566,6 @@ void EventMarkerModel::set_markers(std::vector<EventMarkerEntry> markers)
     row.marker = std::move(marker);
     markers_.push_back(std::move(row));
   }
-  selected_row_ = -1;
   endResetModel();
 }
 

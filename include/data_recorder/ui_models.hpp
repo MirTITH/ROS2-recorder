@@ -112,7 +112,6 @@ public:
     HasPendingRangeStartRole,
     PendingStartSecondsRole,
     InstancesRole,
-    IsSelectedRole,
   };
 
   explicit EventMarkerModel(QObject * parent = nullptr);
@@ -129,13 +128,8 @@ public:
   Q_INVOKABLE bool moveRange(
     int row, int instance_id, double start_seconds, double end_seconds);
   Q_INVOKABLE bool deleteInstance(int row, int instance_id);
-  Q_INVOKABLE void select(int row);
-  Q_INVOKABLE bool selectByShortcut(const QString & shortcut);
 
   void set_markers(std::vector<EventMarkerEntry> markers);
-
-signals:
-  void selectedShortcutChanged(const QString & shortcut);
 
 private:
   struct EventInstance
@@ -155,10 +149,7 @@ private:
     int next_instance_id{1};
   };
 
-  QString selectedShortcut() const;
-
   std::vector<EventMarkerRow> markers_;
-  int selected_row_{-1};
 };
 
 class RecordingSessionModel : public QAbstractListModel
