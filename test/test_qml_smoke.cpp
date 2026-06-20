@@ -366,7 +366,7 @@ TEST_F(QmlSmokeTest, PressingCameraPreviewDoesNotHideTile)
 TEST_F(QmlSmokeTest, ShiftWheelPansTimelineWithoutMovingPlayhead)
 {
   QObject * viewport = find_required(root_, "timelineViewport");
-  auto * curve_mouse_area = qobject_cast<QQuickItem *>(find_required(root_, "timelineCurveMouseArea"));
+  auto * curve_mouse_area = qobject_cast<QQuickItem *>(find_required(root_, "timelineLaneMouseArea"));
   ASSERT_NE(curve_mouse_area, nullptr);
 
   QJSValue viewport_value = engine_->newQObject(viewport);
@@ -401,7 +401,7 @@ TEST_F(QmlSmokeTest, ShiftWheelPansTimelineWithoutMovingPlayhead)
 TEST_F(QmlSmokeTest, PlayheadLineHidesOutsideVisibleWindow)
 {
   QObject * viewport = find_required(root_, "timelineViewport");
-  auto * curve_playhead = qobject_cast<QQuickItem *>(find_required(root_, "timelineCurvePlayhead"));
+  auto * curve_playhead = qobject_cast<QQuickItem *>(find_required(root_, "timelineLanePlayhead"));
   auto * ruler_playhead = qobject_cast<QQuickItem *>(find_required(root_, "timelineRulerPlayhead"));
   ASSERT_NE(curve_playhead, nullptr);
   ASSERT_NE(ruler_playhead, nullptr);

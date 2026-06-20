@@ -193,7 +193,7 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   expect_contains(track_text, "root.markerModel.deleteAllInstances(root.rowIndex)");
   expect_not_contains(track_text, "width: 3\n                    height: 14\n                    color: \"#ffffff\"");
   expect_contains(panel_text, "height: eventInfoRepeater.count > 0 ? 1 : 0");
-  expect_contains(panel_text, "height: eventCurveRepeater.count > 0 ? 1 : 0");
+  expect_contains(panel_text, "height: eventLaneRepeater.count > 0 ? 1 : 0");
 }
 
 TEST(QmlStructure, ResizeHandleUsesCompactUnifiedHitArea)
@@ -279,10 +279,10 @@ TEST(QmlStructure, TimelineInfoUsesEyeSvgAndOmitsTrackKindText)
   EXPECT_TRUE(std::filesystem::exists(qml_dir() / "assets" / "icons" / "eye-off.svg"));
 }
 
-TEST(QmlStructure, TimelineCurveAreaHasAdaptiveWindowAndRangeBar)
+TEST(QmlStructure, TimelineTrackAreaHasAdaptiveWindowAndRangeBar)
 {
   const std::string panel_text = read_text(qml_dir() / "components" / "TimelinePanel.qml");
-  const std::string curve_text = read_text(qml_dir() / "components" / "TimelineCurveRow.qml");
+  const std::string curve_text = read_text(qml_dir() / "components" / "TimelineTrackRow.qml");
 
   expect_contains(panel_text, "property real visibleStartSeconds");
   expect_contains(panel_text, "property real visibleDurationSeconds");
@@ -319,7 +319,7 @@ TEST(QmlStructure, TimelineUsesViewportObjectForWindowMath)
 TEST(QmlStructure, TimelineViewportRenderingRulesAreExplicit)
 {
   const std::string panel_text = read_text(qml_dir() / "components" / "TimelinePanel.qml");
-  const std::string curve_text = read_text(qml_dir() / "components" / "TimelineCurveRow.qml");
+  const std::string curve_text = read_text(qml_dir() / "components" / "TimelineTrackRow.qml");
   const std::string viewport_text = read_text(qml_dir() / "components" / "TimelineViewport.qml");
   const std::string range_text = read_text(qml_dir() / "components" / "TimelineRangeBar.qml");
 

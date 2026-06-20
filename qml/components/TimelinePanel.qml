@@ -22,30 +22,30 @@ Panel {
     function scrollRows(deltaY) {
         var nextY = Math.max(0, Math.min(infoList.contentHeight - infoList.height, infoList.contentY - deltaY))
         infoList.contentY = nextY
-        curveList.contentY = nextY
+        trackLaneList.contentY = nextY
     }
 
-    function syncCurveToInfo() {
+    function syncLaneToInfo() {
         if (!listsReady) {
             return
         }
-        if (Math.abs(curveList.contentY - infoList.contentY) > 0.5) {
-            curveList.contentY = infoList.contentY
+        if (Math.abs(trackLaneList.contentY - infoList.contentY) > 0.5) {
+            trackLaneList.contentY = infoList.contentY
         }
     }
 
-    function syncInfoToCurve() {
+    function syncInfoToLane() {
         if (!listsReady) {
             return
         }
-        if (Math.abs(infoList.contentY - curveList.contentY) > 0.5) {
-            infoList.contentY = curveList.contentY
+        if (Math.abs(infoList.contentY - trackLaneList.contentY) > 0.5) {
+            infoList.contentY = trackLaneList.contentY
         }
     }
 
-    function seekFromCurveX(xPosition) {
+    function seekFromLaneX(xPosition) {
         if (controller && controller.setPlayheadSeconds) {
-            controller.setPlayheadSeconds(viewport.timeAtX(xPosition, curveViewport.width))
+            controller.setPlayheadSeconds(viewport.timeAtX(xPosition, trackLaneViewport.width))
         }
     }
 
@@ -131,7 +131,7 @@ Panel {
                 boundsBehavior: Flickable.StopAtBounds
                 contentWidth: width
                 contentHeight: infoColumn.implicitHeight
-                onContentYChanged: root.syncCurveToInfo()
+                onContentYChanged: root.syncLaneToInfo()
 
                 Column {
                     id: infoColumn
@@ -234,10 +234,10 @@ Panel {
 
                 MouseArea {
                     anchors.fill: parent
-                    onPressed: root.seekFromCurveX(mouse.x)
+                    onPressed: root.seekFromLaneX(mouse.x)
                     onPositionChanged: {
                         if (pressed) {
-                            root.seekFromCurveX(mouse.x)
+                            root.seekFromLaneX(mouse.x)
                         }
                     }
                 }
@@ -254,56 +254,56 @@ Panel {
             }
 
             Item {
-                id: curveViewport
+                id: trackLaneViewport
 
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
 
                 MouseArea {
-                    objectName: "timelineCurveMouseArea"
+                    objectName: "timelineLaneMouseArea"
                     anchors.fill: parent
                     z: 0
                     acceptedButtons: Qt.LeftButton
-                    onPressed: root.seekFromCurveX(mouse.x)
+                    onPressed: root.seekFromLaneX(mouse.x)
                     onPositionChanged: {
                         if (pressed) {
-                            root.seekFromCurveX(mouse.x)
+                            root.seekFromLaneX(mouse.x)
                         }
                     }
                     onWheel: function(wheel) {
                         if (wheel.modifiers & Qt.ShiftModifier) {
                             viewport.panByWheel(wheel.angleDelta.y)
                         } else {
-                            viewport.zoomAt(wheel.x, curveViewport.width, wheel.angleDelta.y)
+                            viewport.zoomAt(wheel.x, trackLaneViewport.width, wheel.angleDelta.y)
                         }
                         wheel.accepted = true
                     }
                 }
 
                 Flickable {
-                    id: curveList
+                    id: trackLaneList
 
                     anchors.fill: parent
                     z: 1
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
                     contentWidth: width
-                    contentHeight: curveColumn.implicitHeight
+                    contentHeight: trackLaneColumn.implicitHeight
                     interactive: false
-                    onContentYChanged: root.syncInfoToCurve()
+                    onContentYChanged: root.syncInfoToLane()
 
                     Column {
-                        id: curveColumn
+                        id: trackLaneColumn
 
-                        width: curveList.width
+                        width: trackLaneList.width
 
                         Repeater {
-                            id: eventCurveRepeater
+                            id: eventLaneRepeater
                             model: root.eventMarkerModel
 
                             EventTrackRow {
-                                width: curveColumn.width
+                                width: trackLaneColumn.width
                                 rowIndex: index
                                 eventName: model.name
                                 kind: model.kind
@@ -318,16 +318,16 @@ Panel {
                         }
 
                         Rectangle {
-                            width: curveColumn.width
-                            height: eventCurveRepeater.count > 0 ? 1 : 0
+                            width: trackLaneColumn.width
+                            height: eventLaneRepeater.count > 0 ? 1 : 0
                             color: "#cbd5e1"
                         }
 
                         Repeater {
                             model: root.model
 
-                            TimelineCurveRow {
-                                width: curveColumn.width
+                            TimelineTrackRow {
+                                width: trackLaneColumn.width
                                 trackKind: model.trackKind
                                 seriesList: model.seriesList
                                 xMax: root.effectiveDurationSeconds
@@ -339,7 +339,7 @@ Panel {
                 }
 
                 Rectangle {
-                    objectName: "timelineCurvePlayhead"
+                    objectName: "timelineLanePlayhead"
                     width: 2
                     height: parent.height
                     visible: viewport.isTimeVisible(root.playheadSeconds)
