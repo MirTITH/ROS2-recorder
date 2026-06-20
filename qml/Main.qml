@@ -12,7 +12,7 @@ ApplicationWindow {
     minimumHeight: 640
     visible: true
     title: "DataRecorder"
-    color: "#e9edf3"
+    color: Theme.windowBg
 
     onActiveChanged: {
         if (active) {
