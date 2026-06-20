@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <fstream>
 #include <string>
 
@@ -49,12 +50,13 @@ groups:
 
   ASSERT_EQ(config.output_dir, "./recordings");
   ASSERT_EQ(config.topics.size(), 3u);
-  ASSERT_EQ(config.track_topics.size(), 2u);
-  ASSERT_EQ(config.camera_topics.size(), 1u);
-  EXPECT_EQ(config.camera_topics[0].topic_name, "/camera/image_raw");
-  EXPECT_EQ(config.camera_topics[0].backend_name, "video");
-  EXPECT_EQ(config.camera_topics[0].params.at("codec"), "libx264");
-  EXPECT_EQ(config.camera_topics[0].params.at("crf"), "23");
+  const auto camera_it = std::find_if(
+    config.topics.begin(), config.topics.end(),
+    [](const auto & t) { return t.topic_name == "/camera/image_raw"; });
+  ASSERT_NE(camera_it, config.topics.end());
+  EXPECT_EQ(camera_it->backend_name, "video");
+  EXPECT_EQ(camera_it->params.at("codec"), "libx264");
+  EXPECT_EQ(camera_it->params.at("crf"), "23");
   ASSERT_EQ(config.tags.size(), 1u);
   EXPECT_EQ(config.tags[0].name, "成功");
   ASSERT_EQ(config.event_markers.size(), 2u);

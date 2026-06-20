@@ -43,8 +43,6 @@ data_recorder::ConfigData make_config_fixture()
   config.config_path = "/tmp/data_recorder_qml_smoke.yaml";
   config.output_dir = "/tmp/recordings";
   config.topics = {tf_topic, joint_topic, camera_topic};
-  config.camera_topics = {camera_topic};
-  config.track_topics = {tf_topic, joint_topic};
   config.tags = {{"成功", "#2f9e44"}};
   config.event_markers = {
     {"1", "拿起水杯", "point", "#1763c9"},

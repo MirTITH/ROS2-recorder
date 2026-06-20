@@ -30,8 +30,6 @@ data_recorder::ConfigData make_config_fixture()
   config.config_path = "/tmp/data_recorder_test.yaml";
   config.output_dir = "/tmp/recordings";
   config.topics = {numeric_topic, camera_topic};
-  config.camera_topics = {camera_topic};
-  config.track_topics = {numeric_topic};
   config.tags = {{"成功", "#2f9e44"}, {"失败", "#e03131"}};
   config.event_markers = {
     {"1", "拿起水杯", "point", "#1763c9"},
@@ -633,18 +631,14 @@ TEST(AppController, ExposesPopulatedModels)
   data_recorder::AppController controller(config);
 
   ASSERT_NE(controller.topicModel(), nullptr);
-  ASSERT_NE(controller.cameraModel(), nullptr);
-  ASSERT_NE(controller.trackModel(), nullptr);
   ASSERT_NE(controller.tagModel(), nullptr);
   ASSERT_NE(controller.eventMarkerModel(), nullptr);
   ASSERT_NE(controller.recordingSessionModel(), nullptr);
 
   EXPECT_EQ(controller.topicModel()->rowCount(), 2);
-  EXPECT_EQ(controller.cameraModel()->rowCount(), 1);
-  EXPECT_EQ(controller.trackModel()->rowCount(), 1);
   EXPECT_EQ(
-    controller.trackModel()
-      ->data(controller.trackModel()->index(0, 0), data_recorder::TopicListModel::TopicNameRole)
+    controller.topicModel()
+      ->data(controller.topicModel()->index(0, 0), data_recorder::TopicListModel::TopicNameRole)
       .toString()
       .toStdString(),
     "/joint_states");

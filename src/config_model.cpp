@@ -104,11 +104,6 @@ ConfigData ConfigModel::load_from_file(const std::string & path) const
           TopicUiCategory::CameraPreview : TopicUiCategory::NumericTrack;
 
         config.topics.push_back(topic);
-        if (topic.ui_category == TopicUiCategory::CameraPreview) {
-          config.camera_topics.push_back(topic);
-        } else {
-          config.track_topics.push_back(topic);
-        }
       }
       ++group_index;
     }

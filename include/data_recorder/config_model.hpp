@@ -44,8 +44,6 @@ struct ConfigData
   std::string config_path;
   std::string output_dir;
   std::vector<TopicEntry> topics;
-  std::vector<TopicEntry> camera_topics;
-  std::vector<TopicEntry> track_topics;
   std::vector<TagEntry> tags;
   std::vector<EventMarkerEntry> event_markers;
 };

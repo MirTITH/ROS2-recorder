@@ -29,8 +29,6 @@ AppController::AppController(const ConfigData & config, QObject * parent)
       refreshVisibleCameraCount();
     });
 
-  camera_model_.set_topics(config.camera_topics);
-  track_model_.set_topics(config.track_topics);
   tag_model_.set_tags(config.tags);
   event_marker_model_.set_markers(config.event_markers);
 }
@@ -104,16 +102,6 @@ int AppController::visibleCameraCount() const
 TopicListModel * AppController::topicModel()
 {
   return &topic_model_;
-}
-
-TopicListModel * AppController::cameraModel()
-{
-  return &camera_model_;
-}
-
-TopicListModel * AppController::trackModel()
-{
-  return &track_model_;
 }
 
 TagListModel * AppController::tagModel()
