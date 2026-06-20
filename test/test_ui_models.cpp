@@ -59,11 +59,7 @@ TEST(TopicListModel, ExposesTopicRoles)
   EXPECT_EQ(
     model.data(index, data_recorder::TopicListModel::BackendNameRole).toString().toStdString(),
     "rosbag");
-  EXPECT_EQ(
-    model.data(index, data_recorder::TopicListModel::CategoryRole).toString().toStdString(),
-    "numeric");
   EXPECT_TRUE(model.data(index, data_recorder::TopicListModel::IsVisibleRole).toBool());
-  EXPECT_FALSE(model.data(index, data_recorder::TopicListModel::SeriesRole).toList().isEmpty());
 }
 
 TEST(TopicListModel, TogglesVisibility)

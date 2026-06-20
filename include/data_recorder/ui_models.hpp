@@ -26,11 +26,9 @@ public:
   {
     TopicNameRole = Qt::UserRole + 1,
     BackendNameRole,
-    CategoryRole,
     IsVisibleRole,
     FrequencyTextRole,
     SeriesColorRole,
-    SeriesRole,
     TrackKindRole,
     IsCameraRole,
     IsDrawableRole,
@@ -58,7 +56,6 @@ private:
     bool is_visible{true};
     QString frequency_text;
     QString series_color;
-    QVariantList series;
     QString track_kind;
     bool is_camera{false};
     bool is_drawable{false};

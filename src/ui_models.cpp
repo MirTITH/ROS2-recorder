@@ -22,11 +22,6 @@ constexpr std::array<const char *, 6> kSeriesColors{
   "#ca8a04",
 };
 
-QString topic_category_name(TopicUiCategory category)
-{
-  return category == TopicUiCategory::CameraPreview ? QStringLiteral("camera") : QStringLiteral("numeric");
-}
-
 QString track_kind_for_topic(const TopicEntry & topic)
 {
   if (topic.ui_category == TopicUiCategory::CameraPreview) {
@@ -136,16 +131,12 @@ QVariant TopicListModel::data(const QModelIndex & index, int role) const
       return QString::fromStdString(row.topic.topic_name);
     case BackendNameRole:
       return QString::fromStdString(row.topic.backend_name);
-    case CategoryRole:
-      return topic_category_name(row.topic.ui_category);
     case IsVisibleRole:
       return row.is_visible;
     case FrequencyTextRole:
       return row.frequency_text;
     case SeriesColorRole:
       return row.series_color;
-    case SeriesRole:
-      return row.series;
     case TrackKindRole:
       return row.track_kind;
     case IsCameraRole:
@@ -193,11 +184,9 @@ QHash<int, QByteArray> TopicListModel::roleNames() const
   return {
     {TopicNameRole, "topicName"},
     {BackendNameRole, "backendName"},
-    {CategoryRole, "category"},
     {IsVisibleRole, "isVisible"},
     {FrequencyTextRole, "frequencyText"},
     {SeriesColorRole, "seriesColor"},
-    {SeriesRole, "series"},
     {TrackKindRole, "trackKind"},
     {IsCameraRole, "isCamera"},
     {IsDrawableRole, "isDrawable"},
@@ -243,9 +232,6 @@ void TopicListModel::set_topics(std::vector<TopicEntry> topics)
     row.is_drawable = row.track_kind == QStringLiteral("numeric");
     row.resolution_text = row.is_camera ? make_resolution_text(static_cast<int>(i)) : QString();
     row.series_list = make_series_list(static_cast<int>(i), row.track_kind);
-    row.series = row.series_list.isEmpty() ?
-      QVariantList{} :
-      row.series_list.first().toMap().value(QStringLiteral("points")).toList();
     topics_.push_back(std::move(row));
   }
   endResetModel();
