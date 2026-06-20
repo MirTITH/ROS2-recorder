@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "."
 
 Panel {
     id: root
@@ -38,7 +39,7 @@ Panel {
                     Accessible.name: model.name
 
                     background: Rectangle {
-                        color: model.isSelected ? "#dbeafe" : "transparent"
+                        color: model.isSelected ? Theme.accentSoft : "transparent"
                         radius: 4
                     }
 

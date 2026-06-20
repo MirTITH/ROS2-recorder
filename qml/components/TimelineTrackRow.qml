@@ -1,4 +1,5 @@
 import QtQuick 2.15
+import "."
 
 Rectangle {
     id: root
@@ -13,7 +14,7 @@ Rectangle {
     property real sampleMarkerSpacingThreshold: 12
 
     height: 48
-    color: trackKind === "empty" ? "#f8fafc" : "#ffffff"
+    color: trackKind === "empty" ? Theme.surfaceAlt : Theme.surface
 
     function boundedDuration() {
         return Math.max(0.001, Number(visibleDurationSeconds) || 1)
@@ -139,7 +140,7 @@ Rectangle {
     }
 
     function drawSampleMarkers(ctx, samples, color, minY, maxY, top, plotHeightValue, widthValue) {
-        ctx.fillStyle = "#ffffff"
+        ctx.fillStyle = Theme.surface
         ctx.strokeStyle = color
         ctx.lineWidth = 1
         for (var index = 0; index < samples.length; ++index) {
@@ -164,7 +165,7 @@ Rectangle {
         onPaint: {
             var ctx = getContext("2d")
             ctx.clearRect(0, 0, width, height)
-            ctx.fillStyle = "#ffffff"
+            ctx.fillStyle = Theme.surface
             ctx.fillRect(0, 0, width, height)
 
             var top = root.plotTop()
@@ -187,7 +188,7 @@ Rectangle {
                 maxY += 1
             }
 
-            ctx.strokeStyle = "#e2e8f0"
+            ctx.strokeStyle = Theme.gridLine
             ctx.lineWidth = 1
             for (var gridY = 0; gridY <= 2; ++gridY) {
                 var yLine = top + (gridY / 2) * plotHeight
@@ -238,6 +239,6 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: 1
-        color: "#e2e8f0"
+        color: Theme.gridLine
     }
 }

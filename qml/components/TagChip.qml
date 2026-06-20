@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import "."
 
 Rectangle {
     id: root
@@ -24,7 +25,7 @@ Rectangle {
         anchors.centerIn: parent
         visible: !root.dotOnly && root.hasTextRoom
         text: root.label
-        color: root.luminance > 0.56 ? "#111827" : "#ffffff"
+        color: root.luminance > 0.56 ? Theme.textPrimary : Theme.surface
         font.pixelSize: 10
         elide: Text.ElideRight
         width: root.hasTextRoom ? root.availableTextWidth : 0

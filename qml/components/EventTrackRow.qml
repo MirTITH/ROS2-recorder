@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import "."
 
 Rectangle {
     id: root
@@ -26,7 +27,7 @@ Rectangle {
     property real activeDragPreviewEndSeconds: 0
 
     height: 32
-    color: "#fbfdff"
+    color: Theme.surfaceAlt
 
     function xAtTime(seconds) {
         if (root.viewport && root.viewport.xAtTime) {
@@ -140,7 +141,7 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: 1
-        color: "#e2e8f0"
+        color: Theme.gridLine
     }
 
     MouseArea {
@@ -213,7 +214,7 @@ Rectangle {
                 height: 8
                 rotation: 45
                 color: instanceDelegate.instanceColor
-                border.color: "#ffffff"
+                border.color: Theme.surface
                 border.width: 1
             }
 

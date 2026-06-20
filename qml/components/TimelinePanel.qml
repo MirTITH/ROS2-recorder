@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "."
 
 Panel {
     id: root
@@ -92,8 +93,8 @@ Panel {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 30
-                color: "#eef2f7"
-                border.color: "#dbe3ef"
+                color: Theme.surfaceAlt
+                border.color: Theme.border
                 border.width: 1
 
                 RowLayout {
@@ -105,7 +106,7 @@ Panel {
                     Label {
                         Layout.fillWidth: true
                         text: root.timeString(root.playheadSeconds)
-                        color: "#111827"
+                        color: Theme.textPrimary
                         font.pixelSize: 12
                         font.bold: true
                         elide: Text.ElideRight
@@ -157,7 +158,7 @@ Panel {
                     Rectangle {
                         width: infoColumn.width
                         height: eventInfoRepeater.count > 0 ? 1 : 0
-                        color: "#cbd5e1"
+                        color: Theme.border
                     }
 
                     Repeater {
@@ -195,8 +196,8 @@ Panel {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 30
                 clip: true
-                color: "#ffffff"
-                border.color: "#dbe3ef"
+                color: Theme.surface
+                border.color: Theme.border
                 border.width: 1
 
                 readonly property var rulerTickTimes: viewport.tickTimes(width, viewport.denseTickInterval(width))
@@ -217,7 +218,7 @@ Panel {
                         Rectangle {
                             width: 1
                             height: labeledTick ? 11 : 6
-                            color: labeledTick ? "#94a3b8" : "#cbd5e1"
+                            color: labeledTick ? Theme.tickStrong : Theme.border
                         }
 
                         Label {
@@ -226,7 +227,7 @@ Panel {
                             anchors.horizontalCenter: parent.horizontalCenter
                             visible: labeledTick
                             text: root.formatTickLabel(tickTime)
-                            color: "#64748b"
+                            color: Theme.textMuted
                             font.pixelSize: 10
                         }
                     }
@@ -248,7 +249,7 @@ Panel {
                     height: parent.height
                     visible: viewport.isTimeVisible(root.playheadSeconds)
                     x: viewport.xAtTime(root.playheadSeconds, parent.width) - width / 2
-                    color: "#dc2626"
+                    color: Theme.danger
                     z: 5
                 }
             }
@@ -320,7 +321,7 @@ Panel {
                         Rectangle {
                             width: trackLaneColumn.width
                             height: eventLaneRepeater.count > 0 ? 1 : 0
-                            color: "#cbd5e1"
+                            color: Theme.border
                         }
 
                         Repeater {
@@ -344,7 +345,7 @@ Panel {
                     height: parent.height
                     visible: viewport.isTimeVisible(root.playheadSeconds)
                     x: viewport.xAtTime(root.playheadSeconds, parent.width) - width / 2
-                    color: "#dc2626"
+                    color: Theme.danger
                     z: 5
                 }
             }

@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import "."
 
 Panel {
     id: root
@@ -563,7 +564,7 @@ Panel {
             width: targetLayout.width
             height: targetLayout.height
             color: "transparent"
-            border.color: "#2563eb"
+            border.color: Theme.accent
             border.width: 2
             opacity: 0.85
         }

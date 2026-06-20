@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "."
 
 Panel {
     id: root
@@ -22,7 +23,7 @@ Panel {
             Layout.fillWidth: true
             Layout.preferredHeight: 32
             height: 32
-            color: selected ? "#e8f1ff" : "#ffffff"
+            color: selected ? Theme.rowSelected : Theme.surface
 
             readonly property bool selected: root.controller && !root.controller.historyMode
 
@@ -31,7 +32,7 @@ Panel {
                 anchors.top: parent.top
                 anchors.bottom: parent.bottom
                 width: 3
-                color: "#2563eb"
+                color: Theme.accent
                 visible: onlineDataSourceRow.selected
             }
 
@@ -51,7 +52,7 @@ Panel {
                 Label {
                     Layout.fillWidth: true
                     text: "在线数据"
-                    color: "#111827"
+                    color: Theme.textPrimary
                     font.pixelSize: 12
                     font.bold: onlineDataSourceRow.selected
                     elide: Text.ElideRight
@@ -73,7 +74,7 @@ Panel {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 height: 1
-                color: "#e2e8f0"
+                color: Theme.gridLine
             }
         }
 
@@ -90,7 +91,7 @@ Panel {
                 objectName: "historyDataSourceRow_" + index
                 width: ListView.view.width
                 height: 46
-                color: selected ? "#e8f1ff" : "#ffffff"
+                color: selected ? Theme.rowSelected : Theme.surface
 
                 readonly property bool selected: root.controller && root.controller.historyMode && root.controller.selectedSessionRow === index
 
@@ -106,7 +107,7 @@ Panel {
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
                     width: 3
-                    color: "#2563eb"
+                    color: Theme.accent
                     visible: selected
                 }
 
@@ -119,7 +120,7 @@ Panel {
                     Label {
                         Layout.fillWidth: true
                         text: model.folderName
-                        color: "#111827"
+                        color: Theme.textPrimary
                         font.pixelSize: 12
                         font.bold: selected
                         elide: Text.ElideMiddle
@@ -130,7 +131,7 @@ Panel {
                         Label {
                             Layout.fillWidth: true
                             text: model.shortDuration
-                            color: "#64748b"
+                            color: Theme.textMuted
                             font.pixelSize: 11
                         }
                         TagChip {
@@ -156,7 +157,7 @@ Panel {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     height: 1
-                    color: "#e2e8f0"
+                    color: Theme.gridLine
                 }
             }
 

@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "."
 
 Rectangle {
     id: root
@@ -34,9 +35,9 @@ Rectangle {
         }
     }
 
-    color: dragActive ? "#172554" : "#0f172a"
+    color: Theme.cameraTileBg
     clip: true
-    border.color: dragActive ? seriesColor : "#334155"
+    border.color: dragActive ? seriesColor : Theme.textSecondary
     border.width: 1
     scale: dragActive ? 0.98 : 1.0
 
@@ -51,7 +52,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 20
-            color: "#111827"
+            color: Theme.textPrimary
 
             RowLayout {
                 anchors.fill: parent
@@ -62,7 +63,7 @@ Rectangle {
                 Label {
                     Layout.fillWidth: true
                     text: root.topicName
-                    color: "#e5e7eb"
+                    color: Theme.gridLine
                     font.pixelSize: 10
                     elide: Text.ElideMiddle
                 }
@@ -72,7 +73,7 @@ Rectangle {
                     Layout.preferredWidth: Math.min(70, implicitWidth)
                     Layout.maximumWidth: Math.min(70, Math.max(0, root.width * 0.32))
                     text: root.resolutionText
-                    color: "#cbd5e1"
+                    color: Theme.border
                     font.pixelSize: 10
                     elide: Text.ElideRight
                     visible: root.width >= 150 && root.resolutionText.length > 0
@@ -94,7 +95,7 @@ Rectangle {
                 onPaint: {
                     var ctx = getContext("2d")
                     ctx.clearRect(0, 0, width, height)
-                    ctx.fillStyle = "#020617"
+                    ctx.fillStyle = Theme.cameraTileBg
                     ctx.fillRect(0, 0, width, height)
 
                     var rect = root.videoRect(width, height)
@@ -103,9 +104,9 @@ Rectangle {
                     ctx.rect(rect.x, rect.y, rect.width, rect.height)
                     ctx.clip()
 
-                    ctx.fillStyle = "#111827"
+                    ctx.fillStyle = Theme.textPrimary
                     ctx.fillRect(rect.x, rect.y, rect.width, rect.height)
-                    ctx.strokeStyle = "#475569"
+                    ctx.strokeStyle = Theme.textSecondary
                     ctx.lineWidth = 1
                     for (var x = rect.x; x < rect.x + rect.width; x += Math.max(24, rect.width / 8)) {
                         ctx.beginPath()

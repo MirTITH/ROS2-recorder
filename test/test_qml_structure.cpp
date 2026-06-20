@@ -231,7 +231,7 @@ TEST(QmlStructure, RecordingSessionsPanelActsAsDataSourceSelector)
   expect_contains(panel_text, "root.controller.selectedSessionRow === index");
   expect_contains(panel_text, "root.controller.historyMode");
   expect_contains(panel_text, "height: 32");
-  expect_contains(panel_text, "color: selected ? \"#e8f1ff\"");
+  expect_contains(panel_text, "color: selected ? Theme.rowSelected");
   expect_not_contains(panel_text, "当前 ROS topics");
 }
 
@@ -348,7 +348,7 @@ TEST(QmlStructure, TimelineViewportRenderingRulesAreExplicit)
   expect_contains(curve_text, "ctx.arc");
 
   expect_contains(range_text, "id: thumbBody");
-  expect_contains(range_text, "color: \"#9aa8ba\"");
+  expect_contains(range_text, "color: Theme.tickStrong");
   expect_contains(range_text, "id: leftHandleGrip");
   expect_contains(range_text, "id: rightHandleGrip");
   expect_contains(range_text, "mapToItem(track");

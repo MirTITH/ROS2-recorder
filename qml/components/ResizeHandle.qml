@@ -1,4 +1,5 @@
 import QtQuick 2.15
+import "."
 
 Item {
     id: root
@@ -14,7 +15,7 @@ Item {
         anchors.centerIn: parent
         width: root.isVerticalLine ? (root.hovered ? 3 : 1) : parent.width
         height: root.isVerticalLine ? parent.height : (root.hovered ? 3 : 1)
-        color: root.hovered ? "#2563eb" : "#cbd5e1"
+        color: root.hovered ? Theme.accent : Theme.border
     }
 
     HoverHandler {

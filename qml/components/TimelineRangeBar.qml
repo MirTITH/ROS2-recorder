@@ -1,4 +1,5 @@
 import QtQuick 2.15
+import "."
 
 Rectangle {
     id: root
@@ -15,7 +16,7 @@ Rectangle {
     readonly property real thumbWidth: Math.max(44, (boundedDuration / boundedTotal) * track.width)
 
     height: 16
-    color: "#f1f5f9"
+    color: Theme.surfaceAlt
 
     function requestWindow(startSeconds, durationSeconds) {
         var nextDuration = Math.max(0.001, Math.min(root.boundedTotal, durationSeconds))
@@ -30,8 +31,8 @@ Rectangle {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         height: 5
-        color: "#d7dde5"
-        border.color: "#b8c2cf"
+        color: Theme.border
+        border.color: Theme.border
         border.width: 1
     }
 
@@ -52,8 +53,8 @@ Rectangle {
             anchors.rightMargin: 7
             anchors.topMargin: 2
             anchors.bottomMargin: 2
-            color: "#9aa8ba"
-            border.color: "#718096"
+            color: Theme.tickStrong
+            border.color: Theme.textMuted
             border.width: 1
         }
 
@@ -87,7 +88,7 @@ Rectangle {
 
             width: 7
             height: parent.height
-            color: "#64748b"
+            color: Theme.textMuted
             anchors.left: parent.left
 
             Rectangle {
@@ -96,7 +97,7 @@ Rectangle {
                 width: 1
                 height: parent.height - 4
                 anchors.centerIn: parent
-                color: "#c6d0dc"
+                color: Theme.border
             }
 
             MouseArea {
@@ -130,7 +131,7 @@ Rectangle {
 
             width: 7
             height: parent.height
-            color: "#64748b"
+            color: Theme.textMuted
             anchors.right: parent.right
 
             Rectangle {
@@ -139,7 +140,7 @@ Rectangle {
                 width: 1
                 height: parent.height - 4
                 anchors.centerIn: parent
-                color: "#c6d0dc"
+                color: Theme.border
             }
 
             MouseArea {

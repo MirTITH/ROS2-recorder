@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "."
 
 Rectangle {
     id: root
@@ -10,8 +11,8 @@ Rectangle {
     readonly property string statusText: controller && controller.statusText ? controller.statusText : "就绪"
 
     implicitHeight: 32
-    color: "#ffffff"
-    border.color: "#d5dce8"
+    color: Theme.surface
+    border.color: Theme.border
     border.width: 1
 
     RowLayout {
@@ -31,7 +32,7 @@ Rectangle {
 
         Label {
             text: root.statusText
-            color: root.isRecording ? "#dc2626" : "#166534"
+            color: root.isRecording ? Theme.danger : "#166534"
             font.pixelSize: 11
             font.bold: true
             elide: Text.ElideRight
@@ -43,7 +44,7 @@ Rectangle {
 
         Label {
             text: "磁盘 --"
-            color: "#64748b"
+            color: Theme.textMuted
             font.pixelSize: 11
         }
     }

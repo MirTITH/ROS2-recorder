@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "."
 
 Rectangle {
     id: root
@@ -13,8 +14,8 @@ Rectangle {
     signal toggleVisibleRequested()
 
     height: 48
-    color: "#f8fafc"
-    border.color: "#dbe3ef"
+    color: Theme.surfaceAlt
+    border.color: Theme.border
     border.width: 0
 
     ColumnLayout {
@@ -28,7 +29,7 @@ Rectangle {
         Label {
             Layout.fillWidth: true
             text: root.topicName
-            color: "#111827"
+            color: Theme.textPrimary
             font.pixelSize: 11
             font.bold: true
             elide: Text.ElideMiddle
@@ -41,7 +42,7 @@ Rectangle {
             Label {
                 Layout.fillWidth: true
                 text: root.frequencyText + " · " + root.backendName
-                color: "#64748b"
+                color: Theme.textMuted
                 font.pixelSize: 10
                 elide: Text.ElideRight
             }
@@ -60,7 +61,7 @@ Rectangle {
                 onClicked: root.toggleVisibleRequested()
 
                 background: Rectangle {
-                    color: cameraVisibilityButton.hovered ? "#e2e8f0" : "transparent"
+                    color: cameraVisibilityButton.hovered ? Theme.gridLine : "transparent"
                     border.width: 0
                 }
 
@@ -80,6 +81,6 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: 1
-        color: "#e2e8f0"
+        color: Theme.gridLine
     }
 }

@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "."
 
 Rectangle {
     id: root
@@ -15,7 +16,7 @@ Rectangle {
     signal actionRequested()
 
     height: 32
-    color: "#f6f8fb"
+    color: Theme.surfaceAlt
 
     RowLayout {
         anchors.fill: parent
@@ -50,7 +51,7 @@ Rectangle {
         Label {
             Layout.fillWidth: true
             text: root.eventName + "（共 " + root.count + " 个）"
-            color: "#111827"
+            color: Theme.textPrimary
             font.pixelSize: 11
             font.bold: true
             elide: Text.ElideRight
@@ -68,15 +69,15 @@ Rectangle {
                 text: root.actionText
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 10
                 font.bold: true
                 elide: Text.ElideRight
             }
 
             background: Rectangle {
-                color: parent.hovered ? "#e2e8f0" : "#ffffff"
-                border.color: "#cbd5e1"
+                color: parent.hovered ? Theme.gridLine : Theme.surface
+                border.color: Theme.border
                 border.width: 1
             }
         }
@@ -87,6 +88,6 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: 1
-        color: "#e2e8f0"
+        color: Theme.gridLine
     }
 }

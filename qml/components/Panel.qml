@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "."
 
 Rectangle {
     id: root
@@ -9,8 +10,8 @@ Rectangle {
     default property alias contentData: body.data
     property bool active: false
 
-    color: active ? "#eef5ff" : "#f8fafc"
-    border.color: active ? "#2563eb" : "#d5dce8"
+    color: Theme.surfaceAlt
+    border.color: active ? Theme.accent : Theme.border
     border.width: 1
     radius: 0
 
@@ -21,7 +22,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 20
-            color: root.active ? "#dbeafe" : "#eef2f7"
+            color: root.active ? Theme.accentSoft : Theme.surfaceAlt
 
             RowLayout {
                 anchors.fill: parent
@@ -32,7 +33,7 @@ Rectangle {
                 Label {
                     id: titleLabel
                     Layout.fillWidth: true
-                    color: "#162033"
+                    color: Theme.cameraTileBg
                     font.pixelSize: 11
                     font.bold: true
                     elide: Text.ElideRight
