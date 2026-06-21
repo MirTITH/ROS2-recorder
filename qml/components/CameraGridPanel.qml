@@ -5,9 +5,17 @@ import "."
 Panel {
     id: root
 
+    // Bound to the C++ CameraGridModel: rows are the visible cameras in order
+    // (0..count-1), exposing topicName/backendName/resolutionText/seriesColor and
+    // Q_INVOKABLE moveCamera(from, to). The model owns visibility filtering and
+    // reorder; the panel is a pure view + drag interaction layer.
     property var model
     property int visibleCameraCount: 0
-    property var visualOrder: []
+
+    // Drag state machine (pure view). Drag identity is the VISIBLE INDEX of the
+    // dragged camera; that index is stable for the duration of one drag because
+    // the model is only mutated on drop (moveCamera). dragSourceKey carries the
+    // dragged row's "topic|backend" key for placeholder bookkeeping/identity.
     property string pendingDragSourceKey: ""
     property int pendingDragSourceIndex: -1
     property real dragStartX: 0
@@ -17,11 +25,20 @@ Panel {
     property int dropInsertIndex: -1
     property real dragX: 0
     property real dragY: 0
-    property bool sourceRefreshActive: false
+    // Display data of the dragged camera, captured at press time so the floating
+    // preview can render it without reading model rows imperatively.
+    property string dragTopicName: ""
+    property string dragResolutionText: ""
+    property color dragSeriesColor: "#2563eb"
     readonly property bool dragActive: dragSourceKey.length > 0
     readonly property real dragStartThreshold: 6
     readonly property real tileGap: 4
     readonly property string placeholderSourceKey: "__drop_placeholder__"
+
+    // Per-visible-index resolution snapshot, populated by the cell delegates.
+    // The Repeater instantiates every delegate eagerly and recreates them on any
+    // model reset (including moveCamera), so this map mirrors the visible rows.
+    property var resolutionByIndex: ({})
 
     title: "相机预览"
 
@@ -29,94 +46,6 @@ Panel {
     SplitView.preferredHeight: visible ? 260 : 0
     SplitView.minimumHeight: visible ? 140 : 0
     SplitView.maximumHeight: visible ? 520 : 0
-
-    function makeSourceKey(sourceRow, topicName, backendName) {
-        return sourceRow + "|" + topicName + "|" + backendName
-    }
-
-    function cameraObject(sourceKey, sourceRow, topicName, backendName, resolutionText, seriesColor, isVisible) {
-        return {
-            sourceKey: sourceKey,
-            sourceRow: sourceRow,
-            topicName: topicName,
-            backendName: backendName,
-            resolutionText: resolutionText,
-            seriesColor: seriesColor,
-            isVisible: isVisible
-        }
-    }
-
-    function findSourceIndex(sourceKey) {
-        for (var index = 0; index < sourceCameras.count; ++index) {
-            if (sourceCameras.get(index).sourceKey === sourceKey) {
-                return index
-            }
-        }
-        return -1
-    }
-
-    function findProxyIndex(sourceKey) {
-        for (var index = 0; index < cameraProxy.count; ++index) {
-            if (cameraProxy.get(index).sourceKey === sourceKey) {
-                return index
-            }
-        }
-        return -1
-    }
-
-    function findSourceRowIndex(sourceRow) {
-        for (var index = 0; index < sourceCameras.count; ++index) {
-            if (sourceCameras.get(index).sourceRow === sourceRow) {
-                return index
-            }
-        }
-        return -1
-    }
-
-    function visibleDebugOrder() {
-        var order = []
-        for (var index = 0; index < cameraProxy.count; ++index) {
-            var camera = cameraProxy.get(index)
-            order.push(camera.topicName + "@" + camera.backendName)
-        }
-        return order
-    }
-
-    function rebuildVisibleCameras() {
-        var knownOrder = ({})
-        for (var orderedIndex = 0; orderedIndex < visualOrder.length; ++orderedIndex) {
-            knownOrder[visualOrder[orderedIndex]] = true
-        }
-
-        var nextOrder = visualOrder.slice()
-
-        for (var sourceCameraIndex = 0; sourceCameraIndex < sourceCameras.count; ++sourceCameraIndex) {
-            var sourceCamera = sourceCameras.get(sourceCameraIndex)
-            if (!knownOrder[sourceCamera.sourceKey]) {
-                nextOrder.push(sourceCamera.sourceKey)
-                knownOrder[sourceCamera.sourceKey] = true
-            }
-        }
-
-        visualOrder = nextOrder
-        cameraProxy.clear()
-        for (var proxyIndex = 0; proxyIndex < visualOrder.length; ++proxyIndex) {
-            var proxySourceIndex = findSourceIndex(visualOrder[proxyIndex])
-            if (proxySourceIndex >= 0) {
-                var proxyCamera = sourceCameras.get(proxySourceIndex)
-                if (proxyCamera.isVisible) {
-                    cameraProxy.append(root.cameraObject(
-                        proxyCamera.sourceKey,
-                        proxyCamera.sourceRow,
-                        proxyCamera.topicName,
-                        proxyCamera.backendName,
-                        proxyCamera.resolutionText,
-                        proxyCamera.seriesColor,
-                        proxyCamera.isVisible))
-                }
-            }
-        }
-    }
 
     function cameraAspectRatio(resolutionText) {
         var match = /^([0-9]+)x([0-9]+)$/.exec(String(resolutionText || ""))
@@ -132,14 +61,15 @@ Panel {
     }
 
     function averageCameraAspectRatio() {
-        if (cameraProxy.count <= 0) {
+        var count = root.model ? root.model.count : 0
+        if (count <= 0) {
             return 16 / 9
         }
         var aspectSum = 0
-        for (var index = 0; index < cameraProxy.count; ++index) {
-            aspectSum += cameraAspectRatio(cameraProxy.get(index).resolutionText)
+        for (var index = 0; index < count; ++index) {
+            aspectSum += cameraAspectRatio(root.resolutionByIndex[index])
         }
-        return aspectSum / cameraProxy.count
+        return aspectSum / count
     }
 
     function chooseLayout(areaWidth, areaHeight, count) {
@@ -176,7 +106,8 @@ Panel {
     }
 
     function layoutForIndex(itemIndex, itemCount) {
-        var count = Math.max(1, itemCount === undefined ? cameraProxy.count : itemCount)
+        var modelCount = root.model ? root.model.count : 0
+        var count = Math.max(1, itemCount === undefined ? modelCount : itemCount)
         var availableWidth = Math.max(1, previewArea.width)
         var availableHeight = Math.max(1, previewArea.height)
         var layout = chooseLayout(availableWidth, availableHeight, count)
@@ -193,54 +124,72 @@ Panel {
         }
     }
 
+    // Build the reflowed cell order during a drag. Entries are index-based for
+    // real cameras (identity == the cell's stable visible index) and the dragged
+    // camera is omitted; a placeholder entry (carrying placeholderSourceKey) is
+    // spliced in at the adjusted drop position. The model is never mutated here.
     function previewSequence() {
         var sequence = []
-        var draggedKey = root.dragActive ? root.dragSourceKey : ""
-        for (var index = 0; index < cameraProxy.count; ++index) {
-            var camera = cameraProxy.get(index)
-            if (camera.sourceKey !== draggedKey) {
+        var draggedIndex = root.dragActive ? root.dragSourceIndex : -1
+        var count = root.model ? root.model.count : 0
+        for (var index = 0; index < count; ++index) {
+            if (index !== draggedIndex) {
                 sequence.push({
-                    sourceKey: camera.sourceKey,
-                    proxyIndex: index
+                    sourceKey: "",
+                    cellIndex: index
                 })
             }
         }
 
         if (root.dragActive && root.dropInsertIndex >= 0) {
             var insertIndex = root.dropInsertIndex
-            if (root.dragSourceIndex >= 0 && insertIndex > root.dragSourceIndex) {
+            if (draggedIndex >= 0 && insertIndex > draggedIndex) {
                 insertIndex -= 1
             }
             insertIndex = Math.max(0, Math.min(sequence.length, insertIndex))
             sequence.splice(insertIndex, 0, {
                 sourceKey: root.placeholderSourceKey,
-                proxyIndex: -1
+                cellIndex: -1
             })
         }
 
         return sequence
     }
 
-    function previewIndexForKey(sourceKey, fallbackIndex) {
+    // Position of a cell within the reflowed sequence. The placeholder is matched
+    // by its sourceKey; real cameras are matched by their stable visible index
+    // (passed as cellIndex / the cell's fallback index).
+    function previewIndexForKey(sourceKey, cellIndex) {
         if (!root.dragActive) {
-            return fallbackIndex
+            return cellIndex
         }
+        var isPlaceholder = sourceKey === root.placeholderSourceKey
         var sequence = root.previewSequence()
         for (var index = 0; index < sequence.length; ++index) {
-            if (sequence[index].sourceKey === sourceKey) {
+            if (isPlaceholder) {
+                if (sequence[index].sourceKey === root.placeholderSourceKey) {
+                    return index
+                }
+            } else if (sequence[index].cellIndex === cellIndex) {
                 return index
             }
         }
-        return fallbackIndex
+        return cellIndex
     }
 
-    function previewLayoutForKey(sourceKey, fallbackIndex) {
-        if (root.dragActive && sourceKey === root.dragSourceKey) {
-            return root.layoutForIndex(fallbackIndex, cameraProxy.count)
+    function previewLayoutForKey(sourceKey, cellIndex) {
+        // The dragged cell keeps its original-slot layout (it is hidden in place;
+        // the floating preview follows the cursor). Guard against the placeholder,
+        // whose cellIndex (0) may collide with dragSourceIndex.
+        if (root.dragActive && sourceKey !== root.placeholderSourceKey &&
+            cellIndex === root.dragSourceIndex) {
+            return root.layoutForIndex(cellIndex, root.model ? root.model.count : 1)
         }
         var sequence = root.previewSequence()
-        var index = root.dragActive ? previewIndexForKey(sourceKey, fallbackIndex) : fallbackIndex
-        var count = root.dragActive ? Math.max(1, sequence.length) : cameraProxy.count
+        var index = root.dragActive ? previewIndexForKey(sourceKey, cellIndex) : cellIndex
+        var count = root.dragActive
+            ? Math.max(1, sequence.length)
+            : (root.model ? root.model.count : 1)
         return root.layoutForIndex(index, count)
     }
 
@@ -265,11 +214,11 @@ Panel {
                 height: 1
             }
         }
-        return root.layoutForIndex(root.dragSourceIndex, cameraProxy.count)
+        return root.layoutForIndex(root.dragSourceIndex, root.model ? root.model.count : 1)
     }
 
     function insertIndexAtPoint(xPosition, yPosition) {
-        var count = cameraProxy.count
+        var count = root.model ? root.model.count : 0
         if (count <= 0) {
             return 0
         }
@@ -288,9 +237,12 @@ Panel {
         return Math.max(0, Math.min(count, bestIndex))
     }
 
-    function beginDragPress(sourceKey, sourceIndex, xPosition, yPosition) {
+    function beginDragPress(sourceKey, sourceIndex, topicName, resolutionText, seriesColor, xPosition, yPosition) {
         pendingDragSourceKey = sourceKey
         pendingDragSourceIndex = sourceIndex
+        dragTopicName = topicName
+        dragResolutionText = resolutionText
+        dragSeriesColor = seriesColor
         dragStartX = xPosition
         dragStartY = yPosition
         dragX = xPosition
@@ -321,11 +273,14 @@ Panel {
         updateDropInsertIndex(xPosition, yPosition)
     }
 
-    function startDrag(sourceKey, sourceIndex, xPosition, yPosition) {
+    function startDrag(sourceKey, sourceIndex, topicName, resolutionText, seriesColor, xPosition, yPosition) {
         pendingDragSourceKey = sourceKey
         pendingDragSourceIndex = sourceIndex
         dragSourceKey = sourceKey
         dragSourceIndex = sourceIndex
+        dragTopicName = topicName
+        dragResolutionText = resolutionText
+        dragSeriesColor = seriesColor
         dragStartX = xPosition
         dragStartY = yPosition
         dragX = xPosition
@@ -339,34 +294,21 @@ Panel {
         dropInsertIndex = insertIndexAtPoint(xPosition, yPosition)
     }
 
+    // On drop, persist the new order via the C++ model. dropInsertIndex is an
+    // insert position in [0, count]; moveCamera expects a destination VISIBLE
+    // index in [0, count-1]. After removing the dragged item, an insert position
+    // beyond the source shifts down by one. Dragging item 0 to the far-right slot
+    // yields insert == count -> to == count-1 -> moveCamera(0, count-1) (lands last).
     function commitDropInsertIndex() {
-        if (!root.dragActive || dragSourceIndex < 0 || dropInsertIndex < 0) {
+        if (!root.dragActive || dragSourceIndex < 0 || dropInsertIndex < 0 || !root.model) {
             finishDrag()
             return
         }
-        var movedKey = dragSourceKey
-        var nextOrder = visualOrder.slice()
-        var fromOrderIndex = nextOrder.indexOf(movedKey)
-        if (fromOrderIndex >= 0) {
-            nextOrder.splice(fromOrderIndex, 1)
-            var visibleKeys = []
-            for (var proxyIndex = 0; proxyIndex < cameraProxy.count; ++proxyIndex) {
-                var proxyKey = cameraProxy.get(proxyIndex).sourceKey
-                if (proxyKey !== movedKey) {
-                    visibleKeys.push(proxyKey)
-                }
-            }
-            var boundedInsert = Math.max(0, Math.min(
-                dropInsertIndex > dragSourceIndex ? dropInsertIndex - 1 : dropInsertIndex,
-                visibleKeys.length))
-            var anchorKey = boundedInsert < visibleKeys.length ? visibleKeys[boundedInsert] : ""
-            var orderInsertIndex = anchorKey.length > 0 ? nextOrder.indexOf(anchorKey) : nextOrder.length
-            if (orderInsertIndex < 0) {
-                orderInsertIndex = nextOrder.length
-            }
-            nextOrder.splice(orderInsertIndex, 0, movedKey)
-            visualOrder = nextOrder
-            rebuildVisibleCameras()
+        var from = dragSourceIndex
+        var to = dropInsertIndex > from ? dropInsertIndex - 1 : dropInsertIndex
+        to = Math.max(0, Math.min(root.model.count - 1, to))
+        if (from >= 0 && to >= 0 && from !== to) {
+            root.model.moveCamera(from, to)
         }
         finishDrag()
     }
@@ -379,124 +321,6 @@ Panel {
         dropInsertIndex = -1
     }
 
-    ListModel {
-        id: sourceCameras
-    }
-
-    ListModel {
-        id: cameraProxy
-    }
-
-    Instantiator {
-        id: sourceInstantiator
-
-        model: root.model
-
-        delegate: QtObject {
-            property int sourceRow: model.index
-            property string backendName: model.backendName || ""
-            property string topicName: model.topicName || ""
-            property string resolutionText: model.resolutionText || ""
-            property string seriesColor: model.seriesColor || "#2563eb"
-            property bool isCamera: Boolean(model.isCamera)
-            property bool isVisible: Boolean(model.isVisible)
-            property string sourceKey: root.makeSourceKey(sourceRow, topicName, backendName)
-            property string syncedSourceKey: ""
-
-            function syncToSourceList() {
-                if (syncedSourceKey.length > 0 && syncedSourceKey !== sourceKey) {
-                    var previousIndex = root.findSourceIndex(syncedSourceKey)
-                    if (previousIndex >= 0) {
-                        sourceCameras.remove(previousIndex)
-                    }
-                    syncedSourceKey = ""
-                }
-
-                var sourceIndex = root.findSourceIndex(sourceKey)
-                if (isCamera && topicName.length > 0) {
-                    var camera = root.cameraObject(
-                        sourceKey,
-                        sourceRow,
-                        topicName,
-                        backendName,
-                        resolutionText,
-                        seriesColor,
-                        isVisible)
-                    if (sourceIndex >= 0) {
-                        sourceCameras.set(sourceIndex, camera)
-                    } else {
-                        var sourceRowIndex = root.findSourceRowIndex(sourceRow)
-                        if (sourceRowIndex >= 0) {
-                            sourceCameras.remove(sourceRowIndex)
-                        }
-                        sourceCameras.append(camera)
-                    }
-                    syncedSourceKey = sourceKey
-                } else if (sourceIndex >= 0) {
-                    sourceCameras.remove(sourceIndex)
-                    syncedSourceKey = ""
-                }
-                if (!root.sourceRefreshActive) {
-                    root.rebuildVisibleCameras()
-                }
-            }
-
-            Component.onCompleted: syncToSourceList()
-            Component.onDestruction: {
-                var sourceIndex = root.findSourceIndex(syncedSourceKey)
-                if (sourceIndex >= 0) {
-                    sourceCameras.remove(sourceIndex)
-                    root.rebuildVisibleCameras()
-                }
-            }
-            onBackendNameChanged: syncToSourceList()
-            onTopicNameChanged: syncToSourceList()
-            onResolutionTextChanged: syncToSourceList()
-            onSeriesColorChanged: syncToSourceList()
-            onSourceRowChanged: syncToSourceList()
-            onIsCameraChanged: syncToSourceList()
-            onIsVisibleChanged: syncToSourceList()
-            onSourceKeyChanged: syncToSourceList()
-        }
-    }
-
-    Connections {
-        target: root.model
-        ignoreUnknownSignals: true
-
-        function onModelReset() {
-            root.refreshSourceList()
-        }
-
-        function onRowsInserted(parent, first, last) {
-            root.refreshSourceList()
-        }
-
-        function onRowsRemoved(parent, first, last) {
-            root.refreshSourceList()
-        }
-
-        function onDataChanged(topLeft, bottomRight, roles) {
-            root.refreshSourceList()
-        }
-    }
-
-    onModelChanged: {
-        sourceCameras.clear()
-        cameraProxy.clear()
-        visualOrder = []
-    }
-
-    function refreshSourceList() {
-        sourceCameras.clear()
-        root.sourceRefreshActive = true
-        for (var index = 0; index < sourceInstantiator.count; ++index) {
-            sourceInstantiator.objectAt(index).syncToSourceList()
-        }
-        root.sourceRefreshActive = false
-        rebuildVisibleCameras()
-    }
-
     Item {
         id: previewArea
 
@@ -505,16 +329,21 @@ Panel {
         clip: true
 
         Repeater {
-            model: cameraProxy
+            model: root.model
 
             delegate: Item {
                 id: cameraCell
 
                 required property int index
-                required property string sourceKey
                 required property string topicName
+                required property string backendName
                 required property string resolutionText
                 required property color seriesColor
+
+                // Per-cell key (matches the C++ model's internal "topic|backend"
+                // key). Kept as a stable per-drag identity and for placeholder
+                // bookkeeping; layout/drag math uses the visible index.
+                readonly property string sourceKey: topicName + "|" + backendName
 
                 readonly property var cellLayout: root.previewLayoutForKey(cameraCell.sourceKey, cameraCell.index)
 
@@ -523,9 +352,12 @@ Panel {
                 width: cellLayout.width
                 height: cellLayout.height
 
+                Component.onCompleted: root.resolutionByIndex[index] = resolutionText
+                onResolutionTextChanged: root.resolutionByIndex[index] = resolutionText
+
                 CameraPreviewTile {
                     anchors.fill: parent
-                    visible: !(root.dragActive && root.dragSourceKey === cameraCell.sourceKey)
+                    visible: !(root.dragActive && root.dragSourceIndex === cameraCell.index)
                     topicName: cameraCell.topicName
                     resolutionText: cameraCell.resolutionText
                     seriesColor: cameraCell.seriesColor
@@ -537,7 +369,14 @@ Panel {
 
                     onPressed: function(mouse) {
                         var point = cameraCell.mapToItem(previewArea, mouse.x, mouse.y)
-                        root.beginDragPress(cameraCell.sourceKey, cameraCell.index, point.x, point.y)
+                        root.beginDragPress(
+                            cameraCell.sourceKey,
+                            cameraCell.index,
+                            cameraCell.topicName,
+                            cameraCell.resolutionText,
+                            cameraCell.seriesColor,
+                            point.x,
+                            point.y)
                     }
 
                     onPositionChanged: function(mouse) {
@@ -581,9 +420,9 @@ Panel {
             y: Math.max(0, Math.min(previewArea.height - height, root.dragY - height / 2))
             z: 10
             opacity: 0.92
-            topicName: root.dragSourceIndex >= 0 ? cameraProxy.get(root.dragSourceIndex).topicName : ""
-            resolutionText: root.dragSourceIndex >= 0 ? cameraProxy.get(root.dragSourceIndex).resolutionText : ""
-            seriesColor: root.dragSourceIndex >= 0 ? cameraProxy.get(root.dragSourceIndex).seriesColor : "#2563eb"
+            topicName: root.dragTopicName
+            resolutionText: root.dragResolutionText
+            seriesColor: root.dragSeriesColor
             dragActive: true
         }
     }

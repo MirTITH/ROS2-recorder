@@ -49,7 +49,7 @@ ApplicationWindow {
                 handle: ResizeHandle { lineOrientation: Qt.Horizontal }
 
                 CameraGridPanel {
-                    model: appController.topicModel
+                    model: appController.cameraGridModel
                     visibleCameraCount: appController.visibleCameraCount
                 }
 
