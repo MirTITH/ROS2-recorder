@@ -10,24 +10,19 @@ namespace data_recorder
 AppController::AppController(const ConfigData & config, QObject * parent)
 : QObject(parent),
   config_path_(QString::fromStdString(config.config_path)),
-  output_directory_(QString::fromStdString(config.output_dir))
+  output_directory_(QString::fromStdString(config.output_dir)),
+  camera_grid_model_(&topic_model_)
 {
-  topic_model_.set_topics(config.topics);
-  visible_camera_count_ = topic_model_.visibleCameraCount();
   connect(
-    &topic_model_,
-    &TopicListModel::dataChanged,
-    this,
-    [this](const QModelIndex &, const QModelIndex &, const QList<int> &) {
-      refreshVisibleCameraCount();
-    });
-  connect(
-    &topic_model_,
-    &TopicListModel::modelReset,
+    &camera_grid_model_,
+    &CameraGridModel::countChanged,
     this,
     [this]() {
       refreshVisibleCameraCount();
     });
+
+  topic_model_.set_topics(config.topics);
+  visible_camera_count_ = camera_grid_model_.rowCount();
 
   tag_model_.set_tags(config.tags);
   event_marker_model_.set_markers(config.event_markers);
@@ -102,6 +97,11 @@ int AppController::visibleCameraCount() const
 TopicListModel * AppController::topicModel()
 {
   return &topic_model_;
+}
+
+CameraGridModel * AppController::cameraGridModel()
+{
+  return &camera_grid_model_;
 }
 
 TagListModel * AppController::tagModel()
@@ -296,7 +296,7 @@ bool AppController::eventFilter(QObject * watched, QEvent * event)
 
 void AppController::refreshVisibleCameraCount()
 {
-  const int next_count = topic_model_.visibleCameraCount();
+  const int next_count = camera_grid_model_.rowCount();
   if (visible_camera_count_ != next_count) {
     visible_camera_count_ = next_count;
     emit visibleCameraCountChanged();

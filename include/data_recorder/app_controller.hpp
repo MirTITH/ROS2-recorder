@@ -5,6 +5,7 @@
 
 class QEvent;
 
+#include "data_recorder/camera_grid_model.hpp"
 #include "data_recorder/config_model.hpp"
 #include "data_recorder/ui_models.hpp"
 
@@ -27,6 +28,7 @@ class AppController : public QObject
   Q_PROPERTY(QString modeText READ modeText NOTIFY modeTextChanged)
   Q_PROPERTY(int visibleCameraCount READ visibleCameraCount NOTIFY visibleCameraCountChanged)
   Q_PROPERTY(TopicListModel * topicModel READ topicModel CONSTANT)
+  Q_PROPERTY(CameraGridModel * cameraGridModel READ cameraGridModel CONSTANT)
   Q_PROPERTY(TagListModel * tagModel READ tagModel CONSTANT)
   Q_PROPERTY(EventMarkerModel * eventMarkerModel READ eventMarkerModel CONSTANT)
   Q_PROPERTY(RecordingSessionModel * recordingSessionModel READ recordingSessionModel CONSTANT)
@@ -47,6 +49,7 @@ public:
   QString modeText() const;
   int visibleCameraCount() const;
   TopicListModel * topicModel();
+  CameraGridModel * cameraGridModel();
   TagListModel * tagModel();
   EventMarkerModel * eventMarkerModel();
   RecordingSessionModel * recordingSessionModel();
@@ -89,6 +92,7 @@ private:
   bool following_live_edge_{false};
   int visible_camera_count_{0};
   TopicListModel topic_model_;
+  CameraGridModel camera_grid_model_;
   TagListModel tag_model_;
   EventMarkerModel event_marker_model_;
   RecordingSessionModel recording_session_model_;
