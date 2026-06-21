@@ -125,6 +125,12 @@ void AppController::toggleRecording()
     return;
   }
 
+  const bool prev_recording = recording_;
+  const bool prev_following = following_live_edge_;
+  const double prev_playhead = playhead_seconds_;
+  const QString prev_status = status_text_;
+  const QString prev_mode = modeText();
+
   recording_ = !recording_;
   if (recording_) {
     following_live_edge_ = true;
@@ -133,11 +139,22 @@ void AppController::toggleRecording()
     following_live_edge_ = false;
   }
   status_text_ = statusTextForCurrentState();
-  emit recordingChanged();
-  emit followingLiveEdgeChanged();
-  emit playheadSecondsChanged();
-  emit statusTextChanged();
-  emit modeTextChanged();
+
+  if (prev_recording != recording_) {
+    emit recordingChanged();
+  }
+  if (prev_following != following_live_edge_) {
+    emit followingLiveEdgeChanged();
+  }
+  if (prev_playhead != playhead_seconds_) {
+    emit playheadSecondsChanged();
+  }
+  if (prev_status != status_text_) {
+    emit statusTextChanged();
+  }
+  if (prev_mode != modeText()) {
+    emit modeTextChanged();
+  }
 }
 
 void AppController::selectOnlineData()

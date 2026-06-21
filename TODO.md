@@ -1,4 +1,4 @@
-- [ ] 重命名“曲线区”
-- [ ] 重构前端代码
-- [ ] 前端界面确定后，优化 `AppController::toggleRecording()` 的信号发射，只在属性值实际变化时发出对应的 `*Changed()` 信号
+- [x] 重命名“曲线区”
+- [x] 重构前端代码
+- [x] 前端界面确定后，优化 `AppController::toggleRecording()` 的信号发射，只在属性值实际变化时发出对应的 `*Changed()` 信号
 - [ ] 实现后端
