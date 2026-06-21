@@ -218,41 +218,17 @@ Rectangle {
                 border.width: 1
             }
 
-            MouseArea {
+            MarkerDragArea {
                 id: pointMouseArea
 
                 visible: instanceDelegate.instanceKind === "point"
                 anchors.fill: parent
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor
-                onWheel: function(wheel) {
-                    root.zoomAtLocalX(root.localXFromMouse(pointMouseArea, wheel), wheel)
-                }
-
-                onPressed: function(mouse) {
-                    if (mouse.button === Qt.RightButton) {
-                        root.requestDelete(
-                            instanceDelegate.instanceId,
-                            root.localXFromMouse(pointMouseArea, mouse),
-                            pointMouseArea.mapToItem(root, mouse.x, mouse.y).y)
-                        return
-                    }
-                    root.startDrag(
-                        "point",
-                        instanceDelegate.instanceId,
-                        instanceDelegate.instanceStart,
-                        instanceDelegate.instanceStart,
-                        root.localXFromMouse(pointMouseArea, mouse))
-                }
-
-                onPositionChanged: function(mouse) {
-                    if (pressedButtons & Qt.LeftButton) {
-                        root.updateDrag(root.localXFromMouse(pointMouseArea, mouse))
-                    }
-                }
-
-                onReleased: root.finishDrag()
-                onCanceled: root.finishDrag()
+                row: root
+                dragMode: "point"
+                instanceId: instanceDelegate.instanceId
+                startSeconds: instanceDelegate.instanceStart
+                endSeconds: instanceDelegate.instanceStart
             }
 
             Rectangle {
@@ -287,45 +263,21 @@ Rectangle {
                 }
             }
 
-            MouseArea {
+            MarkerDragArea {
                 id: rangeBodyMouseArea
 
                 visible: instanceDelegate.instanceKind === "range"
                 anchors.fill: rangeBody
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor
                 z: 10
-                onWheel: function(wheel) {
-                    root.zoomAtLocalX(root.localXFromMouse(rangeBodyMouseArea, wheel), wheel)
-                }
-
-                onPressed: function(mouse) {
-                    if (mouse.button === Qt.RightButton) {
-                        root.requestDelete(
-                            instanceDelegate.instanceId,
-                            root.localXFromMouse(rangeBodyMouseArea, mouse),
-                            rangeBodyMouseArea.mapToItem(root, mouse.x, mouse.y).y)
-                        return
-                    }
-                    root.startDrag(
-                        "range",
-                        instanceDelegate.instanceId,
-                        root.normalizedStart(instanceDelegate.modelData),
-                        root.normalizedEnd(instanceDelegate.modelData),
-                        root.localXFromMouse(rangeBodyMouseArea, mouse))
-                }
-
-                onPositionChanged: function(mouse) {
-                    if (pressedButtons & Qt.LeftButton) {
-                        root.updateDrag(root.localXFromMouse(rangeBodyMouseArea, mouse))
-                    }
-                }
-
-                onReleased: root.finishDrag()
-                onCanceled: root.finishDrag()
+                row: root
+                dragMode: "range"
+                instanceId: instanceDelegate.instanceId
+                startSeconds: root.normalizedStart(instanceDelegate.modelData)
+                endSeconds: root.normalizedEnd(instanceDelegate.modelData)
             }
 
-            MouseArea {
+            MarkerDragArea {
                 id: leftResizeHandle
 
                 visible: instanceDelegate.instanceKind === "range"
@@ -333,40 +285,16 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 4
                 height: 18
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.SizeHorCursor
                 z: 20
-                onWheel: function(wheel) {
-                    root.zoomAtLocalX(root.localXFromMouse(leftResizeHandle, wheel), wheel)
-                }
-
-                onPressed: function(mouse) {
-                    if (mouse.button === Qt.RightButton) {
-                        root.requestDelete(
-                            instanceDelegate.instanceId,
-                            root.localXFromMouse(leftResizeHandle, mouse),
-                            leftResizeHandle.mapToItem(root, mouse.x, mouse.y).y)
-                        return
-                    }
-                    root.startDrag(
-                        "left",
-                        instanceDelegate.instanceId,
-                        root.normalizedStart(instanceDelegate.modelData),
-                        root.normalizedEnd(instanceDelegate.modelData),
-                        root.localXFromMouse(leftResizeHandle, mouse))
-                }
-
-                onPositionChanged: function(mouse) {
-                    if (pressedButtons & Qt.LeftButton) {
-                        root.updateDrag(root.localXFromMouse(leftResizeHandle, mouse))
-                    }
-                }
-
-                onReleased: root.finishDrag()
-                onCanceled: root.finishDrag()
+                row: root
+                dragMode: "left"
+                instanceId: instanceDelegate.instanceId
+                startSeconds: root.normalizedStart(instanceDelegate.modelData)
+                endSeconds: root.normalizedEnd(instanceDelegate.modelData)
             }
 
-            MouseArea {
+            MarkerDragArea {
                 id: rightResizeHandle
 
                 visible: instanceDelegate.instanceKind === "range"
@@ -374,37 +302,13 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 4
                 height: 18
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.SizeHorCursor
                 z: 20
-                onWheel: function(wheel) {
-                    root.zoomAtLocalX(root.localXFromMouse(rightResizeHandle, wheel), wheel)
-                }
-
-                onPressed: function(mouse) {
-                    if (mouse.button === Qt.RightButton) {
-                        root.requestDelete(
-                            instanceDelegate.instanceId,
-                            root.localXFromMouse(rightResizeHandle, mouse),
-                            rightResizeHandle.mapToItem(root, mouse.x, mouse.y).y)
-                        return
-                    }
-                    root.startDrag(
-                        "right",
-                        instanceDelegate.instanceId,
-                        root.normalizedStart(instanceDelegate.modelData),
-                        root.normalizedEnd(instanceDelegate.modelData),
-                        root.localXFromMouse(rightResizeHandle, mouse))
-                }
-
-                onPositionChanged: function(mouse) {
-                    if (pressedButtons & Qt.LeftButton) {
-                        root.updateDrag(root.localXFromMouse(rightResizeHandle, mouse))
-                    }
-                }
-
-                onReleased: root.finishDrag()
-                onCanceled: root.finishDrag()
+                row: root
+                dragMode: "right"
+                instanceId: instanceDelegate.instanceId
+                startSeconds: root.normalizedStart(instanceDelegate.modelData)
+                endSeconds: root.normalizedEnd(instanceDelegate.modelData)
             }
         }
     }
