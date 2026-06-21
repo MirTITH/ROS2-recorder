@@ -131,21 +131,22 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   const std::string main_text = read_text(qml_dir() / "Main.qml");
   const std::string panel_text = read_text(qml_dir() / "components" / "TimelinePanel.qml");
   const std::string track_info_text = read_text(qml_dir() / "components" / "TrackInfoColumn.qml");
+  const std::string lane_text = read_text(qml_dir() / "components" / "TrackLaneColumn.qml");
 
   expect_not_contains(main_text, "EventMarkersPanel");
   EXPECT_FALSE(std::filesystem::exists(qml_dir() / "components" / "EventMarkersPanel.qml"));
   expect_contains(main_text, "eventMarkerModel: appController.eventMarkerModel");
   expect_contains(panel_text, "property var eventMarkerModel");
-  expect_contains(panel_text, "model: root.eventMarkerModel");
+  expect_contains(track_info_text, "model: root.eventMarkerModel");
   expect_contains(track_info_text, "EventTrackInfoRow {");
-  expect_contains(panel_text, "EventTrackRow {");
+  expect_contains(lane_text, "EventTrackRow {");
 
   // Within the right-hand lane column the event marker tracks render above the
-  // topic tracks. Scope the ordering check to that ColumnLayout so the
-  // TrackInfoColumn instance's "model: root.model" binding above does not
-  // interfere (the left column now lives in TrackInfoColumn.qml).
-  const std::string lane_column = qml_block(panel_text, "ColumnLayout {");
-  const auto event_position = lane_column.find("model: root.eventMarkerModel");
+  // topic tracks. Scope the ordering check to TrackLaneColumn.qml, which now
+  // owns the lane Repeaters. The event repeater binds "model: eventMarkerModel"
+  // and the topic repeater binds "model: root.model".
+  const std::string lane_column = qml_block(lane_text, "Column {");
+  const auto event_position = lane_column.find("model: eventMarkerModel");
   const auto topic_position = lane_column.find("model: root.model");
   ASSERT_NE(event_position, std::string::npos);
   ASSERT_NE(topic_position, std::string::npos);
@@ -168,8 +169,8 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   expect_contains(info_text, "signal actionRequested()");
 
   const std::string track_text = read_text(track_row_path);
-  expect_contains(panel_text, "eventName: model.name");
-  expect_contains(panel_text, "kind: model.kind");
+  expect_contains(lane_text, "eventName: model.name");
+  expect_contains(lane_text, "kind: model.kind");
   expect_contains(track_text, "property var viewport");
   expect_contains(track_text, "property var markerModel");
   expect_contains(track_text, "property string eventName");
@@ -199,7 +200,7 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   expect_contains(track_text, "root.markerModel.deleteAllInstances(root.rowIndex)");
   expect_not_contains(track_text, "width: 3\n                    height: 14\n                    color: \"#ffffff\"");
   expect_contains(track_info_text, "height: eventInfoRepeater.count > 0 ? 1 : 0");
-  expect_contains(panel_text, "height: eventLaneRepeater.count > 0 ? 1 : 0");
+  expect_contains(lane_text, "height: eventLaneRepeater.count > 0 ? 1 : 0");
 }
 
 TEST(QmlStructure, ResizeHandleUsesCompactUnifiedHitArea)
@@ -288,13 +289,14 @@ TEST(QmlStructure, TimelineInfoUsesEyeSvgAndOmitsTrackKindText)
 TEST(QmlStructure, TimelineTrackAreaHasAdaptiveWindowAndRangeBar)
 {
   const std::string panel_text = read_text(qml_dir() / "components" / "TimelinePanel.qml");
+  const std::string lane_text = read_text(qml_dir() / "components" / "TrackLaneColumn.qml");
   const std::string curve_text = read_text(qml_dir() / "components" / "TimelineTrackRow.qml");
 
   expect_contains(panel_text, "property real visibleStartSeconds");
   expect_contains(panel_text, "property real visibleDurationSeconds");
-  expect_contains(panel_text, "function formatTickLabel");
-  expect_contains(panel_text, "TimelineRangeBar {");
-  expect_contains(panel_text, "wheel.modifiers & Qt.ShiftModifier");
+  expect_contains(lane_text, "function formatTickLabel");
+  expect_contains(lane_text, "TimelineRangeBar {");
+  expect_contains(lane_text, "wheel.modifiers & Qt.ShiftModifier");
   expect_not_contains(panel_text, "Math.floor(root.effectiveDurationSeconds / 5) + 1");
 
   expect_not_contains(curve_text, "ChartView");
@@ -325,18 +327,19 @@ TEST(QmlStructure, TimelineUsesViewportObjectForWindowMath)
 TEST(QmlStructure, TimelineViewportRenderingRulesAreExplicit)
 {
   const std::string panel_text = read_text(qml_dir() / "components" / "TimelinePanel.qml");
+  const std::string lane_text = read_text(qml_dir() / "components" / "TrackLaneColumn.qml");
   const std::string curve_text = read_text(qml_dir() / "components" / "TimelineTrackRow.qml");
   const std::string viewport_text = read_text(qml_dir() / "components" / "TimelineViewport.qml");
   const std::string range_text = read_text(qml_dir() / "components" / "TimelineRangeBar.qml");
 
-  expect_contains(panel_text, "viewport.isTimeVisible(root.playheadSeconds)");
-  expect_contains(panel_text, "rulerTickTimes");
-  expect_contains(panel_text, "property int rulerLabelTickStride: 10");
-  expect_contains(panel_text, "index % root.rulerLabelTickStride === 0");
-  expect_contains(panel_text, "function formatTickLabel");
-  expect_contains(panel_text, "totalMinutes");
-  expect_contains(panel_text, "padStart(2, \"0\")");
-  expect_contains(panel_text, "padStart(3, \"0\")");
+  expect_contains(lane_text, "viewport.isTimeVisible(playheadSeconds)");
+  expect_contains(lane_text, "rulerTickTimes");
+  expect_contains(lane_text, "property int rulerLabelTickStride: 10");
+  expect_contains(lane_text, "index % rulerLabelTickStride === 0");
+  expect_contains(lane_text, "function formatTickLabel");
+  expect_contains(lane_text, "totalMinutes");
+  expect_contains(lane_text, "padStart(2, \"0\")");
+  expect_contains(lane_text, "padStart(3, \"0\")");
 
   expect_contains(viewport_text, "function denseTickInterval");
   expect_contains(viewport_text, "var targetPixels = 10");

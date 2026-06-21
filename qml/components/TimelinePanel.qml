@@ -23,15 +23,15 @@ Panel {
     function scrollRows(deltaY) {
         var nextY = Math.max(0, Math.min(infoColumnPane.contentHeight - infoColumnPane.viewportHeight, infoColumnPane.contentY - deltaY))
         infoColumnPane.contentY = nextY
-        trackLaneList.contentY = nextY
+        laneColumnPane.contentY = nextY
     }
 
     function syncLaneToInfo() {
         if (!listsReady) {
             return
         }
-        if (Math.abs(trackLaneList.contentY - infoColumnPane.contentY) > 0.5) {
-            trackLaneList.contentY = infoColumnPane.contentY
+        if (Math.abs(laneColumnPane.contentY - infoColumnPane.contentY) > 0.5) {
+            laneColumnPane.contentY = infoColumnPane.contentY
         }
     }
 
@@ -39,26 +39,9 @@ Panel {
         if (!listsReady) {
             return
         }
-        if (Math.abs(infoColumnPane.contentY - trackLaneList.contentY) > 0.5) {
-            infoColumnPane.contentY = trackLaneList.contentY
+        if (Math.abs(infoColumnPane.contentY - laneColumnPane.contentY) > 0.5) {
+            infoColumnPane.contentY = laneColumnPane.contentY
         }
-    }
-
-    function seekFromLaneX(xPosition) {
-        if (controller && controller.setPlayheadSeconds) {
-            controller.setPlayheadSeconds(viewport.timeAtX(xPosition, trackLaneViewport.width))
-        }
-    }
-
-    function formatTickLabel(seconds) {
-        var totalMs = Math.max(0, Math.round(Number(seconds || 0) * 1000))
-        var ms = totalMs % 1000
-        var totalSeconds = Math.floor(totalMs / 1000)
-        var s = totalSeconds % 60
-        var totalMinutes = Math.floor(totalSeconds / 60)
-        return totalMinutes + ":" +
-            s.toString().padStart(2, "0") + "." +
-            ms.toString().padStart(3, "0")
     }
 
     TimelineViewport {
@@ -83,179 +66,17 @@ Panel {
             onContentScrolled: root.syncLaneToInfo()
         }
 
-        ColumnLayout {
+        TrackLaneColumn {
+            id: laneColumnPane
             SplitView.fillWidth: true
-            spacing: 0
-
-            Rectangle {
-                id: ruler
-
-                Layout.fillWidth: true
-                Layout.preferredHeight: 30
-                clip: true
-                color: Theme.surface
-                border.color: Theme.border
-                border.width: 1
-
-                readonly property var rulerTickTimes: viewport.tickTimes(width, viewport.denseTickInterval(width))
-
-                Repeater {
-                    model: ruler.rulerTickTimes
-
-                    delegate: Item {
-                        required property int index
-
-                        readonly property real tickTime: ruler.rulerTickTimes[index]
-                        readonly property bool labeledTick: index % root.rulerLabelTickStride === 0
-
-                        x: viewport.xAtTime(tickTime, ruler.width)
-                        width: 1
-                        height: ruler.height
-
-                        Rectangle {
-                            width: 1
-                            height: labeledTick ? 11 : 6
-                            color: labeledTick ? Theme.tickStrong : Theme.border
-                        }
-
-                        Label {
-                            anchors.top: parent.top
-                            anchors.topMargin: 12
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            visible: labeledTick
-                            text: root.formatTickLabel(tickTime)
-                            color: Theme.textMuted
-                            font.pixelSize: 10
-                        }
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    onPressed: root.seekFromLaneX(mouse.x)
-                    onPositionChanged: {
-                        if (pressed) {
-                            root.seekFromLaneX(mouse.x)
-                        }
-                    }
-                }
-
-                Rectangle {
-                    objectName: "timelineRulerPlayhead"
-                    width: 2
-                    height: parent.height
-                    visible: viewport.isTimeVisible(root.playheadSeconds)
-                    x: viewport.xAtTime(root.playheadSeconds, parent.width) - width / 2
-                    color: Theme.danger
-                    z: 5
-                }
-            }
-
-            Item {
-                id: trackLaneViewport
-
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-
-                MouseArea {
-                    objectName: "timelineLaneMouseArea"
-                    anchors.fill: parent
-                    z: 0
-                    acceptedButtons: Qt.LeftButton
-                    onPressed: root.seekFromLaneX(mouse.x)
-                    onPositionChanged: {
-                        if (pressed) {
-                            root.seekFromLaneX(mouse.x)
-                        }
-                    }
-                    onWheel: function(wheel) {
-                        if (wheel.modifiers & Qt.ShiftModifier) {
-                            viewport.panByWheel(wheel.angleDelta.y)
-                        } else {
-                            viewport.zoomAt(wheel.x, trackLaneViewport.width, wheel.angleDelta.y)
-                        }
-                        wheel.accepted = true
-                    }
-                }
-
-                Flickable {
-                    id: trackLaneList
-
-                    anchors.fill: parent
-                    z: 1
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    contentWidth: width
-                    contentHeight: trackLaneColumn.implicitHeight
-                    interactive: false
-                    onContentYChanged: root.syncInfoToLane()
-
-                    Column {
-                        id: trackLaneColumn
-
-                        width: trackLaneList.width
-
-                        Repeater {
-                            id: eventLaneRepeater
-                            model: root.eventMarkerModel
-
-                            EventTrackRow {
-                                width: trackLaneColumn.width
-                                rowIndex: index
-                                eventName: model.name
-                                kind: model.kind
-                                markerColor: model.color
-                                instances: model.instances
-                                hasPendingRangeStart: model.hasPendingRangeStart
-                                pendingStartSeconds: model.pendingStartSeconds
-                                playheadSeconds: root.playheadSeconds
-                                viewport: root.timelineViewport
-                                markerModel: root.eventMarkerModel
-                            }
-                        }
-
-                        Rectangle {
-                            width: trackLaneColumn.width
-                            height: eventLaneRepeater.count > 0 ? 1 : 0
-                            color: Theme.border
-                        }
-
-                        Repeater {
-                            model: root.model
-
-                            TimelineTrackRow {
-                                width: trackLaneColumn.width
-                                trackKind: model.trackKind
-                                seriesList: model.seriesList
-                                xMax: root.effectiveDurationSeconds
-                                visibleStartSeconds: viewport.visibleStartSeconds
-                                visibleDurationSeconds: viewport.boundedVisibleDuration
-                            }
-                        }
-                    }
-                }
-
-                Rectangle {
-                    objectName: "timelineLanePlayhead"
-                    width: 2
-                    height: parent.height
-                    visible: viewport.isTimeVisible(root.playheadSeconds)
-                    x: viewport.xAtTime(root.playheadSeconds, parent.width) - width / 2
-                    color: Theme.danger
-                    z: 5
-                }
-            }
-
-            TimelineRangeBar {
-                Layout.fillWidth: true
-                totalDurationSeconds: root.effectiveDurationSeconds
-                visibleStartSeconds: viewport.visibleStartSeconds
-                visibleDurationSeconds: viewport.boundedVisibleDuration
-                onWindowRequested: function(startSeconds, durationSeconds) {
-                    viewport.setWindow(startSeconds, durationSeconds)
-                }
-            }
+            controller: root.controller
+            model: root.model
+            eventMarkerModel: root.eventMarkerModel
+            viewport: viewport
+            playheadSeconds: root.playheadSeconds
+            effectiveDurationSeconds: root.effectiveDurationSeconds
+            rulerLabelTickStride: root.rulerLabelTickStride
+            onContentScrolled: root.syncInfoToLane()
         }
     }
 
