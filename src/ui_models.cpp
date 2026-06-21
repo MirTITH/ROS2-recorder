@@ -13,15 +13,6 @@ namespace data_recorder
 namespace
 {
 
-constexpr std::array<const char *, 6> kSeriesColors{
-  "#2563eb",
-  "#16a34a",
-  "#dc2626",
-  "#9333ea",
-  "#0891b2",
-  "#ca8a04",
-};
-
 QString track_kind_for_topic(const TopicEntry & topic)
 {
   if (topic.ui_category == TopicUiCategory::CameraPreview) {
@@ -35,6 +26,21 @@ QString track_kind_for_topic(const TopicEntry & topic)
   }
   return QStringLiteral("numeric");
 }
+
+// ---- Placeholder/demo data generators (remove when backend provides real data) ----
+// Everything in this block produces synthetic display values only. The real backend
+// will supply frequency from actual topic Hz, resolution from actual image dimensions,
+// and series from actual subscribed numeric data. kSeriesColors below is the categorical
+// palette used as default styling.
+
+constexpr std::array<const char *, 6> kSeriesColors{
+  "#2563eb",
+  "#16a34a",
+  "#dc2626",
+  "#9333ea",
+  "#0891b2",
+  "#ca8a04",
+};
 
 QVariantList make_series_list(int row, const QString & track_kind)
 {
@@ -79,6 +85,8 @@ QString make_frequency_text(int row, TopicUiCategory category)
   }
   return QStringLiteral("%1 Hz").arg(20 + row);
 }
+
+// ---- End placeholder/demo data generators ----
 
 bool valid_row(int row, int size)
 {
@@ -216,6 +224,19 @@ int TopicListModel::visibleCameraCount() const
   return count;
 }
 
+// PLACEHOLDER DATA SEAM: synthetic per-topic display values (frequency, resolution, series).
+// Replace with real values from ROS subscriptions when the backend lands. The make_*() helpers
+// above generate demo data only. Real config-derived fields (topic, track_kind, is_camera,
+// is_drawable) are set in set_topics, not here.
+void TopicListModel::populate_placeholder_fields(TopicRow & row, int index)
+{
+  row.frequency_text = make_frequency_text(index, row.topic.ui_category);
+  row.series_color = QString::fromLatin1(kSeriesColors[
+    static_cast<std::size_t>(index) % kSeriesColors.size()]);
+  row.resolution_text = row.is_camera ? make_resolution_text(index) : QString();
+  row.series_list = make_series_list(index, row.track_kind);
+}
+
 void TopicListModel::set_topics(std::vector<TopicEntry> topics)
 {
   beginResetModel();
@@ -225,13 +246,10 @@ void TopicListModel::set_topics(std::vector<TopicEntry> topics)
     TopicRow row;
     row.topic = std::move(topics[i]);
     row.is_visible = true;
-    row.frequency_text = make_frequency_text(static_cast<int>(i), row.topic.ui_category);
-    row.series_color = QString::fromLatin1(kSeriesColors[i % kSeriesColors.size()]);
     row.track_kind = track_kind_for_topic(row.topic);
     row.is_camera = row.track_kind == QStringLiteral("camera");
     row.is_drawable = row.track_kind == QStringLiteral("numeric");
-    row.resolution_text = row.is_camera ? make_resolution_text(static_cast<int>(i)) : QString();
-    row.series_list = make_series_list(static_cast<int>(i), row.track_kind);
+    populate_placeholder_fields(row, static_cast<int>(i));
     topics_.push_back(std::move(row));
   }
   endResetModel();
@@ -615,6 +633,13 @@ void EventMarkerModel::set_markers(std::vector<EventMarkerEntry> markers)
 
 RecordingSessionModel::RecordingSessionModel(QObject * parent)
 : QAbstractListModel(parent)
+{
+  populate_placeholder_sessions();
+}
+
+// PLACEHOLDER DATA SEAM: hardcoded demo sessions. Replace with a scan of the output
+// directory when the backend lands.
+void RecordingSessionModel::populate_placeholder_sessions()
 {
   sessions_ = {
     {QStringLiteral("2026-05-31_07-46-20"), QStringLiteral("1.2 GB"), QStringLiteral("00:00:24.123"),

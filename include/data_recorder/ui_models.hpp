@@ -63,6 +63,9 @@ private:
     QVariantList series_list;
   };
 
+  // PLACEHOLDER DATA SEAM: fills the synthetic per-topic display fields. See ui_models.cpp.
+  void populate_placeholder_fields(TopicRow & row, int index);
+
   std::vector<TopicRow> topics_;
 };
 
@@ -187,6 +190,9 @@ private:
     QString tag_name;
     QString tag_color;
   };
+
+  // PLACEHOLDER DATA SEAM: fills sessions_ with hardcoded demo sessions. See ui_models.cpp.
+  void populate_placeholder_sessions();
 
   std::vector<RecordingSessionRow> sessions_;
 };
