@@ -18,12 +18,14 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Charts Wi
 
 set(DATA_RECORDER_HEADERS
   include/data_recorder/app_controller.hpp
+  include/data_recorder/camera_grid_model.hpp
   include/data_recorder/config_model.hpp
   include/data_recorder/ui_models.hpp
 )
 
 set(DATA_RECORDER_SOURCES
   src/app_controller.cpp
+  src/camera_grid_model.cpp
   src/config_model.cpp
   src/ui_models.cpp
 )
@@ -94,6 +96,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_ui_models test/test_ui_models.cpp)
   target_link_libraries(test_ui_models data_recorder_core)
+
+  ament_add_gtest(test_camera_grid_model test/test_camera_grid_model.cpp)
+  target_link_libraries(test_camera_grid_model data_recorder_core)
 endif()
 
 ament_package()
