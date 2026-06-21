@@ -11,8 +11,6 @@ ColumnLayout {
     property var eventMarkerModel
     property real playheadSeconds: 0
     property alias contentY: infoList.contentY
-    property alias contentHeight: infoList.contentHeight
-    property alias viewportHeight: infoList.height
 
     signal contentScrolled()
 

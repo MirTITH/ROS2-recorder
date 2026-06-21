@@ -20,12 +20,6 @@ Panel {
 
     title: "时间轴"
 
-    function scrollRows(deltaY) {
-        var nextY = Math.max(0, Math.min(infoColumnPane.contentHeight - infoColumnPane.viewportHeight, infoColumnPane.contentY - deltaY))
-        infoColumnPane.contentY = nextY
-        laneColumnPane.contentY = nextY
-    }
-
     function syncLaneToInfo() {
         if (!listsReady) {
             return
