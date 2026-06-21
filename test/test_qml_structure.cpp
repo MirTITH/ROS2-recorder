@@ -130,17 +130,23 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
 {
   const std::string main_text = read_text(qml_dir() / "Main.qml");
   const std::string panel_text = read_text(qml_dir() / "components" / "TimelinePanel.qml");
+  const std::string track_info_text = read_text(qml_dir() / "components" / "TrackInfoColumn.qml");
 
   expect_not_contains(main_text, "EventMarkersPanel");
   EXPECT_FALSE(std::filesystem::exists(qml_dir() / "components" / "EventMarkersPanel.qml"));
   expect_contains(main_text, "eventMarkerModel: appController.eventMarkerModel");
   expect_contains(panel_text, "property var eventMarkerModel");
   expect_contains(panel_text, "model: root.eventMarkerModel");
-  expect_contains(panel_text, "EventTrackInfoRow {");
+  expect_contains(track_info_text, "EventTrackInfoRow {");
   expect_contains(panel_text, "EventTrackRow {");
 
-  const auto event_position = panel_text.find("model: root.eventMarkerModel");
-  const auto topic_position = panel_text.find("model: root.model");
+  // Within the right-hand lane column the event marker tracks render above the
+  // topic tracks. Scope the ordering check to that ColumnLayout so the
+  // TrackInfoColumn instance's "model: root.model" binding above does not
+  // interfere (the left column now lives in TrackInfoColumn.qml).
+  const std::string lane_column = qml_block(panel_text, "ColumnLayout {");
+  const auto event_position = lane_column.find("model: root.eventMarkerModel");
+  const auto topic_position = lane_column.find("model: root.model");
   ASSERT_NE(event_position, std::string::npos);
   ASSERT_NE(topic_position, std::string::npos);
   EXPECT_LT(event_position, topic_position);
@@ -192,7 +198,7 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   expect_contains(track_text, "text: \"删除所有“\" + root.eventName + \"”\"");
   expect_contains(track_text, "root.markerModel.deleteAllInstances(root.rowIndex)");
   expect_not_contains(track_text, "width: 3\n                    height: 14\n                    color: \"#ffffff\"");
-  expect_contains(panel_text, "height: eventInfoRepeater.count > 0 ? 1 : 0");
+  expect_contains(track_info_text, "height: eventInfoRepeater.count > 0 ? 1 : 0");
   expect_contains(panel_text, "height: eventLaneRepeater.count > 0 ? 1 : 0");
 }
 

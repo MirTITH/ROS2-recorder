@@ -21,8 +21,8 @@ Panel {
     title: "时间轴"
 
     function scrollRows(deltaY) {
-        var nextY = Math.max(0, Math.min(infoList.contentHeight - infoList.height, infoList.contentY - deltaY))
-        infoList.contentY = nextY
+        var nextY = Math.max(0, Math.min(infoColumnPane.contentHeight - infoColumnPane.viewportHeight, infoColumnPane.contentY - deltaY))
+        infoColumnPane.contentY = nextY
         trackLaneList.contentY = nextY
     }
 
@@ -30,8 +30,8 @@ Panel {
         if (!listsReady) {
             return
         }
-        if (Math.abs(trackLaneList.contentY - infoList.contentY) > 0.5) {
-            trackLaneList.contentY = infoList.contentY
+        if (Math.abs(trackLaneList.contentY - infoColumnPane.contentY) > 0.5) {
+            trackLaneList.contentY = infoColumnPane.contentY
         }
     }
 
@@ -39,8 +39,8 @@ Panel {
         if (!listsReady) {
             return
         }
-        if (Math.abs(infoList.contentY - trackLaneList.contentY) > 0.5) {
-            infoList.contentY = trackLaneList.contentY
+        if (Math.abs(infoColumnPane.contentY - trackLaneList.contentY) > 0.5) {
+            infoColumnPane.contentY = trackLaneList.contentY
         }
     }
 
@@ -61,19 +61,6 @@ Panel {
             ms.toString().padStart(3, "0")
     }
 
-    function timeString(seconds) {
-        var totalMs = Math.max(0, Math.round(seconds * 1000))
-        var ms = totalMs % 1000
-        var totalSeconds = Math.floor(totalMs / 1000)
-        var s = totalSeconds % 60
-        var m = Math.floor(totalSeconds / 60) % 60
-        var h = Math.floor(totalSeconds / 3600)
-        return h.toString().padStart(2, "0") + ":" +
-            m.toString().padStart(2, "0") + ":" +
-            s.toString().padStart(2, "0") + "." +
-            ms.toString().padStart(3, "0")
-    }
-
     TimelineViewport {
         id: viewport
         totalDurationSeconds: root.effectiveDurationSeconds
@@ -84,106 +71,16 @@ Panel {
         orientation: Qt.Horizontal
         handle: ResizeHandle { lineOrientation: Qt.Vertical }
 
-        ColumnLayout {
+        TrackInfoColumn {
+            id: infoColumnPane
             SplitView.preferredWidth: 300
             SplitView.minimumWidth: 50
             SplitView.maximumWidth: 520
-            spacing: 0
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 30
-                color: Theme.surfaceAlt
-                border.color: Theme.border
-                border.width: 1
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 8
-                    anchors.rightMargin: 8
-                    spacing: 6
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: root.timeString(root.playheadSeconds)
-                        color: Theme.textPrimary
-                        font.pixelSize: 12
-                        font.bold: true
-                        elide: Text.ElideRight
-                    }
-
-                    Button {
-                        Layout.preferredWidth: 72
-                        Layout.preferredHeight: 24
-                        visible: root.controller && root.controller.recording && !root.controller.followingLiveEdge
-                        text: "回到实时"
-                        font.pixelSize: 10
-                        onClicked: root.controller.returnToLiveEdge()
-                    }
-                }
-            }
-
-            Flickable {
-                id: infoList
-
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                contentWidth: width
-                contentHeight: infoColumn.implicitHeight
-                onContentYChanged: root.syncLaneToInfo()
-
-                Column {
-                    id: infoColumn
-
-                    width: infoList.width
-
-                    Repeater {
-                        id: eventInfoRepeater
-                        model: root.eventMarkerModel
-
-                        EventTrackInfoRow {
-                            width: infoColumn.width
-                            eventName: model.name
-                            shortcut: model.shortcut
-                            kind: model.kind
-                            markerColor: model.color
-                            count: model.count
-                            actionText: model.actionText
-                            onActionRequested: root.eventMarkerModel.triggerRowAction(index, root.playheadSeconds)
-                        }
-                    }
-
-                    Rectangle {
-                        width: infoColumn.width
-                        height: eventInfoRepeater.count > 0 ? 1 : 0
-                        color: Theme.border
-                    }
-
-                    Repeater {
-                        model: root.model
-
-                        TimelineInfoRow {
-                            width: infoColumn.width
-                            topicName: model.topicName
-                            frequencyText: model.frequencyText
-                            backendName: model.backendName
-                            isVisible: model.isVisible
-                            isCamera: model.isCamera
-                            onToggleVisibleRequested: {
-                                if (root.controller && root.controller.toggleTopicVisible) {
-                                    root.controller.toggleTopicVisible(index)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AsNeeded
-                }
-            }
+            controller: root.controller
+            model: root.model
+            eventMarkerModel: root.eventMarkerModel
+            playheadSeconds: root.playheadSeconds
+            onContentScrolled: root.syncLaneToInfo()
         }
 
         ColumnLayout {
