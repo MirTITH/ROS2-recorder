@@ -251,25 +251,37 @@ TEST(QmlStructure, CameraPreviewTileIsSquareCornered)
 
 TEST(QmlStructure, CameraGridUsesExplicitLayoutAndDragPreview)
 {
+  // The camera grid is split into three files: CameraGridPanel.qml (the view that
+  // binds the C++ cameraGridModel and renders the cells / placeholder / floating
+  // preview), CameraGridLayout.qml (pure geometry + push-aside reflow), and
+  // CameraDragController.qml (drag state machine + drop-commit via moveCamera).
   const std::string grid_text = read_text(qml_dir() / "components" / "CameraGridPanel.qml");
+  const std::string layout_text = read_text(qml_dir() / "components" / "CameraGridLayout.qml");
+  const std::string drag_text = read_text(qml_dir() / "components" / "CameraDragController.qml");
 
+  // View: no item-view widget, an explicit Repeater, and the drag-preview chrome.
   expect_not_contains(grid_text, "GridView {");
   expect_contains(grid_text, "Repeater {");
-  expect_contains(grid_text, "readonly property string placeholderSourceKey");
-  expect_contains(grid_text, "function chooseLayout");
-  expect_contains(grid_text, "function layoutForIndex");
-  expect_contains(grid_text, "function cameraAspectRatio");
-  expect_contains(grid_text, "function previewSequence");
-  expect_contains(grid_text, "function previewLayoutForKey");
-  expect_contains(grid_text, "function placeholderLayout");
-  expect_contains(grid_text, "function floatingPreviewLayout");
-  expect_contains(grid_text, "root.previewLayoutForKey(cameraCell.sourceKey, cameraCell.index)");
-  expect_contains(grid_text, "sourceKey: root.placeholderSourceKey");
-  expect_contains(grid_text, "root.previewSequence()");
-  expect_contains(grid_text, "function updateDropInsertIndex");
-  expect_contains(grid_text, "function commitDropInsertIndex");
   expect_contains(grid_text, "id: dropPlaceholder");
   expect_contains(grid_text, "id: floatingPreview");
+  expect_contains(grid_text, "gridLayout.previewLayoutForKey(cameraCell.sourceKey, cameraCell.index)");
+
+  // Layout: geometry helpers, the placeholder identity, and the reflow sequence.
+  expect_contains(layout_text, "readonly property string placeholderSourceKey");
+  expect_contains(layout_text, "function chooseLayout");
+  expect_contains(layout_text, "function layoutForIndex");
+  expect_contains(layout_text, "function cameraAspectRatio");
+  expect_contains(layout_text, "function previewSequence");
+  expect_contains(layout_text, "function previewLayoutForKey");
+  expect_contains(layout_text, "function placeholderLayout");
+  expect_contains(layout_text, "function floatingPreviewLayout");
+  expect_contains(layout_text, "sourceKey: gridLayout.placeholderSourceKey");
+  expect_contains(layout_text, "gridLayout.previewSequence()");
+
+  // Drag controller: the drop-insert math and the model-backed reorder commit.
+  expect_contains(drag_text, "function updateDropInsertIndex");
+  expect_contains(drag_text, "function commitDropInsertIndex");
+  expect_contains(drag_text, "moveCamera");
 }
 
 TEST(QmlStructure, TimelineInfoUsesEyeSvgAndOmitsTrackKindText)
