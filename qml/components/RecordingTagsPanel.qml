@@ -39,8 +39,7 @@ Panel {
                     Accessible.name: model.name
 
                     background: Rectangle {
-                        color: model.isSelected ? Theme.accentSoft : "transparent"
-                        radius: 4
+                        color: "transparent"
                     }
 
                     contentItem: TagChip {

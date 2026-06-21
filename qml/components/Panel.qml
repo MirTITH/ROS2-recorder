@@ -22,7 +22,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 20
-            color: root.active ? Theme.accentSoft : Theme.surfaceAlt
+            color: Theme.panelHeader
 
             RowLayout {
                 anchors.fill: parent

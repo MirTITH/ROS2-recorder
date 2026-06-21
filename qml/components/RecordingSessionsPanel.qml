@@ -13,7 +13,6 @@ Panel {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 10
         spacing: 0
 
         Rectangle {

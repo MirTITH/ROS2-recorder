@@ -8,8 +8,8 @@ ApplicationWindow {
 
     width: 1480
     height: 930
-    minimumWidth: 980
-    minimumHeight: 640
+    minimumWidth: 400
+    minimumHeight: 400
     visible: true
     title: "DataRecorder"
     color: Theme.windowBg
