@@ -32,7 +32,7 @@ Rectangle {
 
         Label {
             text: root.statusText
-            color: root.isRecording ? Theme.danger : "#166534"
+            color: root.isRecording ? Theme.danger : Theme.success
             font.pixelSize: 11
             font.bold: true
             elide: Text.ElideRight

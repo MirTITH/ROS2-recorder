@@ -33,7 +33,7 @@ Rectangle {
                 Label {
                     id: titleLabel
                     Layout.fillWidth: true
-                    color: Theme.cameraTileBg
+                    color: Theme.titleText
                     font.pixelSize: 11
                     font.bold: true
                     elide: Text.ElideRight

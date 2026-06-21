@@ -14,6 +14,7 @@ QtObject {
     readonly property color tickStrong: "#94a3b8"   // 强调刻度
 
     // —— 文字 ——
+    readonly property color titleText: "#162033"    // 面板标题（深蓝灰，强于 textPrimary）
     readonly property color textPrimary: "#111827"
     readonly property color textSecondary: "#475569"
     readonly property color textMuted: "#64748b"
@@ -22,6 +23,8 @@ QtObject {
     readonly property color accent: "#2563eb"       // 主强调（选中框、拖拽高亮、默认序列色）
     readonly property color accentSoft: "#dbeafe"   // 弱强调填充
     readonly property color danger: "#dc2626"       // 播放头 / 停止 / 错误
+    readonly property color success: "#166534"      // 状态文字：就绪/实时（深绿）
+    readonly property color online: "#22c55e"       // 在线指示点（亮绿）
 
     // —— 相机瓦片暗底 ——
     readonly property color cameraTileBg: "#162033"

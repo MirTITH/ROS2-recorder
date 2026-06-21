@@ -46,7 +46,7 @@ Panel {
                     Layout.preferredWidth: 7
                     Layout.preferredHeight: 7
                     radius: width / 2
-                    color: "#22c55e"
+                    color: Theme.online
                 }
 
                 Label {
