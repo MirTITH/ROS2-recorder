@@ -603,24 +603,46 @@ void EventMarkerModel::set_markers(std::vector<EventMarkerEntry> markers)
 RecordingSessionModel::RecordingSessionModel(QObject * parent)
 : QAbstractListModel(parent)
 {
-  populate_placeholder_sessions();
 }
 
-// PLACEHOLDER DATA SEAM: hardcoded demo sessions. Replace with a scan of the output
-// directory when the backend lands.
-void RecordingSessionModel::populate_placeholder_sessions()
+namespace
 {
-  sessions_ = {
-    {QStringLiteral("2026-05-31_07-46-20"), QStringLiteral("1.2 GB"), QStringLiteral("00:00:24.123"),
-      QStringLiteral("2026-05-31_07-46-20"), QStringLiteral("24s"), QStringLiteral("00:00:24.123"),
-      QStringLiteral("1.2 GB"), QStringLiteral("成功"), QStringLiteral("#2f9e44")},
-    {QStringLiteral("2026-05-31_07-47-06"), QStringLiteral("860 MB"), QStringLiteral("00:12:35.000"),
-      QStringLiteral("2026-05-31_07-47-06"), QStringLiteral("12m35s"), QStringLiteral("00:12:35.000"),
-      QStringLiteral("860 MB"), QStringLiteral("力控"), QStringLiteral("#7c4dff")},
-    {QStringLiteral("用户自己改的名称"), QStringLiteral("2.4 GB"), QStringLiteral("02:34:35.500"),
-      QStringLiteral("用户自己改的名称"), QStringLiteral("154m35s"), QStringLiteral("02:34:35.500"),
-      QStringLiteral("2.4 GB"), QStringLiteral("失败"), QStringLiteral("#e03131")},
-  };
+QString format_short_duration(double seconds)
+{
+  const int total = static_cast<int>(seconds);
+  const int m = total / 60;
+  const int s = total % 60;
+  return QStringLiteral("%1:%2").arg(m).arg(s, 2, 10, QLatin1Char('0'));
+}
+
+QString format_size(uint64_t bytes)
+{
+  const double mb = static_cast<double>(bytes) / (1024.0 * 1024.0);
+  if (mb >= 1024.0) { return QStringLiteral("%1 GB").arg(mb / 1024.0, 0, 'f', 1); }
+  return QStringLiteral("%1 MB").arg(mb, 0, 'f', 0);
+}
+}  // namespace
+
+void RecordingSessionModel::setSessions(const std::vector<SessionRecord> & sessions)
+{
+  beginResetModel();
+  sessions_.clear();
+  for (const auto & s : sessions) {
+    RecordingSessionRow row;
+    row.name = QString::fromStdString(s.session_id);
+    row.folder_name = QString::fromStdString(s.session_id);
+    row.short_duration = format_short_duration(s.duration_seconds);
+    row.full_duration = row.short_duration;
+    row.duration = row.short_duration;
+    row.size_text = format_size(s.size_bytes);
+    row.size = row.size_text;
+    if (!s.tags.empty()) {
+      row.tag_name = QString::fromStdString(s.tags.front().name);
+      row.tag_color = QString::fromStdString(s.tags.front().color);
+    }
+    sessions_.push_back(std::move(row));
+  }
+  endResetModel();
 }
 
 int RecordingSessionModel::rowCount(const QModelIndex & parent) const

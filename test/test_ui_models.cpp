@@ -39,6 +39,26 @@ data_recorder::ConfigData make_config_fixture()
   return config;
 }
 
+// 录制会话模型不再带占位数据（见 Task 12），凡是测历史选择行为的用例需先注入会话。
+void seed_history_sessions(data_recorder::AppController & controller)
+{
+  data_recorder::SessionRecord first;
+  first.session_id = "2026-05-31_07-46-20";
+  first.directory = "/tmp/recordings/2026-05-31_07-46-20";
+  first.duration_seconds = 24.123;
+  first.size_bytes = 1288490188;  // ~1.2 GiB
+  first.tags = {{"成功", "#2f9e44"}};
+
+  data_recorder::SessionRecord second;
+  second.session_id = "2026-05-31_07-47-06";
+  second.directory = "/tmp/recordings/2026-05-31_07-47-06";
+  second.duration_seconds = 755.0;
+  second.size_bytes = 901775360;  // ~860 MiB
+  second.tags = {{"力控", "#7c4dff"}};
+
+  controller.recordingSessionModel()->setSessions({first, second});
+}
+
 }  // namespace
 
 TEST(TopicListModel, ExposesTopicRoles)
@@ -437,6 +457,7 @@ TEST(AppController, SelectingHistoryDisablesRecordingAndUpdatesStatus)
 {
   const auto config = make_config_fixture();
   data_recorder::AppController controller(config);
+  seed_history_sessions(controller);
 
   controller.selectHistorySession(0);
 
@@ -454,6 +475,7 @@ TEST(AppController, SelectingOnlineDataRestoresRecordingAvailability)
 {
   const auto config = make_config_fixture();
   data_recorder::AppController controller(config);
+  seed_history_sessions(controller);
 
   controller.selectHistorySession(1);
   controller.selectOnlineData();
@@ -468,6 +490,7 @@ TEST(AppController, DataSourceSelectionEmitsOnlyChangedPropertySignals)
 {
   const auto config = make_config_fixture();
   data_recorder::AppController controller(config);
+  seed_history_sessions(controller);
 
   int data_source_changed_count = 0;
   int can_record_changed_count = 0;
@@ -664,12 +687,19 @@ TEST(AppController, ExposesPopulatedModels)
     "/joint_states");
   EXPECT_EQ(controller.tagModel()->rowCount(), 2);
   EXPECT_EQ(controller.eventMarkerModel()->rowCount(), 3);
-  EXPECT_GT(controller.recordingSessionModel()->rowCount(), 0);
+  EXPECT_EQ(controller.recordingSessionModel()->rowCount(), 0);
 }
 
 TEST(RecordingSessionModel, ExposesFolderDurationSizeAndTagRoles)
 {
   data_recorder::RecordingSessionModel model;
+  data_recorder::SessionRecord r;
+  r.session_id = "2026-05-31_07-46-20";
+  r.directory = "/tmp/x/2026-05-31_07-46-20";
+  r.duration_seconds = 24.123;
+  r.size_bytes = 1288490188;  // ~1.2 GiB
+  r.tags = {{"成功", "#2f9e44"}};
+  model.setSessions({r});
 
   ASSERT_GT(model.rowCount(), 0);
   const auto row = model.index(0, 0);
@@ -679,6 +709,26 @@ TEST(RecordingSessionModel, ExposesFolderDurationSizeAndTagRoles)
   EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::SizeTextRole).toString().isEmpty());
   EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::TagNameRole).toString().isEmpty());
   EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::TagColorRole).toString().isEmpty());
+}
+
+TEST(RecordingSessionModel, SetSessionsPopulatesRows)
+{
+  data_recorder::RecordingSessionModel model;
+  data_recorder::SessionRecord r;
+  r.session_id = "2026-06-22_14-30-05";
+  r.directory = "/tmp/x/2026-06-22_14-30-05";
+  r.duration_seconds = 65.0;  // 1:05
+  r.size_bytes = 256 * 1024 * 1024;  // 256 MiB
+  r.tags = {{"成功", "#2f9e44"}};
+  model.setSessions({r});
+
+  ASSERT_EQ(model.rowCount(), 1);
+  const auto idx = model.index(0, 0);
+  EXPECT_EQ(model.data(idx, data_recorder::RecordingSessionModel::FolderNameRole).toString().toStdString(),
+    "2026-06-22_14-30-05");
+  EXPECT_EQ(model.data(idx, data_recorder::RecordingSessionModel::TagNameRole).toString().toStdString(), "成功");
+  // 时长格式化为 mm:ss 含 1:05
+  EXPECT_NE(model.data(idx, data_recorder::RecordingSessionModel::ShortDurationRole).toString().indexOf("1:05"), -1);
 }
 
 TEST(AppController, ToggleRecordingUpdatesStateAndEmitsSignals)

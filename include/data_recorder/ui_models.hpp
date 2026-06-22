@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "data_recorder/config_model.hpp"
+#include "data_recorder/recorder_types.hpp"
 
 namespace data_recorder
 {
@@ -180,6 +181,8 @@ public:
   QVariant data(const QModelIndex & index, int role = Qt::DisplayRole) const override;
   QHash<int, QByteArray> roleNames() const override;
 
+  void setSessions(const std::vector<SessionRecord> & sessions);
+
 private:
   struct RecordingSessionRow
   {
@@ -193,9 +196,6 @@ private:
     QString tag_name;
     QString tag_color;
   };
-
-  // PLACEHOLDER DATA SEAM: fills sessions_ with hardcoded demo sessions. See ui_models.cpp.
-  void populate_placeholder_sessions();
 
   std::vector<RecordingSessionRow> sessions_;
 };

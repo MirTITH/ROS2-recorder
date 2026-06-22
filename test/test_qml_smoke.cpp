@@ -52,6 +52,26 @@ data_recorder::ConfigData make_config_fixture()
   return config;
 }
 
+// 录制会话模型不再带占位数据（见 Task 12），QML 历史行需先注入会话才能出现。
+void seed_history_sessions(data_recorder::AppController & controller)
+{
+  data_recorder::SessionRecord first;
+  first.session_id = "2026-05-31_07-46-20";
+  first.directory = "/tmp/recordings/2026-05-31_07-46-20";
+  first.duration_seconds = 24.123;
+  first.size_bytes = 1288490188;  // ~1.2 GiB
+  first.tags = {{"成功", "#2f9e44"}};
+
+  data_recorder::SessionRecord second;
+  second.session_id = "2026-05-31_07-47-06";
+  second.directory = "/tmp/recordings/2026-05-31_07-47-06";
+  second.duration_seconds = 755.0;
+  second.size_bytes = 901775360;  // ~860 MiB
+  second.tags = {{"力控", "#7c4dff"}};
+
+  controller.recordingSessionModel()->setSessions({first, second});
+}
+
 QObject * find_by_object_name(QObject * object, const QString & object_name)
 {
   if (object == nullptr) {
@@ -158,6 +178,7 @@ protected:
   void SetUp() override
   {
     controller_ = std::make_unique<data_recorder::AppController>(make_config_fixture());
+    seed_history_sessions(*controller_);
     app_->installEventFilter(controller_.get());
     engine_ = std::make_unique<QQmlApplicationEngine>();
     engine_->rootContext()->setContextProperty("appController", controller_.get());
