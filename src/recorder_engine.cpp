@@ -73,10 +73,12 @@ RecorderEngine::RecorderEngine(
     if (bridge_) { bridge_->push_stats(stats); }
   });
 
-  record_start_steady_ = std::chrono::steady_clock::now();
+  record_start_steady_ns_.store(
+    std::chrono::steady_clock::now().time_since_epoch().count());
   live_edge_timer_ = node_->create_wall_timer(33ms, [this]() {
-    const auto elapsed = std::chrono::steady_clock::now() - record_start_steady_;
-    const double seconds = std::chrono::duration<double>(elapsed).count();
+    const int64_t now_ns = std::chrono::steady_clock::now().time_since_epoch().count();
+    const int64_t elapsed_ns = now_ns - record_start_steady_ns_.load();
+    const double seconds = static_cast<double>(elapsed_ns) / 1e9;
     live_edge_seconds_.store(seconds);
     if (bridge_) { bridge_->set_live_edge(seconds); }
   });
@@ -148,13 +150,25 @@ void RecorderEngine::on_rosbag_message(
     if (it != rate_monitors_.end()) { it->second.record(now_ns); }
   }
   if (!recording_.load()) { return; }
-  std::lock_guard<std::mutex> lock(session_mutex_);
-  if (rosbag_queue_) {
+
+  // 在锁内只取 queue/writer 的 shared_ptr 本地副本，随即释放 session_mutex_，
+  // 再做可能阻塞的 push（Block 背压满时会等 space_cv_）。这样即便 writer 卡住，
+  // stop_session 仍能拿到 session_mutex_ 调 rosbag_queue_->stop() 解除阻塞。
+  // 本地副本保活 queue/writer 直到本次 push 返回；任务闭包另持 writer 副本，
+  // 保证 worker 线程执行 write 时 writer 仍存活。
+  std::shared_ptr<WriterQueue<std::function<void()>>> queue;
+  std::shared_ptr<RosbagWriter> writer;
+  {
+    std::lock_guard<std::mutex> lock(session_mutex_);
+    queue = rosbag_queue_;
+    writer = rosbag_writer_;
+  }
+  if (queue && writer) {
     // 拷贝序列化消息进闭包（生命周期安全），入队到 writer 线程。
     auto serialized = std::make_shared<rclcpp::SerializedMessage>(*msg);
     const std::string topic_copy = topic;
-    rosbag_queue_->push([this, topic_copy, serialized, now_ns]() {
-      rosbag_writer_->write(topic_copy, *serialized, now_ns);
+    queue->push([writer, topic_copy, serialized, now_ns]() {
+      writer->write(topic_copy, *serialized, now_ns);
     });
   }
 }
@@ -216,7 +230,7 @@ std::string RecorderEngine::start_session()
   session_dir_ = session_manager_->create_session_directory(output_dir, session_id_);
 
   // rosbag writer + 队列（阻塞背压）
-  rosbag_writer_ = std::make_unique<RosbagWriter>(
+  rosbag_writer_ = std::make_shared<RosbagWriter>(
     (fs::path(session_dir_) / "rosbag").string(), /*storage_id=*/"");
   if (!rosbag_writer_->is_open()) {
     std::cerr << "[RecorderEngine] rosbag writer 打开失败，取消录制\n";
@@ -232,7 +246,7 @@ std::string RecorderEngine::start_session()
       }
     }
   }
-  rosbag_queue_ = std::make_unique<WriterQueue<std::function<void()>>>(
+  rosbag_queue_ = std::make_shared<WriterQueue<std::function<void()>>>(
     2000, OverflowPolicy::Block, [](std::function<void()> task) { task(); });
 
   // video sinks（丢最旧背压）。recorder 在首帧到达时懒建（尺寸首帧才知）。
@@ -245,7 +259,23 @@ std::string RecorderEngine::start_session()
       VideoParams params;
       auto pit = topic.params.find("codec"); if (pit != topic.params.end()) params.codec = pit->second;
       pit = topic.params.find("preset"); if (pit != topic.params.end()) params.preset = pit->second;
-      pit = topic.params.find("crf"); if (pit != topic.params.end()) params.crf = std::stoi(pit->second);
+      pit = topic.params.find("crf");
+      if (pit != topic.params.end()) {
+        // crf 来自用户可改的 YAML 标量，无数值校验；非法值不应让 start_session 抛出。
+        try {
+          size_t consumed = 0;
+          const int crf = std::stoi(pit->second, &consumed);
+          if (consumed == pit->second.size()) {
+            params.crf = crf;
+          } else {
+            std::cerr << "[RecorderEngine] crf 含非数字字符（\"" << pit->second
+                      << "\"），用默认值 " << params.crf << "\n";
+          }
+        } catch (const std::exception & e) {
+          std::cerr << "[RecorderEngine] crf 解析失败（\"" << pit->second
+                    << "\"）：" << e.what() << "，用默认值 " << params.crf << "\n";
+        }
+      }
       pit = topic.params.find("pix_fmt"); if (pit != topic.params.end()) params.pix_fmt = pit->second;
       pit = topic.params.find("container"); if (pit != topic.params.end()) params.container = pit->second;
 
@@ -267,7 +297,8 @@ std::string RecorderEngine::start_session()
     }
   }
 
-  record_start_steady_ = std::chrono::steady_clock::now();
+  record_start_steady_ns_.store(
+    std::chrono::steady_clock::now().time_since_epoch().count());
   record_start_unix_ = std::chrono::duration<double>(
     std::chrono::system_clock::now().time_since_epoch()).count();
   record_start_ros_ns_ = node_->now().nanoseconds();

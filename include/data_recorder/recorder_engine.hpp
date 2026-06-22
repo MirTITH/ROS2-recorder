@@ -79,11 +79,14 @@ private:
   std::atomic<bool> recording_{false};
   std::string session_dir_;
   std::string session_id_;
-  std::chrono::steady_clock::time_point record_start_steady_;
+  // steady_clock 起点存为 atomic ns（live_edge_timer_ 在 ROS 线程读，start_session 在 GUI 线程写）。
+  std::atomic<int64_t> record_start_steady_ns_{0};
   double record_start_unix_{0.0};
   int64_t record_start_ros_ns_{0};
-  std::unique_ptr<RosbagWriter> rosbag_writer_;
-  std::unique_ptr<WriterQueue<std::function<void()>>> rosbag_queue_;
+  // shared_ptr：on_rosbag_message 可在 session_mutex_ 外持本地副本完成阻塞 push，
+  // 即使 stop_session 已 reset 成员，本地副本仍保活 queue/writer 直到 push 返回。
+  std::shared_ptr<RosbagWriter> rosbag_writer_;
+  std::shared_ptr<WriterQueue<std::function<void()>>> rosbag_queue_;
   std::map<std::string, std::shared_ptr<VideoSink>> video_sinks_;
 
   // live edge / stats 定时器
