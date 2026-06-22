@@ -55,6 +55,7 @@ private:
   int width_{0};
   int height_{0};
   bool open_{false};
+  bool header_written_{false};
   int64_t frame_index_{0};
   int64_t first_stamp_ns_{0};
   bool have_first_{false};

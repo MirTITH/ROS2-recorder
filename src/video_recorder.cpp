@@ -86,6 +86,7 @@ bool VideoRecorder::init(const VideoParams & params)
 
   if (avio_open(&fmt_ctx_->pb, video_path_.c_str(), AVIO_FLAG_WRITE) < 0) { return false; }
   if (avformat_write_header(fmt_ctx_, nullptr) < 0) { return false; }
+  header_written_ = true;
 
   // 编码用 YUV 帧
   yuv_frame_ = av_frame_alloc();
@@ -157,7 +158,7 @@ bool VideoRecorder::encode(const ImageFrame & frame)
 
 void VideoRecorder::close()
 {
-  if (codec_ctx_ && fmt_ctx_) {
+  if (header_written_ && codec_ctx_ && fmt_ctx_) {
     avcodec_send_frame(codec_ctx_, nullptr);  // flush
     drain_packets();
     av_write_trailer(fmt_ctx_);

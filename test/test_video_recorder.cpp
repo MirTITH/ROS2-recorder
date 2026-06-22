@@ -95,3 +95,40 @@ TEST(VideoRecorder, UnsupportedEncodingFailsToOpenGracefully)
 
   fs::remove_all(tmp);
 }
+
+// 回归：init() 失败路径（不存在的编码器）必须 !is_open() 且析构干净不崩溃。
+// 防止 close() 在没成功写 header 的 muxer 上调 av_write_trailer。
+TEST(VideoRecorder, BogusCodecFailsToOpenAndDestructsCleanly)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_bogus_codec";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+
+  data_recorder::VideoParams params;
+  params.codec = "no_such_codec";  // avcodec_find_encoder_by_name 返回 null → init 失败
+  {
+    data_recorder::VideoRecorder rec(
+      (tmp / "x.mp4").string(), (tmp / "x.csv").string(), 64, 48, params);
+    EXPECT_FALSE(rec.is_open());
+  }  // 离开作用域 → 析构 → close()；header 未写，不应崩溃
+
+  fs::remove_all(tmp);
+}
+
+// 回归：init() 失败路径（不存在的容器）必须 !is_open() 且析构干净不崩溃。
+TEST(VideoRecorder, BogusContainerFailsToOpenAndDestructsCleanly)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_bogus_container";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+
+  data_recorder::VideoParams params;
+  params.container = "this_is_not_a_container";  // avformat_alloc_output_context2 失败 → init 失败
+  {
+    data_recorder::VideoRecorder rec(
+      (tmp / "x.mp4").string(), (tmp / "x.csv").string(), 64, 48, params);
+    EXPECT_FALSE(rec.is_open());
+  }  // 离开作用域 → 析构 → close()；header 未写，不应崩溃
+
+  fs::remove_all(tmp);
+}
