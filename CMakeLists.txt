@@ -28,6 +28,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/camera_grid_model.hpp
   include/data_recorder/config_model.hpp
   include/data_recorder/recorder_types.hpp
+  include/data_recorder/topic_rate_monitor.hpp
   include/data_recorder/ui_models.hpp
 )
 
@@ -35,6 +36,7 @@ set(DATA_RECORDER_SOURCES
   src/app_controller.cpp
   src/camera_grid_model.cpp
   src/config_model.cpp
+  src/topic_rate_monitor.cpp
   src/ui_models.cpp
 )
 
@@ -107,6 +109,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_camera_grid_model test/test_camera_grid_model.cpp)
   target_link_libraries(test_camera_grid_model data_recorder_core)
+
+  ament_add_gtest(test_topic_rate_monitor test/test_topic_rate_monitor.cpp)
+  target_link_libraries(test_topic_rate_monitor data_recorder_core)
 endif()
 
 ament_package()
