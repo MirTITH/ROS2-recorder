@@ -25,6 +25,8 @@ public:
     BackendNameRole,
     ResolutionTextRole,
     SeriesColorRole,
+    TopicKeyRole,
+    FrameSeqRole,
   };
 
   explicit CameraGridModel(TopicListModel * source, QObject * parent = nullptr);
@@ -34,6 +36,7 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   Q_INVOKABLE void moveCamera(int from, int to);
+  Q_INVOKABLE void updateFrameSeq(const QString & topic_key, int seq);
 
 signals:
   void countChanged();
@@ -45,6 +48,7 @@ private:
     QString backend_name;
     QString resolution_text;
     QString series_color;
+    int frame_seq{0};
   };
 
   QString key_of(const QString & topic, const QString & backend) const;

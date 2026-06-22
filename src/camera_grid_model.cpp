@@ -93,6 +93,8 @@ QVariant CameraGridModel::data(const QModelIndex & index, int role) const
     case BackendNameRole: return c.backend_name;
     case ResolutionTextRole: return c.resolution_text;
     case SeriesColorRole: return c.series_color;
+    case TopicKeyRole: return c.topic_name;
+    case FrameSeqRole: return c.frame_seq;
     default: return {};
   }
 }
@@ -104,6 +106,8 @@ QHash<int, QByteArray> CameraGridModel::roleNames() const
     {BackendNameRole, "backendName"},
     {ResolutionTextRole, "resolutionText"},
     {SeriesColorRole, "seriesColor"},
+    {TopicKeyRole, "topicKey"},
+    {FrameSeqRole, "frameSeq"},
   };
 }
 
@@ -154,6 +158,17 @@ void CameraGridModel::moveCamera(int from, int to)
   order_ = std::move(next_order);
 
   rebuild();  // reset-style; matches existing QML drop-commit behavior
+}
+
+void CameraGridModel::updateFrameSeq(const QString & topic_key, int seq)
+{
+  for (std::size_t i = 0; i < visible_.size(); ++i) {
+    if (visible_[i].topic_name != topic_key) { continue; }
+    visible_[i].frame_seq = seq;
+    const auto idx = index(static_cast<int>(i), 0);
+    emit dataChanged(idx, idx, {FrameSeqRole});
+    return;
+  }
 }
 
 }  // namespace data_recorder

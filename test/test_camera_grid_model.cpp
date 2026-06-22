@@ -92,3 +92,19 @@ TEST(CameraGridModel, HiddenCameraReappearsInOriginalSlot)
   EXPECT_EQ(model.data(model.index(1, 0),
     data_recorder::CameraGridModel::TopicNameRole).toString().toStdString(), "/b/image_raw");
 }
+
+TEST(CameraGridModel, ExposesTopicKeyAndFrameSeq)
+{
+  data_recorder::TopicListModel source;
+  source.set_topics({
+    make_topic("/camera/image_raw", "video", data_recorder::TopicUiCategory::CameraPreview),
+  });
+  data_recorder::CameraGridModel model(&source);
+  const auto idx = model.index(0, 0);
+  EXPECT_EQ(model.data(idx, data_recorder::CameraGridModel::TopicKeyRole).toString().toStdString(),
+    "/camera/image_raw");
+  EXPECT_EQ(model.data(idx, data_recorder::CameraGridModel::FrameSeqRole).toInt(), 0);
+
+  model.updateFrameSeq("/camera/image_raw", 7);
+  EXPECT_EQ(model.data(idx, data_recorder::CameraGridModel::FrameSeqRole).toInt(), 7);
+}
