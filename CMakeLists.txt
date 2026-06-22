@@ -28,6 +28,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/app_controller.hpp
   include/data_recorder/camera_grid_model.hpp
   include/data_recorder/config_model.hpp
+  include/data_recorder/live_bridge.hpp
   include/data_recorder/recorder_types.hpp
   include/data_recorder/rosbag_writer.hpp
   include/data_recorder/session_manager.hpp
@@ -41,6 +42,7 @@ set(DATA_RECORDER_SOURCES
   src/app_controller.cpp
   src/camera_grid_model.cpp
   src/config_model.cpp
+  src/live_bridge.cpp
   src/rosbag_writer.cpp
   src/session_manager.cpp
   src/topic_rate_monitor.cpp
