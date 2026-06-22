@@ -289,6 +289,27 @@ void TagListModel::set_tags(std::vector<TagEntry> tags)
   endResetModel();
 }
 
+std::vector<TagRecord> TagListModel::exportSelectedTags() const
+{
+  std::vector<TagRecord> out;
+  if (selected_row_ >= 0 && selected_row_ < static_cast<int>(tags_.size())) {
+    out.push_back({tags_[static_cast<std::size_t>(selected_row_)].name,
+      tags_[static_cast<std::size_t>(selected_row_)].color});
+  }
+  return out;
+}
+
+void TagListModel::clearSelection()
+{
+  if (selected_row_ < 0) { return; }
+  const int previous = selected_row_;
+  selected_row_ = -1;
+  if (valid_row(previous, static_cast<int>(tags_.size()))) {
+    const auto previous_index = index(previous, 0);
+    emit dataChanged(previous_index, previous_index, {IsSelectedRole});
+  }
+}
+
 EventMarkerModel::EventMarkerModel(QObject * parent)
 : QAbstractListModel(parent)
 {
@@ -596,6 +617,41 @@ void EventMarkerModel::set_markers(std::vector<EventMarkerEntry> markers)
     EventMarkerRow row;
     row.marker = std::move(marker);
     markers_.push_back(std::move(row));
+  }
+  endResetModel();
+}
+
+std::vector<AnnotationRecord> EventMarkerModel::exportAnnotations() const
+{
+  std::vector<AnnotationRecord> out;
+  for (const auto & row : markers_) {
+    for (const auto & inst : row.instances) {
+      AnnotationRecord rec;
+      rec.name = row.marker.name;
+      rec.shortcut = row.marker.shortcut;
+      rec.kind = inst.kind.toStdString();
+      rec.color = row.marker.color;
+      if (inst.kind == QStringLiteral("range")) {
+        rec.t = inst.start_seconds;
+        rec.end = inst.end_seconds;
+      } else {
+        rec.t = inst.start_seconds;
+      }
+      out.push_back(rec);
+    }
+  }
+  std::sort(out.begin(), out.end(),
+    [](const AnnotationRecord & a, const AnnotationRecord & b) { return a.t < b.t; });
+  return out;
+}
+
+void EventMarkerModel::clearInstances()
+{
+  beginResetModel();
+  for (auto & row : markers_) {
+    row.instances.clear();
+    row.has_pending_range_start = false;
+    row.next_instance_id = 1;
   }
   endResetModel();
 }

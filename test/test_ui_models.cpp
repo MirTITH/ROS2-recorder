@@ -429,6 +429,48 @@ TEST(EventMarkerModel, TriggerShortcutIsCaseInsensitive)
   EXPECT_EQ(model.data(model.index(0, 0), data_recorder::EventMarkerModel::CountRole).toInt(), 0);
 }
 
+TEST(EventMarkerModel, ExportsAnnotationSnapshotWithMultipleSameName)
+{
+  data_recorder::EventMarkerModel model;
+  model.set_markers({
+    {"c", "碰撞", "point", "#e03131"},
+    {"2", "倒水", "range", "#2f9e44"},
+  });
+  model.triggerShortcut("c", 8.04);   // point 1
+  model.triggerShortcut("c", 12.88);  // point 2（同名）
+  model.toggleRange(1, 5.0);          // range 起
+  model.toggleRange(1, 9.3);          // range 止
+
+  const auto annotations = model.exportAnnotations();
+  int collision = 0; bool has_range = false;
+  for (const auto & a : annotations) {
+    if (a.name == "碰撞") { ++collision; }
+    if (a.kind == "range" && a.name == "倒水") { has_range = true; EXPECT_NEAR(a.end, 9.3, 1e-6); }
+  }
+  EXPECT_EQ(collision, 2);
+  EXPECT_TRUE(has_range);
+}
+
+TEST(TagListModel, ExportsSelectedTag)
+{
+  data_recorder::TagListModel model;
+  model.set_tags({{"成功", "#2f9e44"}, {"失败", "#e03131"}});
+  model.select(0);
+  const auto tags = model.exportSelectedTags();
+  ASSERT_EQ(tags.size(), 1u);
+  EXPECT_EQ(tags.front().name, "成功");
+}
+
+TEST(TagListModel, ClearSelectionEmptiesExport)
+{
+  data_recorder::TagListModel model;
+  model.set_tags({{"成功", "#2f9e44"}});
+  model.select(0);
+  ASSERT_EQ(model.exportSelectedTags().size(), 1u);
+  model.clearSelection();
+  EXPECT_TRUE(model.exportSelectedTags().empty());
+}
+
 TEST(AppController, ExposesInitialState)
 {
   const auto config = make_config_fixture();

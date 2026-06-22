@@ -93,6 +93,9 @@ public:
 
   Q_INVOKABLE void select(int row);
 
+  std::vector<TagRecord> exportSelectedTags() const;
+  void clearSelection();  // startSession 时清空（select(-1) 当前是 no-op，故需独立方法）
+
   void set_tags(std::vector<TagEntry> tags);
 
 private:
@@ -133,6 +136,9 @@ public:
     int row, int instance_id, double start_seconds, double end_seconds);
   Q_INVOKABLE bool deleteInstance(int row, int instance_id);
   Q_INVOKABLE bool deleteAllInstances(int row);
+
+  std::vector<AnnotationRecord> exportAnnotations() const;
+  void clearInstances();  // startSession 时清空
 
   void set_markers(std::vector<EventMarkerEntry> markers);
 
