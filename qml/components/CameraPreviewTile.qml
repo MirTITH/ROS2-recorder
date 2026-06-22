@@ -10,6 +10,8 @@ Rectangle {
     property string resolutionText: "1280x720"
     property color seriesColor: "#2563eb"
     property bool dragActive: false
+    property string topicKey: ""
+    property int frameSeq: 0
 
     function videoRect(widthValue, heightValue) {
         var match = /^([0-9]+)x([0-9]+)$/.exec(String(resolutionText || ""))
@@ -85,62 +87,15 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            Canvas {
-                id: previewCanvas
-
+            Image {
                 anchors.fill: parent
-                onWidthChanged: requestPaint()
-                onHeightChanged: requestPaint()
-
-                onPaint: {
-                    var ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-                    ctx.fillStyle = Theme.cameraTileBg
-                    ctx.fillRect(0, 0, width, height)
-
-                    var rect = root.videoRect(width, height)
-                    ctx.save()
-                    ctx.beginPath()
-                    ctx.rect(rect.x, rect.y, rect.width, rect.height)
-                    ctx.clip()
-
-                    ctx.fillStyle = Theme.textPrimary
-                    ctx.fillRect(rect.x, rect.y, rect.width, rect.height)
-                    ctx.strokeStyle = Theme.textSecondary
-                    ctx.lineWidth = 1
-                    for (var x = rect.x; x < rect.x + rect.width; x += Math.max(24, rect.width / 8)) {
-                        ctx.beginPath()
-                        ctx.moveTo(x, rect.y)
-                        ctx.lineTo(x, rect.y + rect.height)
-                        ctx.stroke()
-                    }
-                    for (var y = rect.y; y < rect.y + rect.height; y += Math.max(18, rect.height / 6)) {
-                        ctx.beginPath()
-                        ctx.moveTo(rect.x, y)
-                        ctx.lineTo(rect.x + rect.width, y)
-                        ctx.stroke()
-                    }
-                    ctx.strokeStyle = root.seriesColor
-                    ctx.lineWidth = 3
-                    ctx.strokeRect(
-                        rect.x + rect.width * 0.18,
-                        rect.y + rect.height * 0.18,
-                        rect.width * 0.64,
-                        rect.height * 0.64)
-                    ctx.restore()
-                }
-
-                Connections {
-                    target: root
-
-                    function onSeriesColorChanged() {
-                        previewCanvas.requestPaint()
-                    }
-
-                    function onResolutionTextChanged() {
-                        previewCanvas.requestPaint()
-                    }
-                }
+                fillMode: Image.PreserveAspectFit
+                cache: false
+                asynchronous: false
+                source: root.topicKey.length > 0
+                    ? "image://camera/" + root.topicKey + "?seq=" + root.frameSeq
+                    : ""
+                // seq 变化 → source 变化 → 重新拉帧
             }
         }
     }

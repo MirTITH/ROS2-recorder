@@ -64,6 +64,8 @@ Panel {
                 required property string backendName
                 required property string resolutionText
                 required property color seriesColor
+                required property string topicKey
+                required property int frameSeq
 
                 // Per-cell key (matches the C++ model's internal "topic|backend"
                 // key). Kept as a stable per-drag identity and for placeholder
@@ -86,6 +88,8 @@ Panel {
                     topicName: cameraCell.topicName
                     resolutionText: cameraCell.resolutionText
                     seriesColor: cameraCell.seriesColor
+                    topicKey: cameraCell.topicKey
+                    frameSeq: cameraCell.frameSeq
                 }
 
                 MouseArea {
