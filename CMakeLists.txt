@@ -30,6 +30,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/camera_image_provider.hpp
   include/data_recorder/config_model.hpp
   include/data_recorder/live_bridge.hpp
+  include/data_recorder/recorder_engine.hpp
   include/data_recorder/recorder_types.hpp
   include/data_recorder/rosbag_writer.hpp
   include/data_recorder/session_manager.hpp
@@ -45,6 +46,7 @@ set(DATA_RECORDER_SOURCES
   src/camera_image_provider.cpp
   src/config_model.cpp
   src/live_bridge.cpp
+  src/recorder_engine.cpp
   src/rosbag_writer.cpp
   src/session_manager.cpp
   src/topic_rate_monitor.cpp
@@ -71,7 +73,7 @@ target_link_libraries(data_recorder_core
   Qt6::QuickControls2
   Qt6::Charts
 )
-ament_target_dependencies(data_recorder_core rclcpp ament_index_cpp rosbag2_cpp rosbag2_storage pluginlib)
+ament_target_dependencies(data_recorder_core rclcpp ament_index_cpp rosbag2_cpp rosbag2_storage pluginlib rosbag2_transport sensor_msgs)
 
 add_executable(data_recorder src/data_recorder.cpp)
 target_link_libraries(data_recorder data_recorder_core)
