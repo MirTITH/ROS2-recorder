@@ -3,11 +3,18 @@
 #include <QKeyEvent>
 
 #include <algorithm>
+#include <filesystem>
+
+#include "data_recorder/live_bridge.hpp"
+#include "data_recorder/recorder_engine.hpp"
+#include "data_recorder/session_manager.hpp"
 
 namespace data_recorder
 {
 
-AppController::AppController(const ConfigData & config, QObject * parent)
+AppController::AppController(
+  const ConfigData & config, LiveBridge * bridge, RecorderEngine * engine,
+  SessionManager * session_manager, QObject * parent)
 : QObject(parent),
   config_path_(QString::fromStdString(config.config_path)),
   output_directory_(QString::fromStdString(config.output_dir)),
@@ -26,6 +33,17 @@ AppController::AppController(const ConfigData & config, QObject * parent)
 
   tag_model_.set_tags(config.tags);
   event_marker_model_.set_markers(config.event_markers);
+
+  bridge_ = bridge;
+  engine_ = engine;
+  session_manager_ = session_manager;
+
+  if (bridge_) {
+    connect(bridge_, &LiveBridge::statsUpdated, this, &AppController::onStatsUpdated);
+    connect(bridge_, &LiveBridge::frameReady, this, &AppController::onFrameReady);
+    connect(bridge_, &LiveBridge::liveEdgeChanged, this, &AppController::onLiveEdge);
+  }
+  refreshSessions();  // 启动扫描
 }
 
 QString AppController::configPath() const
@@ -131,7 +149,29 @@ void AppController::toggleRecording()
   const QString prev_status = status_text_;
   const QString prev_mode = modeText();
 
-  recording_ = !recording_;
+  if (!recording_) {
+    // 开始
+    event_marker_model_.clearInstances();
+    tag_model_.clearSelection();  // 清标签选择，每次录制从干净状态开始
+    if (engine_) {
+      const std::string id = engine_->start_session();
+      if (id.empty()) {
+        status_text_ = QStringLiteral("录制启动失败");
+        emit statusTextChanged();
+        return;
+      }
+    }
+    recording_ = true;
+  } else {
+    // 停止
+    if (engine_) {
+      engine_->stop_session(
+        event_marker_model_.exportAnnotations(), tag_model_.exportSelectedTags());
+    }
+    recording_ = false;
+    refreshSessions();
+  }
+
   if (recording_) {
     following_live_edge_ = true;
     playhead_seconds_ = live_edge_seconds_;
@@ -340,6 +380,34 @@ void AppController::refreshStatusText()
 
   status_text_ = next_status_text;
   emit statusTextChanged();
+}
+
+void AppController::onStatsUpdated(const QVariantList & stats)
+{
+  for (const auto & v : stats) {
+    const auto m = v.toMap();
+    const QString key = m.value("topicKey").toString();
+    topic_model_.updateStats(key, m.value("hz").toDouble(),
+      m.value("width").toInt(), m.value("height").toInt());
+  }
+}
+
+void AppController::onFrameReady(const QString & key, int seq)
+{
+  topic_model_.updateFrameSeq(key, seq);
+  camera_grid_model_.updateFrameSeq(key, seq);
+}
+
+void AppController::onLiveEdge(double seconds)
+{
+  advanceLiveEdge(seconds);  // 复用现有方法
+}
+
+void AppController::refreshSessions()
+{
+  if (!session_manager_) { return; }
+  const std::string dir = std::filesystem::absolute(output_directory_.toStdString()).string();
+  recording_session_model_.setSessions(session_manager_->scan(dir));
 }
 
 }  // namespace data_recorder

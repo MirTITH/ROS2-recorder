@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QVariantList>
 
 class QEvent;
 
@@ -11,6 +12,10 @@ class QEvent;
 
 namespace data_recorder
 {
+
+class LiveBridge;
+class RecorderEngine;
+class SessionManager;
 
 class AppController : public QObject
 {
@@ -34,7 +39,9 @@ class AppController : public QObject
   Q_PROPERTY(RecordingSessionModel * recordingSessionModel READ recordingSessionModel CONSTANT)
 
 public:
-  explicit AppController(const ConfigData & config, QObject * parent = nullptr);
+  explicit AppController(
+    const ConfigData & config, LiveBridge * bridge = nullptr, RecorderEngine * engine = nullptr,
+    SessionManager * session_manager = nullptr, QObject * parent = nullptr);
 
   QString configPath() const;
   QString outputDirectory() const;
@@ -80,6 +87,14 @@ private:
   void refreshVisibleCameraCount();
   QString statusTextForCurrentState() const;
   void refreshStatusText();
+  void onStatsUpdated(const QVariantList & stats);
+  void onFrameReady(const QString & key, int seq);
+  void onLiveEdge(double seconds);
+  void refreshSessions();
+
+  LiveBridge * bridge_{nullptr};
+  RecorderEngine * engine_{nullptr};
+  SessionManager * session_manager_{nullptr};
 
   QString config_path_;
   QString output_directory_;
