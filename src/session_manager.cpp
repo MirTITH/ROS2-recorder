@@ -85,7 +85,9 @@ std::vector<SessionRecord> SessionManager::scan(const std::string & output_dir) 
   }
   for (const auto & entry : fs::directory_iterator(output_dir, ec)) {
     if (ec) { break; }
-    if (!entry.is_directory()) { continue; }
+    // 用 error_code 重载，避免目录扫描中途被删/瞬时错误抛出 filesystem_error 崩溃 GUI 线程。
+    ec.clear();
+    if (!entry.is_directory(ec) || ec) { continue; }  // 非目录或出错则跳过
     const fs::path yaml_path = entry.path() / "session.yaml";
     if (!fs::exists(yaml_path)) { continue; }  // 静默跳过（崩溃/进行中会话）
 
@@ -98,7 +100,9 @@ std::vector<SessionRecord> SessionManager::scan(const std::string & output_dir) 
 
     SessionRecord r;
     r.session_id = root["session"] ? root["session"].as<std::string>() : entry.path().filename().string();
-    r.directory = fs::absolute(entry.path()).string();
+    ec.clear();
+    const fs::path abs_dir = fs::absolute(entry.path(), ec);
+    r.directory = ec ? entry.path().string() : abs_dir.string();
     if (root["recorded_at"]) {
       r.unix_time = root["recorded_at"]["unix"].as<double>(0.0);
       r.ros_time_ns = root["recorded_at"]["ros_time_ns"].as<int64_t>(0);

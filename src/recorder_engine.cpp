@@ -127,8 +127,16 @@ void RecorderEngine::setup_subscriptions()
       std::string type;
       const auto eps = node_->get_publishers_info_by_topic(topic_name);
       if (!eps.empty()) { type = eps.front().topic_type(); }
-      if (type.empty()) { continue; }  // 暂无发布者，跳过（spec v1：简单处理）
+      // 暂无发布者，跳过（spec v1：简单处理）。注意：启动后才出现发布者的话题不会被订阅（v1 限制，非 bug）。
+      if (type.empty()) { continue; }
+      // 适配发布者 QoS，否则 BEST_EFFORT 话题订阅不上（RELIABLE 订阅匹配不到 BEST_EFFORT 发布者）。
+      // 与 offered_qos_for() 记录的 QoS 保持一致；保留较深的 KeepLast(100) 队列深度。
       auto qos = rclcpp::QoS(rclcpp::KeepLast(100));
+      if (!eps.empty()) {
+        const auto pub_qos = eps.front().qos_profile();
+        qos.reliability(pub_qos.reliability());
+        qos.durability(pub_qos.durability());
+      }
       auto sub = node_->create_generic_subscription(
         topic_name, type, qos,
         [this, topic_name, type](std::shared_ptr<rclcpp::SerializedMessage> msg) {

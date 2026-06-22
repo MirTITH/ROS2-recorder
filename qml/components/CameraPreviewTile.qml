@@ -13,30 +13,6 @@ Rectangle {
     property string topicKey: ""
     property int frameSeq: 0
 
-    function videoRect(widthValue, heightValue) {
-        var match = /^([0-9]+)x([0-9]+)$/.exec(String(resolutionText || ""))
-        var aspect = 16 / 9
-        if (match) {
-            var parsedWidth = Number(match[1])
-            var parsedHeight = Number(match[2])
-            if (isFinite(parsedWidth) && isFinite(parsedHeight) && parsedHeight > 0) {
-                aspect = parsedWidth / parsedHeight
-            }
-        }
-        var targetWidth = widthValue
-        var targetHeight = targetWidth / aspect
-        if (targetHeight > heightValue) {
-            targetHeight = heightValue
-            targetWidth = targetHeight * aspect
-        }
-        return {
-            x: (widthValue - targetWidth) / 2,
-            y: (heightValue - targetHeight) / 2,
-            width: targetWidth,
-            height: targetHeight
-        }
-    }
-
     color: Theme.cameraTileBg
     clip: true
     border.color: dragActive ? seriesColor : Theme.textSecondary

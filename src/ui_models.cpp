@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <utility>
 
 namespace data_recorder
