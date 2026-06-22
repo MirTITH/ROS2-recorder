@@ -30,6 +30,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/recorder_types.hpp
   include/data_recorder/topic_rate_monitor.hpp
   include/data_recorder/ui_models.hpp
+  include/data_recorder/writer_queue.hpp
 )
 
 set(DATA_RECORDER_SOURCES
@@ -38,6 +39,7 @@ set(DATA_RECORDER_SOURCES
   src/config_model.cpp
   src/topic_rate_monitor.cpp
   src/ui_models.cpp
+  src/writer_queue.cpp
 )
 
 add_library(data_recorder_core
@@ -112,6 +114,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_topic_rate_monitor test/test_topic_rate_monitor.cpp)
   target_link_libraries(test_topic_rate_monitor data_recorder_core)
+
+  ament_add_gtest(test_writer_queue test/test_writer_queue.cpp)
+  target_link_libraries(test_writer_queue data_recorder_core)
 endif()
 
 ament_package()
