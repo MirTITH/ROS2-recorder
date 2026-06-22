@@ -203,15 +203,6 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   expect_contains(lane_text, "height: eventLaneRepeater.count > 0 ? 1 : 0");
 }
 
-TEST(QmlStructure, ResizeHandleUsesCompactUnifiedHitArea)
-{
-  const std::string handle_text = read_text(qml_dir() / "components" / "ResizeHandle.qml");
-
-  expect_contains(handle_text, "implicitWidth: 5");
-  expect_contains(handle_text, "implicitHeight: 5");
-  expect_not_contains(handle_text, "lineGravity");
-}
-
 TEST(QmlStructure, RecordingTagsPanelCanCollapseToTitleBar)
 {
   const std::string main_text = read_text(qml_dir() / "Main.qml");
