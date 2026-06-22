@@ -151,12 +151,36 @@ TEST(TopicListModel, ClassifiesCameraNumericAndEmptyTracks)
 
   EXPECT_EQ(model.data(model.index(1, 0), data_recorder::TopicListModel::TrackKindRole).toString().toStdString(), "numeric");
   EXPECT_TRUE(model.data(model.index(1, 0), data_recorder::TopicListModel::IsDrawableRole).toBool());
-  EXPECT_GE(model.data(model.index(1, 0), data_recorder::TopicListModel::SeriesListRole).toList().size(), 2);
 
   EXPECT_EQ(model.data(model.index(2, 0), data_recorder::TopicListModel::TrackKindRole).toString().toStdString(), "camera");
   EXPECT_TRUE(model.data(model.index(2, 0), data_recorder::TopicListModel::IsCameraRole).toBool());
   EXPECT_FALSE(model.data(model.index(2, 0), data_recorder::TopicListModel::IsDrawableRole).toBool());
-  EXPECT_FALSE(model.data(model.index(2, 0), data_recorder::TopicListModel::ResolutionTextRole).toString().isEmpty());
+}
+
+TEST(TopicListModel, UpdateStatsBackfillsFrequencyAndResolution)
+{
+  data_recorder::TopicListModel model;
+  model.set_topics({
+    []{ data_recorder::TopicEntry t; t.topic_name="/camera/image_raw"; t.backend_name="video";
+        t.ui_category=data_recorder::TopicUiCategory::CameraPreview; return t; }(),
+  });
+  // 初始 frequency_text 为空（无占位）
+  const auto idx = model.index(0, 0);
+  // 注入 stats
+  model.updateStats("/camera/image_raw", 22.0, 848, 480);
+  EXPECT_EQ(model.data(idx, data_recorder::TopicListModel::FrequencyTextRole).toString().toStdString(), "22 fps");
+  EXPECT_EQ(model.data(idx, data_recorder::TopicListModel::ResolutionTextRole).toString().toStdString(), "848x480");
+}
+
+TEST(TopicListModel, NumericTopicShowsHzNotFps)
+{
+  data_recorder::TopicListModel model;
+  model.set_topics({
+    []{ data_recorder::TopicEntry t; t.topic_name="/joint_states"; t.backend_name="rosbag";
+        t.ui_category=data_recorder::TopicUiCategory::NumericTrack; return t; }(),
+  });
+  model.updateStats("/joint_states", 400.0, 0, 0);
+  EXPECT_EQ(model.data(model.index(0,0), data_recorder::TopicListModel::FrequencyTextRole).toString().toStdString(), "400 Hz");
 }
 
 TEST(TopicListModel, CountsVisibleCameraRows)

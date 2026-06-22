@@ -13,6 +13,15 @@ namespace data_recorder
 namespace
 {
 
+constexpr std::array<const char *, 6> kSeriesColors{
+  "#2563eb",
+  "#16a34a",
+  "#dc2626",
+  "#9333ea",
+  "#0891b2",
+  "#ca8a04",
+};
+
 QString track_kind_for_topic(const TopicEntry & topic)
 {
   if (topic.ui_category == TopicUiCategory::CameraPreview) {
@@ -26,67 +35,6 @@ QString track_kind_for_topic(const TopicEntry & topic)
   }
   return QStringLiteral("numeric");
 }
-
-// ---- Placeholder/demo data generators (remove when backend provides real data) ----
-// Everything in this block produces synthetic display values only. The real backend
-// will supply frequency from actual topic Hz, resolution from actual image dimensions,
-// and series from actual subscribed numeric data. kSeriesColors below is the categorical
-// palette used as default styling.
-
-constexpr std::array<const char *, 6> kSeriesColors{
-  "#2563eb",
-  "#16a34a",
-  "#dc2626",
-  "#9333ea",
-  "#0891b2",
-  "#ca8a04",
-};
-
-QVariantList make_series_list(int row, const QString & track_kind)
-{
-  QVariantList series_list;
-  if (track_kind != QStringLiteral("numeric")) {
-    return series_list;
-  }
-
-  const int series_count = row == 0 ? 2 : 3;
-  for (int series_index = 0; series_index < series_count; ++series_index) {
-    QVariantMap series;
-    series.insert(QStringLiteral("name"), QStringLiteral("series_%1").arg(series_index + 1));
-    series.insert(QStringLiteral("color"), QString::fromLatin1(kSeriesColors[
-      static_cast<std::size_t>((row + series_index) % kSeriesColors.size())]));
-
-    QVariantList points;
-    points.reserve(80);
-    for (int i = 0; i < 80; ++i) {
-      QVariantMap point;
-      point.insert(QStringLiteral("x"), i);
-      point.insert(
-        QStringLiteral("y"),
-        std::sin((static_cast<double>(i) / 8.0) + series_index) +
-          static_cast<double>(series_index) * 0.4);
-      points.push_back(point);
-    }
-    series.insert(QStringLiteral("points"), points);
-    series_list.push_back(series);
-  }
-  return series_list;
-}
-
-QString make_resolution_text(int row)
-{
-  return row % 2 == 0 ? QStringLiteral("1280x720") : QStringLiteral("1920x1080");
-}
-
-QString make_frequency_text(int row, TopicUiCategory category)
-{
-  if (category == TopicUiCategory::CameraPreview) {
-    return QStringLiteral("%1 fps").arg(18 + row);
-  }
-  return QStringLiteral("%1 Hz").arg(20 + row);
-}
-
-// ---- End placeholder/demo data generators ----
 
 bool valid_row(int row, int size)
 {
@@ -155,6 +103,8 @@ QVariant TopicListModel::data(const QModelIndex & index, int role) const
       return row.series_list;
     case ResolutionTextRole:
       return row.resolution_text;
+    case FrameSeqRole:
+      return row.frame_seq;
     default:
       return {};
   }
@@ -200,6 +150,7 @@ QHash<int, QByteArray> TopicListModel::roleNames() const
     {IsDrawableRole, "isDrawable"},
     {SeriesListRole, "seriesList"},
     {ResolutionTextRole, "resolutionText"},
+    {FrameSeqRole, "frameSeq"},
   };
 }
 
@@ -224,19 +175,6 @@ int TopicListModel::visibleCameraCount() const
   return count;
 }
 
-// PLACEHOLDER DATA SEAM: synthetic per-topic display values (frequency, resolution, series).
-// Replace with real values from ROS subscriptions when the backend lands. The make_*() helpers
-// above generate demo data only. Real config-derived fields (topic, track_kind, is_camera,
-// is_drawable) are set in set_topics, not here.
-void TopicListModel::populate_placeholder_fields(TopicRow & row, int index)
-{
-  row.frequency_text = make_frequency_text(index, row.topic.ui_category);
-  row.series_color = QString::fromLatin1(kSeriesColors[
-    static_cast<std::size_t>(index) % kSeriesColors.size()]);
-  row.resolution_text = row.is_camera ? make_resolution_text(index) : QString();
-  row.series_list = make_series_list(index, row.track_kind);
-}
-
 void TopicListModel::set_topics(std::vector<TopicEntry> topics)
 {
   beginResetModel();
@@ -249,10 +187,41 @@ void TopicListModel::set_topics(std::vector<TopicEntry> topics)
     row.track_kind = track_kind_for_topic(row.topic);
     row.is_camera = row.track_kind == QStringLiteral("camera");
     row.is_drawable = row.track_kind == QStringLiteral("numeric");
-    populate_placeholder_fields(row, static_cast<int>(i));
+    row.series_color = QString::fromLatin1(kSeriesColors[
+      static_cast<std::size_t>(i) % kSeriesColors.size()]);
+    row.frequency_text = QString();      // 等引擎回填
+    row.resolution_text = QString();
+    row.series_list = QVariantList();    // v1 数值留空
     topics_.push_back(std::move(row));
   }
   endResetModel();
+}
+
+void TopicListModel::updateStats(const QString & topic_key, double hz, int width, int height)
+{
+  for (std::size_t i = 0; i < topics_.size(); ++i) {
+    auto & row = topics_[i];
+    if (QString::fromStdString(row.topic.topic_name) != topic_key) { continue; }
+    const QString unit = row.is_camera ? QStringLiteral("fps") : QStringLiteral("Hz");
+    row.frequency_text = QStringLiteral("%1 %2").arg(qRound(hz)).arg(unit);
+    if (row.is_camera && width > 0 && height > 0) {
+      row.resolution_text = QStringLiteral("%1x%2").arg(width).arg(height);
+    }
+    const auto idx = index(static_cast<int>(i), 0);
+    emit dataChanged(idx, idx, {FrequencyTextRole, ResolutionTextRole});
+    return;
+  }
+}
+
+void TopicListModel::updateFrameSeq(const QString & topic_key, int seq)
+{
+  for (std::size_t i = 0; i < topics_.size(); ++i) {
+    if (QString::fromStdString(topics_[i].topic.topic_name) != topic_key) { continue; }
+    topics_[i].frame_seq = seq;
+    const auto idx = index(static_cast<int>(i), 0);
+    emit dataChanged(idx, idx, {FrameSeqRole});
+    return;
+  }
 }
 
 TagListModel::TagListModel(QObject * parent)

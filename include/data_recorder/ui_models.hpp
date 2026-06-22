@@ -34,6 +34,7 @@ public:
     IsDrawableRole,
     SeriesListRole,
     ResolutionTextRole,
+    FrameSeqRole,
   };
 
   explicit TopicListModel(QObject * parent = nullptr);
@@ -46,6 +47,10 @@ public:
 
   Q_INVOKABLE void toggleVisible(int row);
   Q_INVOKABLE int visibleCameraCount() const;
+
+  // 由引擎经 LiveBridge 实时回填（GUI 线程调）。
+  void updateStats(const QString & topic_key, double hz, int width, int height);
+  void updateFrameSeq(const QString & topic_key, int seq);
 
   void set_topics(std::vector<TopicEntry> topics);
 
@@ -61,10 +66,8 @@ private:
     bool is_drawable{false};
     QString resolution_text;
     QVariantList series_list;
+    int frame_seq{0};
   };
-
-  // PLACEHOLDER DATA SEAM: fills the synthetic per-topic display fields. See ui_models.cpp.
-  void populate_placeholder_fields(TopicRow & row, int index);
 
   std::vector<TopicRow> topics_;
 };
