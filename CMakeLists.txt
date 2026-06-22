@@ -17,6 +17,7 @@ find_package(yaml-cpp REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
 find_package(rosbag2_storage REQUIRED)
 find_package(rosbag2_transport REQUIRED)
+find_package(pluginlib REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
@@ -28,6 +29,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/camera_grid_model.hpp
   include/data_recorder/config_model.hpp
   include/data_recorder/recorder_types.hpp
+  include/data_recorder/rosbag_writer.hpp
   include/data_recorder/session_manager.hpp
   include/data_recorder/topic_rate_monitor.hpp
   include/data_recorder/ui_models.hpp
@@ -39,6 +41,7 @@ set(DATA_RECORDER_SOURCES
   src/app_controller.cpp
   src/camera_grid_model.cpp
   src/config_model.cpp
+  src/rosbag_writer.cpp
   src/session_manager.cpp
   src/topic_rate_monitor.cpp
   src/ui_models.cpp
@@ -64,7 +67,7 @@ target_link_libraries(data_recorder_core
   Qt6::QuickControls2
   Qt6::Charts
 )
-ament_target_dependencies(data_recorder_core rclcpp ament_index_cpp)
+ament_target_dependencies(data_recorder_core rclcpp ament_index_cpp rosbag2_cpp rosbag2_storage pluginlib)
 
 add_executable(data_recorder src/data_recorder.cpp)
 target_link_libraries(data_recorder data_recorder_core)
@@ -128,6 +131,11 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_video_recorder test/test_video_recorder.cpp)
   target_link_libraries(test_video_recorder data_recorder_core PkgConfig::LIBAV)
+
+  find_package(std_msgs REQUIRED)
+  ament_add_gtest(test_rosbag_writer test/test_rosbag_writer.cpp)
+  target_link_libraries(test_rosbag_writer data_recorder_core)
+  ament_target_dependencies(test_rosbag_writer rclcpp rosbag2_cpp std_msgs)
 endif()
 
 ament_package()
