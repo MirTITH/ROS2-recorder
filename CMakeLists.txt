@@ -31,6 +31,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/session_manager.hpp
   include/data_recorder/topic_rate_monitor.hpp
   include/data_recorder/ui_models.hpp
+  include/data_recorder/video_recorder.hpp
   include/data_recorder/writer_queue.hpp
 )
 
@@ -41,6 +42,7 @@ set(DATA_RECORDER_SOURCES
   src/session_manager.cpp
   src/topic_rate_monitor.cpp
   src/ui_models.cpp
+  src/video_recorder.cpp
   src/writer_queue.cpp
 )
 
@@ -54,6 +56,7 @@ target_include_directories(data_recorder_core PUBLIC
 )
 target_link_libraries(data_recorder_core
   yaml-cpp
+  PkgConfig::LIBAV
   Qt6::Core
   Qt6::Gui
   Qt6::Qml
@@ -122,6 +125,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_session_manager test/test_session_manager.cpp)
   target_link_libraries(test_session_manager data_recorder_core)
+
+  ament_add_gtest(test_video_recorder test/test_video_recorder.cpp)
+  target_link_libraries(test_video_recorder data_recorder_core PkgConfig::LIBAV)
 endif()
 
 ament_package()
