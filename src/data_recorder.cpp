@@ -6,17 +6,24 @@
 #include <QTimer>
 #include <QUrl>
 
+#include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include "data_recorder/app_controller.hpp"
+#include "data_recorder/camera_image_provider.hpp"
 #include "data_recorder/config_model.hpp"
+#include "data_recorder/live_bridge.hpp"
+#include "data_recorder/recorder_engine.hpp"
+#include "data_recorder/session_manager.hpp"
 
 namespace
 {
@@ -67,10 +74,28 @@ int main(int argc, char ** argv)
   }
   int qt_argc = static_cast<int>(qt_argv.size());
   QApplication app(qt_argc, qt_argv.data());
-  data_recorder::AppController controller(config);
+
+  data_recorder::LiveBridge bridge;
+  data_recorder::SessionManager session_manager;
+  data_recorder::RecorderEngine engine(node, config, &bridge, &session_manager);
+  data_recorder::AppController controller(config, &bridge, &engine, &session_manager);
   app.installEventFilter(&controller);
-  QQmlApplicationEngine engine;
-  engine.rootContext()->setContextProperty("appController", &controller);
+
+  QQmlApplicationEngine qml_engine;
+  qml_engine.addImageProvider(QStringLiteral("camera"),
+    new data_recorder::CameraImageProvider(&bridge));  // 引擎接管所有权
+  qml_engine.rootContext()->setContextProperty("appController", &controller);
+
+  // 后台 ROS spin 线程
+  std::atomic<bool> spin_running{true};
+  std::thread spin_thread([node, &spin_running]() {
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(node);
+    while (spin_running.load() && rclcpp::ok()) {
+      executor.spin_some(std::chrono::milliseconds(10));
+    }
+  });
+
   QTimer ros_shutdown_timer;
   QObject::connect(&ros_shutdown_timer, &QTimer::timeout, &app, [&app]() {
     if (!rclcpp::ok()) {
@@ -82,11 +107,11 @@ int main(int argc, char ** argv)
   const auto package_share = QString::fromStdString(
     ament_index_cpp::get_package_share_directory("data_recorder"));
   const auto qml_dir = package_share + QStringLiteral("/qml");
-  engine.addImportPath(qml_dir);
+  qml_engine.addImportPath(qml_dir);
 
   const QUrl main_qml = QUrl::fromLocalFile(qml_dir + QStringLiteral("/Main.qml"));
   QObject::connect(
-    &engine,
+    &qml_engine,
     &QQmlApplicationEngine::objectCreated,
     &app,
     [main_qml](QObject * object, const QUrl & object_url) {
@@ -95,9 +120,15 @@ int main(int argc, char ** argv)
       }
     },
     Qt::QueuedConnection);
-  engine.load(main_qml);
+  qml_engine.load(main_qml);
 
   const int result = app.exec();
+
+  // 干净退出：停 spin、join、shutdown
+  spin_running.store(false);
+  if (spin_thread.joinable()) {
+    spin_thread.join();
+  }
   rclcpp::shutdown();
   return result;
 }
