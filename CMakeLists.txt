@@ -14,12 +14,20 @@ find_package(ament_cmake_gtest REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(rosbag2_cpp REQUIRED)
+find_package(rosbag2_storage REQUIRED)
+find_package(rosbag2_transport REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
+  libavcodec libavformat libavutil libswscale)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Charts Widgets Test)
 
 set(DATA_RECORDER_HEADERS
   include/data_recorder/app_controller.hpp
   include/data_recorder/camera_grid_model.hpp
   include/data_recorder/config_model.hpp
+  include/data_recorder/recorder_types.hpp
   include/data_recorder/ui_models.hpp
 )
 

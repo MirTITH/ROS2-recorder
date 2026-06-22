@@ -12,6 +12,15 @@
   <depend>rclcpp</depend>
   <depend>ament_index_cpp</depend>
   <depend>yaml-cpp</depend>
+  <depend>rosbag2_cpp</depend>
+  <depend>rosbag2_storage</depend>
+  <depend>rosbag2_transport</depend>
+  <depend>sensor_msgs</depend>
+  <depend>libavcodec-dev</depend>
+  <depend>libavformat-dev</depend>
+  <depend>libavutil-dev</depend>
+  <depend>libswscale-dev</depend>
+  <exec_depend>ros-humble-rosbag2-storage-mcap</exec_depend>
   <depend>qt6-base-dev</depend>
   <depend>qt6-declarative-dev</depend>
   <exec_depend>qml6-module-qtcharts</exec_depend>
