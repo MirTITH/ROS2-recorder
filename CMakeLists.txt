@@ -28,6 +28,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/camera_grid_model.hpp
   include/data_recorder/config_model.hpp
   include/data_recorder/recorder_types.hpp
+  include/data_recorder/session_manager.hpp
   include/data_recorder/topic_rate_monitor.hpp
   include/data_recorder/ui_models.hpp
   include/data_recorder/writer_queue.hpp
@@ -37,6 +38,7 @@ set(DATA_RECORDER_SOURCES
   src/app_controller.cpp
   src/camera_grid_model.cpp
   src/config_model.cpp
+  src/session_manager.cpp
   src/topic_rate_monitor.cpp
   src/ui_models.cpp
   src/writer_queue.cpp
@@ -117,6 +119,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_writer_queue test/test_writer_queue.cpp)
   target_link_libraries(test_writer_queue data_recorder_core)
+
+  ament_add_gtest(test_session_manager test/test_session_manager.cpp)
+  target_link_libraries(test_session_manager data_recorder_core)
 endif()
 
 ament_package()
