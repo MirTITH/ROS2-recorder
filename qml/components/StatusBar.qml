@@ -21,15 +21,6 @@ Rectangle {
         anchors.rightMargin: 12
         spacing: 10
 
-        Button {
-            objectName: "recordButton"
-            Layout.preferredWidth: 64
-            Layout.preferredHeight: 24
-            text: root.isRecording ? "停止" : "录制"
-            enabled: !!root.controller && root.controller.canRecord
-            onClicked: root.controller.toggleRecording()
-        }
-
         Label {
             text: root.statusText
             color: root.isRecording ? Theme.danger : Theme.success

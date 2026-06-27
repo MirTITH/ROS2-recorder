@@ -91,6 +91,8 @@ Panel {
                 width: ListView.view.width
                 height: 46
                 color: selected ? Theme.rowSelected : Theme.surface
+                enabled: !(root.controller && root.controller.recording)
+                opacity: enabled ? 1.0 : 0.45
 
                 readonly property bool selected: root.controller && root.controller.historyMode && root.controller.selectedSessionRow === index
 
@@ -145,7 +147,7 @@ Panel {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
-                        if (root.controller) {
+                        if (root.controller && !root.controller.recording) {
                             root.controller.selectHistorySession(index)
                         }
                     }

@@ -116,8 +116,6 @@ TEST(QmlStructure, AppChromeUsesStatusBarForRecording)
   expect_not_contains(main_text, "AppHeader");
   EXPECT_FALSE(std::filesystem::exists(qml_dir() / "components" / "AppHeader.qml"));
   expect_contains(status_text, "implicitHeight: 32");
-  expect_contains(status_text, "objectName: \"recordButton\"");
-  expect_contains(status_text, "root.controller.toggleRecording()");
   expect_contains(status_text, "readonly property bool isRecording");
   expect_contains(status_text, "readonly property string statusText");
   expect_contains(status_text, "text: root.statusText");
@@ -139,6 +137,9 @@ TEST(QmlStructure, EventMarkersRenderAsTimelineTracks)
   expect_contains(panel_text, "property var eventMarkerModel");
   expect_contains(track_info_text, "model: root.eventMarkerModel");
   expect_contains(track_info_text, "EventTrackInfoRow {");
+  expect_contains(track_info_text, "objectName: \"primaryActionButton\"");
+  expect_contains(track_info_text, "togglePlayback()");
+  expect_contains(track_info_text, "toggleRecording()");
   expect_contains(lane_text, "EventTrackRow {");
 
   // Within the right-hand lane column the event marker tracks render above the

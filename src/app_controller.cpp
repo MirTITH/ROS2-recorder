@@ -451,6 +451,7 @@ void AppController::detachFromLiveEdge()
 
 bool AppController::triggerMarkerShortcut(const QString & shortcut)
 {
+  if (history_mode_) { return false; }
   return event_marker_model_.triggerShortcut(shortcut, playhead_seconds_);
 }
 

@@ -15,6 +15,8 @@ Rectangle {
     property real playheadSeconds: 0
     property var viewport
     property var markerModel
+    property var controller
+    readonly property bool editable: !(controller && controller.historyMode)
 
     property int contextInstanceId: -1
     property string activeDragMode: ""
@@ -79,6 +81,7 @@ Rectangle {
     }
 
     function startDrag(mode, instanceId, startSeconds, endSeconds, rootX) {
+        if (!root.editable) { return }
         root.activeDragMode = mode
         root.activeDragInstanceId = instanceId
         root.activeDragPressX = Number(rootX || 0)
@@ -116,7 +119,7 @@ Rectangle {
     }
 
     function finishDrag() {
-        if (root.activeDragMode === "" || !root.markerModel) {
+        if (root.activeDragMode === "" || !root.markerModel || !root.editable) {
             root.activeDragMode = ""
             root.activeDragInstanceId = -1
             return
@@ -151,7 +154,7 @@ Rectangle {
         acceptedButtons: Qt.RightButton
         z: 1
         onPressed: function(mouse) {
-            if (mouse.button === Qt.RightButton) {
+            if (mouse.button === Qt.RightButton && root.editable) {
                 root.requestDeleteAll(mouse.x, mouse.y)
                 mouse.accepted = true
             }
@@ -319,7 +322,7 @@ Rectangle {
         MenuItem {
             text: "删除"
             onTriggered: {
-                if (root.markerModel && root.markerModel.deleteInstance) {
+                if (root.editable && root.markerModel && root.markerModel.deleteInstance) {
                     root.markerModel.deleteInstance(root.rowIndex, root.contextInstanceId)
                 }
             }
@@ -332,7 +335,7 @@ Rectangle {
         MenuItem {
             text: "删除所有“" + root.eventName + "”"
             onTriggered: {
-                if (root.markerModel && root.markerModel.deleteAllInstances) {
+                if (root.editable && root.markerModel && root.markerModel.deleteAllInstances) {
                     root.markerModel.deleteAllInstances(root.rowIndex)
                 }
             }

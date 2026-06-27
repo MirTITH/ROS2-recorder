@@ -1278,3 +1278,68 @@ TEST(AppControllerHistoryTest, SelectHistoryEntersPlaybackMode)
 
   fs::remove_all(out);
 }
+
+TEST(AppControllerHistoryTest, MarkerShortcutIsNoOpInHistoryMode)
+{
+  namespace fs = std::filesystem;
+  int argc = 0; char ** argv = nullptr;
+  QCoreApplication app(argc, argv);
+
+  fs::path out = fs::temp_directory_path() / "drc_appctrl_marker_history_test";
+  fs::remove_all(out);
+  fs::path sdir = out / "2026-06-28_00-00-00";
+  fs::create_directories(sdir / "video");
+  {
+    data_recorder::VideoParams params;
+    data_recorder::VideoRecorder rec(
+      (sdir / "video" / "cam.mp4").string(),
+      (sdir / "video" / "cam.csv").string(), 32, 24, params);
+    for (int i = 0; i < 20; ++i) {
+      data_recorder::ImageFrame f;
+      f.width = 32; f.height = 24; f.step = 96; f.encoding = "bgr8";
+      f.ros_stamp_ns = 1000000000LL + i * 40000000LL;
+      f.data.assign(32 * 24 * 3, static_cast<uint8_t>(i * 6));
+      rec.encode(f);
+    }
+    rec.close();
+  }
+  {
+    std::ofstream y((sdir / "session.yaml").string());
+    y << "session: 2026-06-28_00-00-00\n"
+      << "duration_seconds: 0.8\n"
+      << "topics:\n  - name: /cam\n    backend: video\n"
+      << "tags: []\nannotations: []\n";
+  }
+
+  data_recorder::ConfigData config;
+  config.output_dir = out.string();
+  config.topics.push_back({"/cam", "video", 0,
+    data_recorder::TopicUiCategory::CameraPreview, {}});
+
+  data_recorder::LiveBridge bridge;
+  data_recorder::SessionManager sm;
+  data_recorder::AppController ctrl(config, &bridge, nullptr, &sm);
+
+  ASSERT_GT(ctrl.recordingSessionModel()->rowCount(), 0);
+
+  ctrl.selectHistorySession(0);
+  for (int i = 0; i < 50 && bridge.latest_frame("/cam") == nullptr; ++i) {
+    app.processEvents();
+    QThread::msleep(5);
+  }
+  ASSERT_TRUE(ctrl.historyMode());
+
+  const auto row = ctrl.eventMarkerModel()->index(0, 0);
+  const int count_before =
+    ctrl.eventMarkerModel()->data(row, data_recorder::EventMarkerModel::CountRole).toInt();
+
+  // The keyboard-shortcut marker path must be a no-op in history mode so the
+  // loaded read-only annotations are never mutated.
+  ctrl.setPlayheadSeconds(0.2);
+  EXPECT_FALSE(ctrl.triggerMarkerShortcut("1"));
+  EXPECT_EQ(
+    ctrl.eventMarkerModel()->data(row, data_recorder::EventMarkerModel::CountRole).toInt(),
+    count_before);
+
+  fs::remove_all(out);
+}

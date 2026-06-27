@@ -161,6 +161,7 @@ ColumnLayout {
                         playheadSeconds: root.playheadSeconds
                         viewport: root.viewport
                         markerModel: eventMarkerModel
+                        controller: root.controller
                     }
                 }
 

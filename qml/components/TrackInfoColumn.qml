@@ -52,6 +52,30 @@ ColumnLayout {
             }
 
             Button {
+                objectName: "primaryActionButton"
+                Layout.preferredWidth: 72
+                Layout.preferredHeight: 24
+                font.pixelSize: 10
+                visible: !!root.controller
+                enabled: root.controller
+                    ? (root.controller.historyMode ? true : root.controller.canRecord)
+                    : false
+                text: {
+                    if (!root.controller) return ""
+                    if (root.controller.historyMode)
+                        return root.controller.playing ? "暂停" : "播放"
+                    return root.controller.recording ? "停止" : "录制"
+                }
+                onClicked: {
+                    if (!root.controller) return
+                    if (root.controller.historyMode)
+                        root.controller.togglePlayback()
+                    else
+                        root.controller.toggleRecording()
+                }
+            }
+
+            Button {
                 Layout.preferredWidth: 72
                 Layout.preferredHeight: 24
                 visible: root.controller && root.controller.recording && !root.controller.followingLiveEdge
@@ -90,7 +114,11 @@ ColumnLayout {
                     markerColor: model.color
                     count: model.count
                     actionText: model.actionText
-                    onActionRequested: root.eventMarkerModel.triggerRowAction(index, root.playheadSeconds)
+                    onActionRequested: {
+                        if (!(root.controller && root.controller.historyMode)) {
+                            root.eventMarkerModel.triggerRowAction(index, root.playheadSeconds)
+                        }
+                    }
                 }
             }
 

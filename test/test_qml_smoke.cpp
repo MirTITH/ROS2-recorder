@@ -224,17 +224,17 @@ std::unique_ptr<QApplication> QmlSmokeTest::app_;
 
 TEST_F(QmlSmokeTest, LoadsMainWindowAndInteractiveControls)
 {
-  ASSERT_NE(find_required(root_, "recordButton"), nullptr);
+  ASSERT_NE(find_required(root_, "primaryActionButton"), nullptr);
   ASSERT_NE(find_required(root_, "eventMarkerActionButton_c"), nullptr);
 }
 
-TEST_F(QmlSmokeTest, RecordButtonAndSpaceToggleRecording)
+TEST_F(QmlSmokeTest, PrimaryActionButtonAndSpaceToggleRecording)
 {
-  QObject * record_button = find_required(root_, "recordButton");
-  ASSERT_NE(record_button, nullptr);
+  QObject * primary_button = find_required(root_, "primaryActionButton");
+  ASSERT_NE(primary_button, nullptr);
 
   EXPECT_FALSE(controller_->recording());
-  ASSERT_TRUE(QMetaObject::invokeMethod(record_button, "clicked"));
+  ASSERT_TRUE(QMetaObject::invokeMethod(primary_button, "clicked"));
   EXPECT_TRUE(controller_->recording());
 
   QSignalSpy recording_spy(controller_.get(), &data_recorder::AppController::recordingChanged);
@@ -248,23 +248,23 @@ TEST_F(QmlSmokeTest, DataSourceRowsSwitchBetweenOnlineAndHistoryState)
 {
   auto * online_row = qobject_cast<QQuickItem *>(find_required(root_, "onlineDataSourceRow"));
   auto * history_row = qobject_cast<QQuickItem *>(find_required(root_, "historyDataSourceRow_0"));
-  auto * record_button_item = qobject_cast<QQuickItem *>(find_required(root_, "recordButton"));
+  auto * primary_button_item = qobject_cast<QQuickItem *>(find_required(root_, "primaryActionButton"));
   ASSERT_NE(online_row, nullptr);
   ASSERT_NE(history_row, nullptr);
-  ASSERT_NE(record_button_item, nullptr);
+  ASSERT_NE(primary_button_item, nullptr);
   ASSERT_TRUE(online_row->isVisible());
   ASSERT_TRUE(history_row->isVisible());
-  ASSERT_TRUE(record_button_item->isVisible());
+  ASSERT_TRUE(primary_button_item->isVisible());
   ASSERT_GT(online_row->width(), 0.0);
   ASSERT_GT(online_row->height(), 0.0);
   ASSERT_GT(history_row->width(), 0.0);
   ASSERT_GT(history_row->height(), 0.0);
-  ASSERT_GT(record_button_item->width(), 0.0);
-  ASSERT_GT(record_button_item->height(), 0.0);
+  ASSERT_GT(primary_button_item->width(), 0.0);
+  ASSERT_GT(primary_button_item->height(), 0.0);
 
   EXPECT_FALSE(controller_->historyMode());
   EXPECT_EQ(controller_->statusText().toStdString(), "实时查看");
-  EXPECT_TRUE(record_button_item->property("enabled").toBool());
+  EXPECT_TRUE(primary_button_item->property("enabled").toBool());
 
   QPoint history_position =
     history_row->mapToScene(QPointF(history_row->width() / 2.0, history_row->height() / 2.0))
@@ -275,15 +275,16 @@ TEST_F(QmlSmokeTest, DataSourceRowsSwitchBetweenOnlineAndHistoryState)
   EXPECT_TRUE(controller_->historyMode());
   EXPECT_EQ(controller_->selectedSessionRow(), 0);
   EXPECT_EQ(controller_->statusText().toStdString(), "历史查看：2026-05-31_07-46-20");
-  EXPECT_FALSE(record_button_item->property("enabled").toBool());
+  // In history mode the primary button shows 播放 and is always enabled.
+  EXPECT_TRUE(primary_button_item->property("enabled").toBool());
 
   QSignalSpy recording_spy(controller_.get(), &data_recorder::AppController::recordingChanged);
-  const QPoint record_position =
-    record_button_item
+  const QPoint primary_position =
+    primary_button_item
       ->mapToScene(
-        QPointF(record_button_item->width() / 2.0, record_button_item->height() / 2.0))
+        QPointF(primary_button_item->width() / 2.0, primary_button_item->height() / 2.0))
       .toPoint();
-  QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, record_position);
+  QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, primary_position);
   QCoreApplication::processEvents();
   EXPECT_EQ(recording_spy.count(), 0);
   EXPECT_FALSE(controller_->recording());
@@ -297,7 +298,7 @@ TEST_F(QmlSmokeTest, DataSourceRowsSwitchBetweenOnlineAndHistoryState)
   EXPECT_FALSE(controller_->historyMode());
   EXPECT_EQ(controller_->selectedSessionRow(), -1);
   EXPECT_EQ(controller_->statusText().toStdString(), "实时查看");
-  EXPECT_TRUE(record_button_item->property("enabled").toBool());
+  EXPECT_TRUE(primary_button_item->property("enabled").toBool());
 }
 
 TEST_F(QmlSmokeTest, MarkerShortcutAddsPointAtPlayhead)
