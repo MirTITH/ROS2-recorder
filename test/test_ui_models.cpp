@@ -1211,7 +1211,16 @@ TEST(LiveBridgeTest, PlaybackModeGatesLiveButAllowsPlayback)
   bridge.push_playback_frame(key, play);
   EXPECT_EQ(bridge.latest_frame(key)->width(), 16);
 
+  // 退出回放：帧仓库被清空（历史相机帧不再驻留）。
   bridge.set_playback_mode(false);
+  EXPECT_EQ(bridge.latest_frame(key), nullptr);
+
+  // 网关关闭后到达的迟到回放帧应被丢弃，不更新仓库。
+  auto late_play = std::make_shared<QImage>(32, 32, QImage::Format_RGB888);
+  bridge.push_playback_frame(key, late_play);
+  EXPECT_EQ(bridge.latest_frame(key), nullptr);
+
+  // 网关关闭后实时帧正常写入。
   bridge.push_frame(key, live2);
   EXPECT_EQ(bridge.latest_frame(key)->width(), 8);
 }

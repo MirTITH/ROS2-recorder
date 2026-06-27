@@ -56,6 +56,7 @@ std::shared_ptr<const QImage> LiveBridge::latest_frame(const QString & topic_key
 
 void LiveBridge::push_playback_frame(const QString & topic_key, std::shared_ptr<const QImage> image)
 {
+  if (!playback_mode_.load()) { return; }  // 回放已结束：丢弃迟到的解码帧
   int seq = 0;
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -69,6 +70,11 @@ void LiveBridge::push_playback_frame(const QString & topic_key, std::shared_ptr<
 void LiveBridge::set_playback_mode(bool on)
 {
   playback_mode_.store(on);
+  if (!on) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    frames_.clear();
+    // 注意：不清 seqs_，保持 seq 单调递增，避免 image provider 缓存键回退
+  }
 }
 
 }  // namespace data_recorder
