@@ -2,12 +2,16 @@
 
 #include <QObject>
 #include <QString>
+#include <QThread>
 #include <QVariantList>
+
+#include <vector>
 
 class QEvent;
 
 #include "data_recorder/camera_grid_model.hpp"
 #include "data_recorder/config_model.hpp"
+#include "data_recorder/recorder_types.hpp"
 #include "data_recorder/ui_models.hpp"
 
 namespace data_recorder
@@ -16,6 +20,7 @@ namespace data_recorder
 class LiveBridge;
 class RecorderEngine;
 class SessionManager;
+class SessionPlayer;
 
 class AppController : public QObject
 {
@@ -24,6 +29,7 @@ class AppController : public QObject
   Q_PROPERTY(QString outputDirectory READ outputDirectory CONSTANT)
   Q_PROPERTY(QString statusText READ statusText NOTIFY statusTextChanged)
   Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+  Q_PROPERTY(bool playing READ playing NOTIFY playingChanged)
   Q_PROPERTY(bool historyMode READ historyMode NOTIFY dataSourceChanged)
   Q_PROPERTY(int selectedSessionRow READ selectedSessionRow NOTIFY dataSourceChanged)
   Q_PROPERTY(bool canRecord READ canRecord NOTIFY canRecordChanged)
@@ -45,10 +51,13 @@ public:
     const ConfigData & config, LiveBridge * bridge = nullptr, RecorderEngine * engine = nullptr,
     SessionManager * session_manager = nullptr, QObject * parent = nullptr);
 
+  ~AppController() override;
+
   QString configPath() const;
   QString outputDirectory() const;
   QString statusText() const;
   bool recording() const;
+  bool playing() const;
   bool historyMode() const;
   int selectedSessionRow() const;
   bool canRecord() const;
@@ -65,6 +74,7 @@ public:
   RecordingSessionModel * recordingSessionModel();
 
   Q_INVOKABLE void toggleRecording();
+  Q_INVOKABLE void togglePlayback();
   Q_INVOKABLE void selectOnlineData();
   Q_INVOKABLE void selectHistorySession(int row);
   Q_INVOKABLE void setPlayheadSeconds(double seconds);
@@ -79,6 +89,7 @@ public:
 signals:
   void statusTextChanged();
   void recordingChanged();
+  void playingChanged();
   void dataSourceChanged();
   void canRecordChanged();
   void playheadSecondsChanged();
@@ -100,6 +111,11 @@ private:
   LiveBridge * bridge_{nullptr};
   RecorderEngine * engine_{nullptr};
   SessionManager * session_manager_{nullptr};
+  SessionPlayer * player_{nullptr};
+  QThread * player_thread_{nullptr};
+  std::vector<SessionRecord> scanned_sessions_;
+  std::vector<TopicEntry> live_topics_;
+  bool playing_{false};
 
   QString config_path_;
   QString output_directory_;

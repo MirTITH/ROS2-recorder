@@ -3,11 +3,13 @@
 #include <QKeyEvent>
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 
 #include "data_recorder/live_bridge.hpp"
 #include "data_recorder/recorder_engine.hpp"
 #include "data_recorder/session_manager.hpp"
+#include "data_recorder/session_player.hpp"
 
 namespace data_recorder
 {
@@ -27,6 +29,8 @@ AppController::AppController(
   output_directory_(QString::fromStdString(config.output_dir)),
   camera_grid_model_(&topic_model_)
 {
+  qRegisterMetaType<data_recorder::SessionRecord>("data_recorder::SessionRecord");
+
   connect(
     &camera_grid_model_,
     &CameraGridModel::countChanged,
@@ -36,6 +40,7 @@ AppController::AppController(
     });
 
   topic_model_.set_topics(config.topics);
+  live_topics_ = config.topics;
   visible_camera_count_ = camera_grid_model_.rowCount();
 
   tag_model_.set_tags(config.tags);
@@ -50,7 +55,37 @@ AppController::AppController(
     connect(bridge_, &LiveBridge::frameReady, this, &AppController::onFrameReady);
     connect(bridge_, &LiveBridge::liveEdgeChanged, this, &AppController::onLiveEdge);
   }
+
+  player_thread_ = new QThread(this);
+  player_ = new SessionPlayer(bridge_);
+  player_->moveToThread(player_thread_);
+  connect(player_thread_, &QThread::finished, player_, &QObject::deleteLater);
+  connect(player_, &SessionPlayer::playheadAdvanced, this,
+    [this](double seconds) {
+      if (!history_mode_) { return; }
+      if (playhead_seconds_ != seconds) {
+        playhead_seconds_ = seconds;
+        emit playheadSecondsChanged();
+      }
+    });
+  connect(player_, &SessionPlayer::playingChanged, this,
+    [this](bool on) {
+      if (playing_ != on) {
+        playing_ = on;
+        emit playingChanged();
+      }
+    });
+  player_thread_->start();
+
   refreshSessions();  // 启动扫描
+}
+
+AppController::~AppController()
+{
+  if (player_thread_) {
+    player_thread_->quit();
+    player_thread_->wait();
+  }
 }
 
 QString AppController::configPath() const
@@ -71,6 +106,17 @@ QString AppController::statusText() const
 bool AppController::recording() const
 {
   return recording_;
+}
+
+bool AppController::playing() const
+{
+  return playing_;
+}
+
+void AppController::togglePlayback()
+{
+  if (!history_mode_ || !player_) { return; }
+  QMetaObject::invokeMethod(player_, [p = player_] { p->togglePlay(); }, Qt::QueuedConnection);
 }
 
 bool AppController::historyMode() const
@@ -100,6 +146,13 @@ double AppController::liveEdgeSeconds() const
 
 double AppController::timelineDurationSeconds() const
 {
+  if (history_mode_ && selected_session_row_ >= 0 &&
+    selected_session_row_ < static_cast<int>(scanned_sessions_.size()))
+  {
+    const double d = scanned_sessions_[static_cast<std::size_t>(selected_session_row_)]
+      .duration_seconds;
+    if (d > 0.0) { return d; }
+  }
   return std::max({live_edge_seconds_, playhead_seconds_, kDefaultTimelineSpanSeconds});
 }
 
@@ -231,6 +284,15 @@ void AppController::selectOnlineData()
   if (previous_mode != modeText()) {
     emit modeTextChanged();
   }
+
+  if (bridge_) { bridge_->set_playback_mode(false); }
+  if (player_) { QMetaObject::invokeMethod(player_, [p = player_] { p->stop(); }, Qt::QueuedConnection); }
+  topic_model_.set_topics(live_topics_);
+  event_marker_model_.clearInstances();
+  tag_model_.clearSelection();
+  playhead_seconds_ = 0.0;
+  emit playheadSecondsChanged();
+  emit timelineDurationSecondsChanged();
 }
 
 void AppController::selectHistorySession(int row)
@@ -271,10 +333,55 @@ void AppController::selectHistorySession(int row)
   if (previous_mode != modeText()) {
     emit modeTextChanged();
   }
+
+  if (row >= 0 && row < static_cast<int>(scanned_sessions_.size())) {
+    const SessionRecord & session = scanned_sessions_[static_cast<std::size_t>(row)];
+
+    std::vector<TopicEntry> session_topics;
+    for (const auto & tref : session.topics) {
+      TopicEntry e;
+      e.topic_name = tref.name;
+      e.backend_name = tref.backend;
+      // 与实时配置的相机判定保持一致（ConfigModel::is_camera_topic）：
+      // backend 为 video，或话题名（小写）含 "image" 即视为相机。
+      auto lower_name = tref.name;
+      std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      const bool is_camera =
+        (tref.backend == "video") || lower_name.find("image") != std::string::npos;
+      e.ui_category = is_camera ? TopicUiCategory::CameraPreview : TopicUiCategory::NumericTrack;
+      session_topics.push_back(e);
+    }
+    topic_model_.set_topics(session_topics);
+    event_marker_model_.setInstances(session.annotations);
+    tag_model_.setSelectedTags(session.tags);
+
+    playhead_seconds_ = 0.0;
+    emit playheadSecondsChanged();
+    emit timelineDurationSecondsChanged();
+
+    if (bridge_) { bridge_->set_playback_mode(true); }
+    if (player_) {
+      QMetaObject::invokeMethod(player_, [p = player_, session] { p->load(session); },
+        Qt::QueuedConnection);
+    }
+  }
 }
 
 void AppController::setPlayheadSeconds(double seconds)
 {
+  if (history_mode_) {
+    const double clamped = std::max(0.0, seconds);
+    if (playhead_seconds_ != clamped) {
+      playhead_seconds_ = clamped;
+      emit playheadSecondsChanged();
+    }
+    if (player_) {
+      QMetaObject::invokeMethod(player_, [p = player_, clamped] { p->seek(clamped); },
+        Qt::QueuedConnection);
+    }
+    return;
+  }
   const double clamped_seconds = std::max(0.0, seconds);
   const bool was_following = following_live_edge_;
   const double previous_timeline_duration = timelineDurationSeconds();
@@ -443,7 +550,8 @@ void AppController::refreshSessions()
 {
   if (!session_manager_) { return; }
   const std::string dir = std::filesystem::absolute(output_directory_.toStdString()).string();
-  recording_session_model_.setSessions(session_manager_->scan(dir));
+  scanned_sessions_ = session_manager_->scan(dir);
+  recording_session_model_.setSessions(scanned_sessions_);
 }
 
 }  // namespace data_recorder

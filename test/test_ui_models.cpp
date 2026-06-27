@@ -12,7 +12,15 @@
 #include "data_recorder/live_bridge.hpp"
 
 #include "data_recorder/app_controller.hpp"
+#include "data_recorder/session_manager.hpp"
 #include "data_recorder/ui_models.hpp"
+#include "data_recorder/video_recorder.hpp"
+
+#include <QCoreApplication>
+#include <QThread>
+
+#include <filesystem>
+#include <fstream>
 
 namespace
 {
@@ -1206,4 +1214,67 @@ TEST(LiveBridgeTest, PlaybackModeGatesLiveButAllowsPlayback)
   bridge.set_playback_mode(false);
   bridge.push_frame(key, live2);
   EXPECT_EQ(bridge.latest_frame(key)->width(), 8);
+}
+
+TEST(AppControllerHistoryTest, SelectHistoryEntersPlaybackMode)
+{
+  namespace fs = std::filesystem;
+  int argc = 0; char ** argv = nullptr;
+  QCoreApplication app(argc, argv);
+
+  fs::path out = fs::temp_directory_path() / "drc_appctrl_test";
+  fs::remove_all(out);
+  fs::path sdir = out / "2026-06-27_00-00-00";
+  fs::create_directories(sdir / "video");
+  {
+    data_recorder::VideoParams params;
+    data_recorder::VideoRecorder rec(
+      (sdir / "video" / "cam.mp4").string(),
+      (sdir / "video" / "cam.csv").string(), 32, 24, params);
+    for (int i = 0; i < 20; ++i) {
+      data_recorder::ImageFrame f;
+      f.width = 32; f.height = 24; f.step = 96; f.encoding = "bgr8";
+      f.ros_stamp_ns = 1000000000LL + i * 40000000LL;
+      f.data.assign(32 * 24 * 3, static_cast<uint8_t>(i * 6));
+      rec.encode(f);
+    }
+    rec.close();
+  }
+  {
+    std::ofstream y((sdir / "session.yaml").string());
+    y << "session: 2026-06-27_00-00-00\n"
+      << "duration_seconds: 0.8\n"
+      << "topics:\n  - name: /cam\n    backend: video\n"
+      << "tags: []\nannotations: []\n";
+  }
+
+  data_recorder::ConfigData config;
+  config.output_dir = out.string();
+  config.topics.push_back({"/cam", "video", 0,
+    data_recorder::TopicUiCategory::CameraPreview, {}});
+
+  data_recorder::LiveBridge bridge;
+  data_recorder::SessionManager sm;
+  data_recorder::AppController ctrl(config, &bridge, nullptr, &sm);
+
+  ASSERT_GT(ctrl.recordingSessionModel()->rowCount(), 0);
+  EXPECT_FALSE(ctrl.historyMode());
+  EXPECT_TRUE(ctrl.canRecord());
+
+  ctrl.selectHistorySession(0);
+  for (int i = 0; i < 50 && bridge.latest_frame("/cam") == nullptr; ++i) {
+    app.processEvents();
+    QThread::msleep(5);
+  }
+  EXPECT_TRUE(ctrl.historyMode());
+  EXPECT_FALSE(ctrl.canRecord());
+  EXPECT_NEAR(ctrl.timelineDurationSeconds(), 0.8, 0.5);
+  ASSERT_NE(bridge.latest_frame("/cam"), nullptr);
+
+  ctrl.selectOnlineData();
+  for (int i = 0; i < 10; ++i) { app.processEvents(); QThread::msleep(5); }
+  EXPECT_FALSE(ctrl.historyMode());
+  EXPECT_TRUE(ctrl.canRecord());
+
+  fs::remove_all(out);
 }

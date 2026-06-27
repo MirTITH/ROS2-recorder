@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QMetaType>
 #include <QObject>
 #include <QString>
 #include <QTimer>
@@ -63,3 +64,5 @@ private:
 };
 
 }  // namespace data_recorder
+
+Q_DECLARE_METATYPE(data_recorder::SessionRecord)
