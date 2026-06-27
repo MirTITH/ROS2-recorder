@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -27,6 +28,8 @@ public:
   void push_frame(const QString & topic_key, std::shared_ptr<const QImage> image);
   void push_stats(const std::vector<TopicStats> & stats);
   void set_live_edge(double seconds);
+  void push_playback_frame(const QString & topic_key, std::shared_ptr<const QImage> image);
+  void set_playback_mode(bool on);
 
   // —— GUI 线程调用（image provider）——
   std::shared_ptr<const QImage> latest_frame(const QString & topic_key) const;
@@ -40,6 +43,7 @@ private:
   mutable std::mutex mutex_;
   std::map<QString, std::shared_ptr<const QImage>> frames_;
   std::map<QString, int> seqs_;
+  std::atomic<bool> playback_mode_{false};
 };
 
 }  // namespace data_recorder

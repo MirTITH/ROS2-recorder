@@ -1,12 +1,15 @@
 #include <gtest/gtest.h>
 
 #include <QAbstractItemModel>
+#include <QImage>
 #include <QKeyEvent>
 #include <QModelIndex>
 #include <QObject>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QVector>
+
+#include "data_recorder/live_bridge.hpp"
 
 #include "data_recorder/app_controller.hpp"
 #include "data_recorder/ui_models.hpp"
@@ -1108,4 +1111,27 @@ TEST(AppController, EventFilterIgnoresModifiedShortcuts)
       ->data(controller.eventMarkerModel()->index(0, 0), data_recorder::EventMarkerModel::CountRole)
       .toInt(),
     0);
+}
+
+TEST(LiveBridgeTest, PlaybackModeGatesLiveButAllowsPlayback)
+{
+  data_recorder::LiveBridge bridge;
+  const QString key = "/camera/image_raw";
+  auto img = std::make_shared<QImage>(4, 4, QImage::Format_RGB888);
+
+  bridge.push_frame(key, img);
+  ASSERT_NE(bridge.latest_frame(key), nullptr);
+
+  bridge.set_playback_mode(true);
+  auto live2 = std::make_shared<QImage>(8, 8, QImage::Format_RGB888);
+  bridge.push_frame(key, live2);
+  EXPECT_EQ(bridge.latest_frame(key)->width(), 4);  // still old frame
+
+  auto play = std::make_shared<QImage>(16, 16, QImage::Format_RGB888);
+  bridge.push_playback_frame(key, play);
+  EXPECT_EQ(bridge.latest_frame(key)->width(), 16);
+
+  bridge.set_playback_mode(false);
+  bridge.push_frame(key, live2);
+  EXPECT_EQ(bridge.latest_frame(key)->width(), 8);
 }

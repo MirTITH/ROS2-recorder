@@ -13,6 +13,7 @@ LiveBridge::LiveBridge(QObject * parent)
 
 void LiveBridge::push_frame(const QString & topic_key, std::shared_ptr<const QImage> image)
 {
+  if (playback_mode_.load()) { return; }  // 回放模式丢弃实时帧
   int seq = 0;
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -26,6 +27,7 @@ void LiveBridge::push_frame(const QString & topic_key, std::shared_ptr<const QIm
 
 void LiveBridge::push_stats(const std::vector<TopicStats> & stats)
 {
+  if (playback_mode_.load()) { return; }  // 回放模式丢弃实时统计
   QVariantList list;
   for (const auto & s : stats) {
     QVariantMap m;
@@ -50,6 +52,23 @@ std::shared_ptr<const QImage> LiveBridge::latest_frame(const QString & topic_key
   std::lock_guard<std::mutex> lock(mutex_);
   auto it = frames_.find(topic_key);
   return it != frames_.end() ? it->second : nullptr;
+}
+
+void LiveBridge::push_playback_frame(const QString & topic_key, std::shared_ptr<const QImage> image)
+{
+  int seq = 0;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    frames_[topic_key] = std::move(image);
+    seq = ++seqs_[topic_key];
+  }
+  QMetaObject::invokeMethod(this, "frameReady", Qt::QueuedConnection,
+    Q_ARG(QString, topic_key), Q_ARG(int, seq));
+}
+
+void LiveBridge::set_playback_mode(bool on)
+{
+  playback_mode_.store(on);
 }
 
 }  // namespace data_recorder
