@@ -30,10 +30,12 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/camera_image_provider.hpp
   include/data_recorder/config_model.hpp
   include/data_recorder/live_bridge.hpp
+  include/data_recorder/path_utils.hpp
   include/data_recorder/recorder_engine.hpp
   include/data_recorder/recorder_types.hpp
   include/data_recorder/rosbag_writer.hpp
   include/data_recorder/session_manager.hpp
+  include/data_recorder/session_player.hpp
   include/data_recorder/topic_rate_monitor.hpp
   include/data_recorder/ui_models.hpp
   include/data_recorder/video_clip_reader.hpp
@@ -50,6 +52,7 @@ set(DATA_RECORDER_SOURCES
   src/recorder_engine.cpp
   src/rosbag_writer.cpp
   src/session_manager.cpp
+  src/session_player.cpp
   src/topic_rate_monitor.cpp
   src/ui_models.cpp
   src/video_clip_reader.cpp
@@ -142,6 +145,11 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_video_clip_reader test/test_video_clip_reader.cpp)
   target_link_libraries(test_video_clip_reader data_recorder_core PkgConfig::LIBAV)
+
+  ament_add_gtest(test_session_player test/test_session_player.cpp
+    ENV "QT_QPA_PLATFORM=offscreen"
+  )
+  target_link_libraries(test_session_player data_recorder_core PkgConfig::LIBAV Qt6::Test)
 
   find_package(std_msgs REQUIRED)
   ament_add_gtest(test_rosbag_writer test/test_rosbag_writer.cpp)

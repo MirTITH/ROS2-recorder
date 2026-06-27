@@ -15,6 +15,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "data_recorder/live_bridge.hpp"
+#include "data_recorder/path_utils.hpp"
 #include "data_recorder/session_manager.hpp"
 
 namespace fs = std::filesystem;
@@ -27,12 +28,7 @@ namespace
 {
 std::string file_name_for_topic(const std::string & topic)
 {
-  std::string s = topic;
-  if (!s.empty() && s.front() == '/') { s.erase(s.begin()); }
-  for (auto & c : s) {
-    if (c == '/') { c = '_'; }  // '/' → '_'（两个连续下划线由双斜杠产生，符合 spec __）
-  }
-  return s;
+  return file_base_for_topic(topic);
 }
 
 std::string timestamp_now()
