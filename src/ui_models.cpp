@@ -644,13 +644,47 @@ std::vector<AnnotationRecord> EventMarkerModel::exportAnnotations() const
   return out;
 }
 
-void EventMarkerModel::clearInstances()
+void EventMarkerModel::resetAllRows()
 {
-  beginResetModel();
   for (auto & row : markers_) {
     row.instances.clear();
     row.has_pending_range_start = false;
     row.next_instance_id = 1;
+  }
+}
+
+void EventMarkerModel::clearInstances()
+{
+  beginResetModel();
+  resetAllRows();
+  endResetModel();
+}
+
+void EventMarkerModel::setInstances(const std::vector<AnnotationRecord> & annotations)
+{
+  beginResetModel();
+  resetAllRows();
+  for (const auto & ann : annotations) {
+    auto it = std::find_if(markers_.begin(), markers_.end(),
+      [&ann](const EventMarkerRow & r) {
+        return r.marker.shortcut == ann.shortcut;
+      });
+    if (it == markers_.end()) { continue; }
+    EventInstance instance;
+    instance.id = it->next_instance_id++;
+    if (ann.kind == "range") {
+      double start_seconds = ann.t;
+      double end_seconds = ann.end;
+      normalize_range(start_seconds, end_seconds);
+      instance.kind = QStringLiteral("range");
+      instance.start_seconds = start_seconds;
+      instance.end_seconds = end_seconds;
+    } else {
+      instance.kind = QStringLiteral("point");
+      instance.start_seconds = ann.t;
+      instance.end_seconds = ann.t;
+    }
+    it->instances.push_back(instance);
   }
   endResetModel();
 }

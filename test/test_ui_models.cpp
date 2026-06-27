@@ -1113,6 +1113,43 @@ TEST(AppController, EventFilterIgnoresModifiedShortcuts)
     0);
 }
 
+TEST(EventMarkerModel, SetInstancesLoadsHistoryAnnotations)
+{
+  data_recorder::EventMarkerModel model;
+  std::vector<data_recorder::EventMarkerEntry> markers = {
+    {"1", "拿起水杯", "point", "#1763c9"},
+    {"2", "倒水", "range", "#2f9e44"},
+  };
+  model.set_markers(markers);
+
+  std::vector<data_recorder::AnnotationRecord> anns;
+  data_recorder::AnnotationRecord a1;
+  a1.shortcut = "1"; a1.kind = "point"; a1.t = 23.1;
+  data_recorder::AnnotationRecord a2;
+  a2.shortcut = "2"; a2.kind = "range"; a2.t = 25.0; a2.end = 29.0;
+  anns.push_back(a1);
+  anns.push_back(a2);
+
+  model.setInstances(anns);
+
+  EXPECT_EQ(model.data(model.index(0, 0),
+    data_recorder::EventMarkerModel::CountRole).toInt(), 1);
+  EXPECT_EQ(model.data(model.index(1, 0),
+    data_recorder::EventMarkerModel::CountRole).toInt(), 1);
+
+  const QVariantList range_instances =
+    model.data(model.index(1, 0), data_recorder::EventMarkerModel::InstancesRole).toList();
+  ASSERT_EQ(range_instances.size(), 1);
+  const QVariantMap range_instance = range_instances.at(0).toMap();
+  EXPECT_EQ(range_instance.value(QStringLiteral("kind")).toString().toStdString(), "range");
+  EXPECT_DOUBLE_EQ(range_instance.value(QStringLiteral("startSeconds")).toDouble(), 25.0);
+  EXPECT_DOUBLE_EQ(range_instance.value(QStringLiteral("endSeconds")).toDouble(), 29.0);
+
+  model.setInstances(anns);  // re-call must reset, not accumulate
+  EXPECT_EQ(model.data(model.index(0, 0),
+    data_recorder::EventMarkerModel::CountRole).toInt(), 1);
+}
+
 TEST(LiveBridgeTest, PlaybackModeGatesLiveButAllowsPlayback)
 {
   data_recorder::LiveBridge bridge;

@@ -139,6 +139,7 @@ public:
 
   std::vector<AnnotationRecord> exportAnnotations() const;
   void clearInstances();  // startSession 时清空
+  void setInstances(const std::vector<AnnotationRecord> & annotations);
 
   void set_markers(std::vector<EventMarkerEntry> markers);
 
@@ -159,6 +160,8 @@ private:
     double pending_start_seconds{0.0};
     int next_instance_id{1};
   };
+
+  void resetAllRows();
 
   std::vector<EventMarkerRow> markers_;
 };
