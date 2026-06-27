@@ -6,9 +6,9 @@ Rectangle {
 
     property string trackKind: "empty"
     property var seriesList: []
-    property real xMax: 80
+    property real xMax: 60
     property real visibleStartSeconds: 0
-    property real visibleDurationSeconds: 80
+    property real visibleDurationSeconds: 60
     property real plotTopPadding: 4
     property real plotBottomPadding: 4
     property real sampleMarkerSpacingThreshold: 12

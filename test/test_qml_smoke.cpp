@@ -444,3 +444,53 @@ TEST_F(QmlSmokeTest, PlayheadLineHidesOutsideVisibleWindow)
   EXPECT_TRUE(curve_playhead->isVisible());
   EXPECT_TRUE(ruler_playhead->isVisible());
 }
+
+TEST_F(QmlSmokeTest, FollowingLiveEdgeKeepsPlayheadVisibleBeyondDefaultSpan)
+{
+  auto * curve_playhead = qobject_cast<QQuickItem *>(find_required(root_, "timelineLanePlayhead"));
+  auto * ruler_playhead = qobject_cast<QQuickItem *>(find_required(root_, "timelineRulerPlayhead"));
+  ASSERT_NE(curve_playhead, nullptr);
+  ASSERT_NE(ruler_playhead, nullptr);
+
+  controller_->toggleRecording();
+  ASSERT_TRUE(controller_->followingLiveEdge());
+
+  // 实时端越过默认 60 秒标尺，跟随模式应自动滚动窗口，使播放头始终可见。
+  controller_->advanceLiveEdge(120.0);
+  QCoreApplication::processEvents();
+
+  EXPECT_GE(controller_->playheadSeconds(), 120.0);
+  EXPECT_TRUE(curve_playhead->isVisible());
+  EXPECT_TRUE(ruler_playhead->isVisible());
+}
+
+TEST_F(QmlSmokeTest, ManualPanWhileRecordingDetachesFromLiveEdge)
+{
+  auto * curve_mouse_area =
+    qobject_cast<QQuickItem *>(find_required(root_, "timelineLaneMouseArea"));
+  ASSERT_NE(curve_mouse_area, nullptr);
+
+  controller_->toggleRecording();
+  controller_->advanceLiveEdge(30.0);
+  QCoreApplication::processEvents();
+  ASSERT_TRUE(controller_->followingLiveEdge());
+
+  const QPoint position =
+    curve_mouse_area
+      ->mapToScene(QPointF(curve_mouse_area->width() / 2.0, curve_mouse_area->height() / 2.0))
+      .toPoint();
+  QWheelEvent wheel_event(
+    position,
+    window_->mapToGlobal(position),
+    QPoint(),
+    QPoint(0, -120),
+    Qt::NoButton,
+    Qt::ShiftModifier,
+    Qt::NoScrollPhase,
+    false);
+  EXPECT_TRUE(QCoreApplication::sendEvent(window_, &wheel_event));
+  QCoreApplication::processEvents();
+
+  // 手动平移视口即脱离实时端（进入“录制中回看”），不再被实时端拉回。
+  EXPECT_FALSE(controller_->followingLiveEdge());
+}

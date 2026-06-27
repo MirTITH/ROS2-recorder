@@ -12,6 +12,13 @@
 namespace data_recorder
 {
 
+namespace
+{
+// 默认标尺长度：录制时间轴在实时端/播放头尚未超过该跨度前固定显示这么长，
+// 之后随实时端增长，保证播放头始终落在可寻址区间内。
+constexpr double kDefaultTimelineSpanSeconds = 60.0;
+}  // namespace
+
 AppController::AppController(
   const ConfigData & config, LiveBridge * bridge, RecorderEngine * engine,
   SessionManager * session_manager, QObject * parent)
@@ -89,6 +96,11 @@ double AppController::playheadSeconds() const
 double AppController::liveEdgeSeconds() const
 {
   return live_edge_seconds_;
+}
+
+double AppController::timelineDurationSeconds() const
+{
+  return std::max({live_edge_seconds_, playhead_seconds_, kDefaultTimelineSpanSeconds});
 }
 
 bool AppController::followingLiveEdge() const
@@ -265,12 +277,16 @@ void AppController::setPlayheadSeconds(double seconds)
 {
   const double clamped_seconds = std::max(0.0, seconds);
   const bool was_following = following_live_edge_;
+  const double previous_timeline_duration = timelineDurationSeconds();
   if (recording_) {
     following_live_edge_ = false;
   }
   if (playhead_seconds_ != clamped_seconds) {
     playhead_seconds_ = clamped_seconds;
     emit playheadSecondsChanged();
+  }
+  if (timelineDurationSeconds() != previous_timeline_duration) {
+    emit timelineDurationSecondsChanged();
   }
   if (was_following != following_live_edge_) {
     refreshStatusText();
@@ -285,17 +301,22 @@ void AppController::advanceLiveEdge(double seconds)
   if (live_edge_seconds_ == clamped_seconds) {
     return;
   }
+  const double previous_timeline_duration = timelineDurationSeconds();
   live_edge_seconds_ = clamped_seconds;
   emit liveEdgeSecondsChanged();
   if (recording_ && following_live_edge_) {
     playhead_seconds_ = live_edge_seconds_;
     emit playheadSecondsChanged();
   }
+  if (timelineDurationSeconds() != previous_timeline_duration) {
+    emit timelineDurationSecondsChanged();
+  }
 }
 
 void AppController::returnToLiveEdge()
 {
   const bool was_following = following_live_edge_;
+  const double previous_timeline_duration = timelineDurationSeconds();
   following_live_edge_ = recording_;
   playhead_seconds_ = live_edge_seconds_;
   if (was_following != following_live_edge_) {
@@ -304,6 +325,21 @@ void AppController::returnToLiveEdge()
     emit modeTextChanged();
   }
   emit playheadSecondsChanged();
+  if (timelineDurationSeconds() != previous_timeline_duration) {
+    emit timelineDurationSecondsChanged();
+  }
+}
+
+void AppController::detachFromLiveEdge()
+{
+  // 仅在录制且当前正跟随实时端时生效：脱离实时端进入“录制中回看”，播放头保持原位。
+  if (!recording_ || !following_live_edge_) {
+    return;
+  }
+  following_live_edge_ = false;
+  refreshStatusText();
+  emit followingLiveEdgeChanged();
+  emit modeTextChanged();
 }
 
 bool AppController::triggerMarkerShortcut(const QString & shortcut)

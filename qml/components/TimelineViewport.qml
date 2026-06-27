@@ -18,6 +18,9 @@ QtObject {
         boundedTotalDuration,
         visibleStartSeconds + boundedVisibleDuration)
 
+    // 用户主动操作视口（平移 / 缩放）时发出，供上层据此脱离实时端跟随。
+    signal manualInteraction()
+
     function clamp(value, low, high) {
         return Math.max(low, Math.min(high, value))
     }
@@ -32,6 +35,7 @@ QtObject {
     }
 
     function panBySeconds(deltaSeconds) {
+        manualInteraction()
         setWindow(visibleStartSeconds + Number(deltaSeconds || 0), boundedVisibleDuration)
     }
 
@@ -41,6 +45,7 @@ QtObject {
     }
 
     function zoomAt(anchorX, widthValue, deltaY) {
+        manualInteraction()
         var oldDuration = boundedVisibleDuration
         var factor = deltaY > 0 ? 0.86 : 1.16
         var newDuration = clamp(oldDuration * factor, minimumVisibleDurationSeconds, boundedTotalDuration)

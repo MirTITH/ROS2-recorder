@@ -202,6 +202,7 @@ ColumnLayout {
         visibleStartSeconds: viewport.visibleStartSeconds
         visibleDurationSeconds: viewport.boundedVisibleDuration
         onWindowRequested: function(startSeconds, durationSeconds) {
+            viewport.manualInteraction()
             viewport.setWindow(startSeconds, durationSeconds)
         }
     }

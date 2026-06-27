@@ -86,6 +86,7 @@ ApplicationWindow {
                         controller: appController
                         model: appController.topicModel
                         eventMarkerModel: appController.eventMarkerModel
+                        durationSeconds: appController.timelineDurationSeconds
                     }
                 }
             }

@@ -29,6 +29,8 @@ class AppController : public QObject
   Q_PROPERTY(bool canRecord READ canRecord NOTIFY canRecordChanged)
   Q_PROPERTY(double playheadSeconds READ playheadSeconds NOTIFY playheadSecondsChanged)
   Q_PROPERTY(double liveEdgeSeconds READ liveEdgeSeconds NOTIFY liveEdgeSecondsChanged)
+  Q_PROPERTY(double timelineDurationSeconds READ timelineDurationSeconds NOTIFY
+    timelineDurationSecondsChanged)
   Q_PROPERTY(bool followingLiveEdge READ followingLiveEdge NOTIFY followingLiveEdgeChanged)
   Q_PROPERTY(QString modeText READ modeText NOTIFY modeTextChanged)
   Q_PROPERTY(int visibleCameraCount READ visibleCameraCount NOTIFY visibleCameraCountChanged)
@@ -52,6 +54,7 @@ public:
   bool canRecord() const;
   double playheadSeconds() const;
   double liveEdgeSeconds() const;
+  double timelineDurationSeconds() const;
   bool followingLiveEdge() const;
   QString modeText() const;
   int visibleCameraCount() const;
@@ -67,6 +70,7 @@ public:
   Q_INVOKABLE void setPlayheadSeconds(double seconds);
   Q_INVOKABLE void advanceLiveEdge(double seconds);
   Q_INVOKABLE void returnToLiveEdge();
+  Q_INVOKABLE void detachFromLiveEdge();
   Q_INVOKABLE bool triggerMarkerShortcut(const QString & shortcut);
   Q_INVOKABLE void toggleTopicVisible(int row);
 
@@ -79,6 +83,7 @@ signals:
   void canRecordChanged();
   void playheadSecondsChanged();
   void liveEdgeSecondsChanged();
+  void timelineDurationSecondsChanged();
   void followingLiveEdgeChanged();
   void modeTextChanged();
   void visibleCameraCountChanged();

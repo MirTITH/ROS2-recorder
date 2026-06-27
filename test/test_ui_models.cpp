@@ -855,6 +855,92 @@ TEST(AppController, ScrubbingDuringRecordingDetachesAndCanReturnToLive)
   EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 12.0);
 }
 
+TEST(AppController, TimelineDurationDefaultsToSixtySecondSpan)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  // 默认标尺长度 60 秒：录制开始前，时间轴总长固定为 60。
+  EXPECT_DOUBLE_EQ(controller.timelineDurationSeconds(), 60.0);
+}
+
+TEST(AppController, TimelineDurationGrowsWithLiveEdgeAndEmitsOnlyWhenSpanChanges)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  int timeline_duration_changed_count = 0;
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::timelineDurationSecondsChanged,
+    [&timeline_duration_changed_count]() {
+      ++timeline_duration_changed_count;
+    });
+
+  controller.toggleRecording();
+
+  // 实时端仍在默认 60 秒标尺内 → 总长不变、不发信号。
+  controller.advanceLiveEdge(45.0);
+  EXPECT_DOUBLE_EQ(controller.timelineDurationSeconds(), 60.0);
+  EXPECT_EQ(timeline_duration_changed_count, 0);
+
+  // 实时端超过默认标尺 → 总长随之增长并发一次信号。
+  controller.advanceLiveEdge(120.0);
+  EXPECT_DOUBLE_EQ(controller.timelineDurationSeconds(), 120.0);
+  EXPECT_EQ(timeline_duration_changed_count, 1);
+}
+
+TEST(AppController, PlayheadBeyondLiveEdgeStillExtendsTimelineDuration)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  // 即便实时端为 0，把播放头拖到远处也应让总长覆盖播放头，避免播放头脱离可寻址区间。
+  controller.setPlayheadSeconds(95.0);
+  EXPECT_DOUBLE_EQ(controller.timelineDurationSeconds(), 95.0);
+}
+
+TEST(AppController, DetachFromLiveEdgeStopsFollowingWithoutMovingPlayhead)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  controller.toggleRecording();
+  controller.advanceLiveEdge(40.0);
+  ASSERT_TRUE(controller.followingLiveEdge());
+  ASSERT_DOUBLE_EQ(controller.playheadSeconds(), 40.0);
+
+  controller.detachFromLiveEdge();
+
+  EXPECT_FALSE(controller.followingLiveEdge());
+  EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 40.0);  // 播放头不移动，只脱离实时端
+  EXPECT_EQ(controller.statusText().toStdString(), "录制中回看");
+
+  // 已经脱离时再次调用应为无操作。
+  controller.detachFromLiveEdge();
+  EXPECT_FALSE(controller.followingLiveEdge());
+  EXPECT_DOUBLE_EQ(controller.playheadSeconds(), 40.0);
+}
+
+TEST(AppController, DetachFromLiveEdgeIsNoOpWhenNotRecording)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  int following_changed_count = 0;
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::followingLiveEdgeChanged,
+    [&following_changed_count]() {
+      ++following_changed_count;
+    });
+
+  controller.detachFromLiveEdge();
+
+  EXPECT_FALSE(controller.followingLiveEdge());
+  EXPECT_EQ(following_changed_count, 0);
+}
+
 TEST(AppController, TriggerMarkerShortcutAddsPointAtPlayhead)
 {
   const auto config = make_config_fixture();
