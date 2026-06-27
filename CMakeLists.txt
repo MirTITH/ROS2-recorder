@@ -36,6 +36,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/session_manager.hpp
   include/data_recorder/topic_rate_monitor.hpp
   include/data_recorder/ui_models.hpp
+  include/data_recorder/video_clip_reader.hpp
   include/data_recorder/video_recorder.hpp
   include/data_recorder/writer_queue.hpp
 )
@@ -51,6 +52,7 @@ set(DATA_RECORDER_SOURCES
   src/session_manager.cpp
   src/topic_rate_monitor.cpp
   src/ui_models.cpp
+  src/video_clip_reader.cpp
   src/video_recorder.cpp
   src/writer_queue.cpp
 )
@@ -137,6 +139,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_video_recorder test/test_video_recorder.cpp)
   target_link_libraries(test_video_recorder data_recorder_core PkgConfig::LIBAV)
+
+  ament_add_gtest(test_video_clip_reader test/test_video_clip_reader.cpp)
+  target_link_libraries(test_video_clip_reader data_recorder_core PkgConfig::LIBAV)
 
   find_package(std_msgs REQUIRED)
   ament_add_gtest(test_rosbag_writer test/test_rosbag_writer.cpp)
