@@ -1150,6 +1150,41 @@ TEST(EventMarkerModel, SetInstancesLoadsHistoryAnnotations)
     data_recorder::EventMarkerModel::CountRole).toInt(), 1);
 }
 
+TEST(TagListModel, SetSelectedTagsMarksMultipleSelected)
+{
+  data_recorder::TagListModel model;
+  model.set_tags({{"成功", "#2f9e44"}, {"失败", "#e03131"}, {"碰撞", "#e8a915"}});
+
+  model.setSelectedTags({{"成功", "#2f9e44"}, {"碰撞", "#e8a915"}});
+
+  EXPECT_TRUE(model.data(model.index(0, 0),
+    data_recorder::TagListModel::IsSelectedRole).toBool());   // 成功
+  EXPECT_FALSE(model.data(model.index(1, 0),
+    data_recorder::TagListModel::IsSelectedRole).toBool());   // 失败
+  EXPECT_TRUE(model.data(model.index(2, 0),
+    data_recorder::TagListModel::IsSelectedRole).toBool());   // 碰撞
+
+  model.clearSelection();
+  EXPECT_FALSE(model.data(model.index(0, 0),
+    data_recorder::TagListModel::IsSelectedRole).toBool());
+}
+
+TEST(TagListModel, SelectClearsSessionTags)
+{
+  data_recorder::TagListModel model;
+  model.set_tags({{"成功", "#2f9e44"}, {"失败", "#e03131"}, {"碰撞", "#e8a915"}});
+
+  model.setSelectedTags({{"成功", "#2f9e44"}, {"碰撞", "#e8a915"}});
+  model.select(1);
+
+  EXPECT_FALSE(model.data(model.index(0, 0),
+    data_recorder::TagListModel::IsSelectedRole).toBool());   // 成功 会话选择被清空
+  EXPECT_TRUE(model.data(model.index(1, 0),
+    data_recorder::TagListModel::IsSelectedRole).toBool());    // 失败 实时单选
+  EXPECT_FALSE(model.data(model.index(2, 0),
+    data_recorder::TagListModel::IsSelectedRole).toBool());   // 碰撞 会话选择被清空
+}
+
 TEST(LiveBridgeTest, PlaybackModeGatesLiveButAllowsPlayback)
 {
   data_recorder::LiveBridge bridge;

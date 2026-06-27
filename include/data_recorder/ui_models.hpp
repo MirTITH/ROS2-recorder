@@ -10,6 +10,7 @@
 #include <QVariantList>
 #include <QVector>
 
+#include <string>
 #include <vector>
 
 #include "data_recorder/config_model.hpp"
@@ -94,6 +95,7 @@ public:
   Q_INVOKABLE void select(int row);
 
   std::vector<TagRecord> exportSelectedTags() const;
+  void setSelectedTags(const std::vector<TagRecord> & tags);
   void clearSelection();  // startSession 时清空（select(-1) 当前是 no-op，故需独立方法）
 
   void set_tags(std::vector<TagEntry> tags);
@@ -101,6 +103,7 @@ public:
 private:
   std::vector<TagEntry> tags_;
   int selected_row_{-1};
+  std::vector<std::string> session_selected_names_;
 };
 
 class EventMarkerModel : public QAbstractListModel
