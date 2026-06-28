@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -46,6 +47,10 @@ public:
 
 private:
   void setup_subscriptions();
+  // 订阅一个 rosbag 话题；发布者尚未被发现则返回 false（留待 try_subscribe_pending 补订）。
+  bool subscribe_rosbag_topic(const std::string & topic_name);
+  // 周期性尝试补订 pending_topics_ 里还没订上的话题（spin 线程上的定时器调用）。
+  void try_subscribe_pending();
   void on_rosbag_message(
     const std::string & topic, const std::string & type,
     std::shared_ptr<rclcpp::SerializedMessage> msg);
@@ -59,6 +64,10 @@ private:
   SessionManager * session_manager_;
 
   std::vector<rclcpp::SubscriptionBase::SharedPtr> subscriptions_;
+  // 构造时发布者未被发现而未订上的 rosbag 话题；resubscribe_timer_ 持续补订。
+  // pending_mutex_ 同时保护 pending_topics_ 与 subscriptions_ 的追加（构造线程 vs spin 线程）。
+  std::set<std::string> pending_topics_;
+  std::mutex pending_mutex_;
   std::map<std::string, TopicRateMonitor> rate_monitors_;
   std::mutex rate_mutex_;
   std::map<std::string, std::pair<int, int>> image_dims_;  // topic -> (w,h)
@@ -88,10 +97,15 @@ private:
   std::shared_ptr<RosbagWriter> rosbag_writer_;
   std::shared_ptr<WriterQueue<std::function<void()>>> rosbag_queue_;
   std::map<std::string, std::shared_ptr<VideoSink>> video_sinks_;
+  // 本会话已在 writer 上 add_topic 过的话题（session_mutex_ 保护）。start_session 预登记开录时
+  // 已有发布者的话题；录制中补订的话题在首帧时懒登记，靠此集合防重复 create_topic。
+  std::set<std::string> registered_topics_;
 
   // live edge / stats 定时器
   rclcpp::TimerBase::SharedPtr stats_timer_;
   rclcpp::TimerBase::SharedPtr live_edge_timer_;
+  // 发现竞态补订定时器（持续运行；pending 为空时近乎 no-op）。
+  rclcpp::TimerBase::SharedPtr resubscribe_timer_;
   std::atomic<double> live_edge_seconds_{0.0};
 };
 

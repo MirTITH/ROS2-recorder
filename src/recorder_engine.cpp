@@ -69,6 +69,11 @@ RecorderEngine::RecorderEngine(
     if (bridge_) { bridge_->push_stats(stats); }
   });
 
+  // 发现竞态补订：构造时（spin 前、node 建好仅数毫秒）DDS 发现远未收敛，很多发布者还没被
+  // 看到。setup_subscriptions 把订不上的话题放入 pending_topics_，这里周期性补订；持续运行
+  // 还能捕获录制开始后才启动/重启的发布者。
+  resubscribe_timer_ = node_->create_wall_timer(500ms, [this]() { try_subscribe_pending(); });
+
   record_start_steady_ns_.store(
     std::chrono::steady_clock::now().time_since_epoch().count());
   live_edge_timer_ = node_->create_wall_timer(33ms, [this]() {
@@ -118,33 +123,60 @@ void RecorderEngine::setup_subscriptions()
         });
       subscriptions_.push_back(sub);
     } else {
-      const std::string topic_name = topic.topic_name;
-      // 类型在订阅时可能未知；用发布者通告的类型。
-      std::string type;
-      const auto eps = node_->get_publishers_info_by_topic(topic_name);
-      if (!eps.empty()) { type = eps.front().topic_type(); }
-      // 暂无发布者，跳过（spec v1：简单处理）。注意：启动后才出现发布者的话题不会被订阅（v1 限制，非 bug）。
-      if (type.empty()) { continue; }
-      // 适配发布者 QoS，否则 BEST_EFFORT 话题订阅不上（RELIABLE 订阅匹配不到 BEST_EFFORT 发布者）。
-      // 与 offered_qos_for() 记录的 QoS 保持一致；保留较深的 KeepLast(100) 队列深度。
-      auto qos = rclcpp::QoS(rclcpp::KeepLast(100));
-      if (!eps.empty()) {
-        const auto pub_qos = eps.front().qos_profile();
-        qos.reliability(pub_qos.reliability());
-        qos.durability(pub_qos.durability());
+      // 此刻（spin 前）发布者多半还没被发现而订不上；放入 pending，由 resubscribe_timer_ 补订。
+      if (!subscribe_rosbag_topic(topic.topic_name)) {
+        std::lock_guard<std::mutex> lock(pending_mutex_);
+        pending_topics_.insert(topic.topic_name);
       }
-      auto sub = node_->create_generic_subscription(
-        topic_name, type, qos,
-        [this, topic_name, type](std::shared_ptr<rclcpp::SerializedMessage> msg) {
-          on_rosbag_message(topic_name, type, msg);
-        });
-      subscriptions_.push_back(sub);
+    }
+  }
+}
+
+bool RecorderEngine::subscribe_rosbag_topic(const std::string & topic_name)
+{
+  // 类型在订阅时可能未知；用发布者通告的类型。没有发布者就订不上，返回 false 等补订。
+  const auto eps = node_->get_publishers_info_by_topic(topic_name);
+  if (eps.empty()) { return false; }
+  const std::string type = eps.front().topic_type();
+  if (type.empty()) { return false; }
+  // 适配发布者 QoS，否则 BEST_EFFORT 话题订阅不上（RELIABLE 订阅匹配不到 BEST_EFFORT 发布者）。
+  // 与 offered_qos_for() 记录的 QoS 保持一致；保留较深的 KeepLast(100) 队列深度。
+  auto qos = rclcpp::QoS(rclcpp::KeepLast(100));
+  const auto pub_qos = eps.front().qos_profile();
+  qos.reliability(pub_qos.reliability());
+  qos.durability(pub_qos.durability());
+  auto sub = node_->create_generic_subscription(
+    topic_name, type, qos,
+    [this, topic_name, type](std::shared_ptr<rclcpp::SerializedMessage> msg) {
+      on_rosbag_message(topic_name, type, msg);
+    });
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    subscriptions_.push_back(sub);
+  }
+  return true;
+}
+
+void RecorderEngine::try_subscribe_pending()
+{
+  std::vector<std::string> todo;
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    todo.assign(pending_topics_.begin(), pending_topics_.end());
+  }
+  for (const auto & topic_name : todo) {
+    if (subscribe_rosbag_topic(topic_name)) {
+      {
+        std::lock_guard<std::mutex> lock(pending_mutex_);
+        pending_topics_.erase(topic_name);
+      }
+      std::cerr << "[RecorderEngine] 补订成功: " << topic_name << "\n";
     }
   }
 }
 
 void RecorderEngine::on_rosbag_message(
-  const std::string & topic, const std::string & /*type*/,
+  const std::string & topic, const std::string & type,
   std::shared_ptr<rclcpp::SerializedMessage> msg)
 {
   const int64_t now_ns = node_->now().nanoseconds();
@@ -162,12 +194,25 @@ void RecorderEngine::on_rosbag_message(
   // 保证 worker 线程执行 write 时 writer 仍存活。
   std::shared_ptr<WriterQueue<std::function<void()>>> queue;
   std::shared_ptr<RosbagWriter> writer;
+  bool need_register = false;
   {
     std::lock_guard<std::mutex> lock(session_mutex_);
     queue = rosbag_queue_;
     writer = rosbag_writer_;
+    // 录制中补订的话题，start_session 没 add_topic 过：首帧时补登记（防重复，故用 insert 的返回值）。
+    if (queue && writer) { need_register = registered_topics_.insert(topic).second; }
   }
   if (queue && writer) {
+    // 首次见到该话题：把 add_topic 任务排在 write 之前入队。队列是单 worker FIFO，
+    // 既保证 rosbag2 要求的 create-before-write，又让所有 writer 调用都在该 worker 线程上串行。
+    if (need_register) {
+      const std::string topic_reg = topic;
+      const std::string type_reg = type;
+      const std::string qos_reg = offered_qos_for(topic);
+      queue->push([writer, topic_reg, type_reg, qos_reg]() {
+        writer->add_topic(topic_reg, type_reg, qos_reg);
+      });
+    }
     // 拷贝序列化消息进闭包（生命周期安全），入队到 writer 线程。
     auto serialized = std::make_shared<rclcpp::SerializedMessage>(*msg);
     const std::string topic_copy = topic;
@@ -241,12 +286,16 @@ std::string RecorderEngine::start_session()
     rosbag_writer_.reset();
     return "";
   }
+  // 预登记开录时已有发布者的话题（即便整段会话 0 消息也会出现在 bag metadata 里）。
+  // 录制中才补订的话题不在此列，由 on_rosbag_message 首帧懒登记；registered_topics_ 两边共用、防重复。
+  registered_topics_.clear();
   for (const auto & topic : config_.topics) {
     if (topic.backend_name != "video" && topic.ui_category != TopicUiCategory::CameraPreview) {
       const auto eps = node_->get_publishers_info_by_topic(topic.topic_name);
       std::string type = eps.empty() ? "" : eps.front().topic_type();
       if (!type.empty()) {
         rosbag_writer_->add_topic(topic.topic_name, type, offered_qos_for(topic.topic_name));
+        registered_topics_.insert(topic.topic_name);
       }
     }
   }

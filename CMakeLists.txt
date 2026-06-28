@@ -155,6 +155,10 @@ if(BUILD_TESTING)
   ament_add_gtest(test_rosbag_writer test/test_rosbag_writer.cpp)
   target_link_libraries(test_rosbag_writer data_recorder_core)
   ament_target_dependencies(test_rosbag_writer rclcpp rosbag2_cpp std_msgs)
+
+  ament_add_gtest(test_recorder_engine_subscription test/test_recorder_engine_subscription.cpp)
+  target_link_libraries(test_recorder_engine_subscription data_recorder_core)
+  ament_target_dependencies(test_recorder_engine_subscription rclcpp std_msgs)
 endif()
 
 ament_package()
