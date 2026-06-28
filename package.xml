@@ -17,6 +17,8 @@
   <depend>rosbag2_transport</depend>
   <depend>pluginlib</depend>
   <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>trajectory_msgs</depend>
   <depend>libavcodec-dev</depend>
   <depend>libavformat-dev</depend>
   <depend>libavutil-dev</depend>

@@ -19,6 +19,8 @@ find_package(rosbag2_storage REQUIRED)
 find_package(rosbag2_transport REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(trajectory_msgs REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
   libavcodec libavformat libavutil libswscale)
@@ -80,7 +82,7 @@ target_link_libraries(data_recorder_core
   Qt6::QuickControls2
   Qt6::Charts
 )
-ament_target_dependencies(data_recorder_core rclcpp ament_index_cpp rosbag2_cpp rosbag2_storage pluginlib rosbag2_transport sensor_msgs)
+ament_target_dependencies(data_recorder_core rclcpp ament_index_cpp rosbag2_cpp rosbag2_storage pluginlib rosbag2_transport sensor_msgs geometry_msgs trajectory_msgs)
 
 add_executable(data_recorder src/data_recorder.cpp)
 target_link_libraries(data_recorder data_recorder_core)
@@ -160,7 +162,7 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_value_extractor test/test_value_extractor.cpp)
   target_link_libraries(test_value_extractor data_recorder_core)
-  ament_target_dependencies(test_value_extractor rclcpp)
+  ament_target_dependencies(test_value_extractor rclcpp sensor_msgs geometry_msgs trajectory_msgs)
 
   ament_add_gtest(test_recorder_engine_subscription test/test_recorder_engine_subscription.cpp)
   target_link_libraries(test_recorder_engine_subscription data_recorder_core)
