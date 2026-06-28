@@ -10,6 +10,7 @@
 #include "data_recorder/recorder_engine.hpp"
 #include "data_recorder/session_manager.hpp"
 #include "data_recorder/session_player.hpp"
+#include "data_recorder/topic_series.hpp"
 
 namespace data_recorder
 {
@@ -56,6 +57,8 @@ AppController::AppController(
     connect(bridge_, &LiveBridge::statsUpdated, this, &AppController::onStatsUpdated);
     connect(bridge_, &LiveBridge::frameReady, this, &AppController::onFrameReady);
     connect(bridge_, &LiveBridge::liveEdgeChanged, this, &AppController::onLiveEdge);
+    connect(bridge_, &LiveBridge::curvesUpdated, this, &AppController::onCurvesUpdated);
+    connect(bridge_, &LiveBridge::topicTypesUpdated, this, &AppController::onTopicTypesUpdated);
   }
 
   player_thread_ = new QThread(this);
@@ -546,6 +549,46 @@ void AppController::onStatsUpdated(const QVariantList & stats)
     const QString key = m.value("topicKey").toString();
     topic_model_.updateStats(key, m.value("hz").toDouble(),
       m.value("width").toInt(), m.value("height").toInt());
+  }
+}
+
+void AppController::onTopicTypesUpdated(const QVariantList & types)
+{
+  for (const auto & v : types) {
+    const auto m = v.toMap();
+    topic_model_.updateTopicType(
+      m.value("topicKey").toString(), m.value("rosType").toString());
+  }
+}
+
+void AppController::onCurvesUpdated(const QVariantList & topics)
+{
+  for (const auto & v : topics) {
+    const auto m = v.toMap();
+    const QString topic_key = m.value("topicKey").toString();
+
+    std::vector<double> dots;
+    const auto dot_list = m.value("messageDots").toList();
+    dots.reserve(static_cast<std::size_t>(dot_list.size()));
+    for (const auto & d : dot_list) { dots.push_back(d.toDouble()); }
+    topic_model_.updateMessageDots(topic_key, dots);
+
+    std::vector<TopicSeries::SeriesSnapshot> series;
+    const auto series_list = m.value("series").toList();
+    series.reserve(static_cast<std::size_t>(series_list.size()));
+    for (const auto & s : series_list) {
+      const auto sm = s.toMap();
+      TopicSeries::SeriesSnapshot snap;
+      snap.key = sm.value("key").toString().toStdString();
+      const auto pts = sm.value("points").toList();
+      snap.points.reserve(static_cast<std::size_t>(pts.size()));
+      for (const auto & p : pts) {
+        const auto pm = p.toMap();
+        snap.points.emplace_back(pm.value("x").toDouble(), pm.value("y").toDouble());
+      }
+      series.push_back(std::move(snap));
+    }
+    topic_model_.updateSeries(topic_key, series);
   }
 }
 

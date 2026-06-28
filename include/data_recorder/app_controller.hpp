@@ -90,6 +90,9 @@ public:
 
   bool eventFilter(QObject * watched, QEvent * event) override;
 
+  void onCurvesUpdated(const QVariantList & topics);
+  void onTopicTypesUpdated(const QVariantList & types);
+
 signals:
   void statusTextChanged();
   void recordingChanged();

@@ -499,6 +499,73 @@ TEST(AppController, ExposesExpandAndSeriesVisibilityToModel)
   EXPECT_NO_FATAL_FAILURE(controller.setSeriesVisible("/joint_states", "pos/a", false));
 }
 
+TEST(AppController, OnTopicTypesUpdatedMarksPlottable)
+{
+  auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+  auto * model = controller.topicModel();
+
+  int joint_row = -1;
+  for (int r = 0; r < model->rowCount(); ++r) {
+    if (model->data(model->index(r, 0), data_recorder::TopicListModel::TopicNameRole)
+        .toString() == "/joint_states") { joint_row = r; break; }
+  }
+  ASSERT_GE(joint_row, 0);
+
+  QVariantMap t;
+  t.insert("topicKey", "/joint_states");
+  t.insert("rosType", "sensor_msgs/msg/JointState");
+  controller.onTopicTypesUpdated(QVariantList{t});
+
+  EXPECT_TRUE(
+    model->data(model->index(joint_row, 0), data_recorder::TopicListModel::IsPlottableRole)
+      .toBool());
+}
+
+TEST(AppController, OnCurvesUpdatedFillsDotsAndSeries)
+{
+  auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+  auto * model = controller.topicModel();
+
+  int joint_row = -1;
+  for (int r = 0; r < model->rowCount(); ++r) {
+    if (model->data(model->index(r, 0), data_recorder::TopicListModel::TopicNameRole)
+        .toString() == "/joint_states") { joint_row = r; break; }
+  }
+  ASSERT_GE(joint_row, 0);
+
+  QVariantMap point;
+  point.insert("x", 0.5);
+  point.insert("y", 1.25);
+  QVariantMap series;
+  series.insert("key", "pos/a");
+  series.insert("points", QVariantList{point});
+  QVariantMap topic;
+  topic.insert("topicKey", "/joint_states");
+  topic.insert("messageDots", QVariantList{0.5, 1.0});
+  topic.insert("series", QVariantList{series});
+
+  controller.onCurvesUpdated(QVariantList{topic});
+
+  const auto dots =
+    model->data(model->index(joint_row, 0), data_recorder::TopicListModel::MessageDotsRole)
+      .toList();
+  ASSERT_EQ(dots.size(), 2);
+  EXPECT_DOUBLE_EQ(dots[0].toDouble(), 0.5);
+
+  const auto list =
+    model->data(model->index(joint_row, 0), data_recorder::TopicListModel::SeriesListRole)
+      .toList();
+  ASSERT_EQ(list.size(), 1);
+  const auto entry = list[0].toMap();
+  EXPECT_EQ(entry.value("key").toString().toStdString(), "pos/a");
+  const auto pts = entry.value("points").toList();
+  ASSERT_EQ(pts.size(), 1);
+  EXPECT_DOUBLE_EQ(pts[0].toMap().value("x").toDouble(), 0.5);
+  EXPECT_DOUBLE_EQ(pts[0].toMap().value("y").toDouble(), 1.25);
+}
+
 TEST(TopicListModel, UpdateStatsBackfillsFrequencyAndResolution)
 {
   data_recorder::TopicListModel model;
