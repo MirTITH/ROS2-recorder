@@ -16,6 +16,8 @@
 #include "data_recorder/recorder_types.hpp"
 #include "data_recorder/rosbag_writer.hpp"
 #include "data_recorder/topic_rate_monitor.hpp"
+#include "data_recorder/topic_series.hpp"
+#include "data_recorder/value_extractor.hpp"
 #include "data_recorder/video_recorder.hpp"
 #include "data_recorder/writer_queue.hpp"
 
@@ -73,6 +75,13 @@ private:
   std::map<std::string, std::pair<int, int>> image_dims_;  // topic -> (w,h)
   std::mutex dims_mutex_;
 
+  // 数值曲线核心：registry 判可绘制 + 每 topic 时间序列缓冲。
+  ValueExtractorRegistry extractor_registry_;
+  std::map<std::string, TopicSeries> series_;        // topic -> 缓冲
+  std::map<std::string, std::string> topic_types_;   // topic -> ROS 类型（首见记录）
+  std::set<std::string> announced_types_;            // 已推过类型的 topic（防重复）
+  std::mutex series_mutex_;                           // 保护以上四者（spin 写，timer 读）
+
   // 一路相机的视频 sink：队列 + 懒建 recorder（首帧定尺寸）。
   struct VideoSink
   {
@@ -104,6 +113,8 @@ private:
   // live edge / stats 定时器
   rclcpp::TimerBase::SharedPtr stats_timer_;
   rclcpp::TimerBase::SharedPtr live_edge_timer_;
+  // 数值曲线快照推送定时器（~5 Hz）。
+  rclcpp::TimerBase::SharedPtr curves_timer_;
   // 发现竞态补订定时器（持续运行；pending 为空时近乎 no-op）。
   rclcpp::TimerBase::SharedPtr resubscribe_timer_;
   std::atomic<double> live_edge_seconds_{0.0};

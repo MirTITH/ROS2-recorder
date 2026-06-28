@@ -1,6 +1,9 @@
 #include "data_recorder/recorder_engine.hpp"
 
 #include <QImage>
+#include <QString>
+#include <QVariantList>
+#include <QVariantMap>
 
 #include <chrono>
 #include <ctime>
@@ -49,6 +52,7 @@ RecorderEngine::RecorderEngine(
 : node_(node), config_(std::move(config)), bridge_(bridge), session_manager_(session_manager)
 {
   setup_subscriptions();
+  register_builtin_extractors(extractor_registry_);
 
   stats_timer_ = node_->create_wall_timer(500ms, [this]() {
     std::vector<TopicStats> stats;
@@ -82,6 +86,51 @@ RecorderEngine::RecorderEngine(
     const double seconds = static_cast<double>(elapsed_ns) / 1e9;
     live_edge_seconds_.store(seconds);
     if (bridge_) { bridge_->set_live_edge(seconds); }
+  });
+
+  // 数值曲线快照推送（5 Hz）：把每 topic 的折叠点 + 抽稀曲线打成 QVariant 交 LiveBridge。
+  curves_timer_ = node_->create_wall_timer(200ms, [this]() {
+    if (!bridge_) { return; }
+    QVariantList topics;
+    QVariantList new_types;
+    {
+      std::lock_guard<std::mutex> lock(series_mutex_);
+      for (auto & [topic, type] : topic_types_) {
+        if (announced_types_.insert(topic).second) {
+          QVariantMap tm;
+          tm.insert("topicKey", QString::fromStdString(topic));
+          tm.insert("rosType", QString::fromStdString(type));
+          new_types.push_back(tm);
+        }
+      }
+      for (auto & [topic, buffer] : series_) {
+        QVariantMap topic_map;
+        topic_map.insert("topicKey", QString::fromStdString(topic));
+
+        QVariantList dots;
+        for (const double t : buffer.message_times(/*budget=*/2000)) { dots.push_back(t); }
+        topic_map.insert("messageDots", dots);
+
+        QVariantList series_arr;
+        for (const auto & snap : buffer.snapshot(/*budget=*/2000)) {
+          QVariantMap series_map;
+          series_map.insert("key", QString::fromStdString(snap.key));
+          QVariantList points;
+          for (const auto & p : snap.points) {
+            QVariantMap pt;
+            pt.insert("x", p.first);
+            pt.insert("y", p.second);
+            points.push_back(pt);
+          }
+          series_map.insert("points", points);
+          series_arr.push_back(series_map);
+        }
+        topic_map.insert("series", series_arr);
+        topics.push_back(topic_map);
+      }
+    }
+    if (!new_types.isEmpty()) { bridge_->push_topic_types(new_types); }
+    if (!topics.isEmpty()) { bridge_->push_curves(topics); }
   });
 }
 
@@ -185,6 +234,22 @@ void RecorderEngine::on_rosbag_message(
     auto it = rate_monitors_.find(topic);
     if (it != rate_monitors_.end()) { it->second.record(now_ns); }
   }
+
+  // 数值曲线：记折叠点；可绘制类型则反序列化提取标量。用 live edge 秒做时间轴（与播放头同源）。
+  const double t_seconds = live_edge_seconds_.load();
+  {
+    std::lock_guard<std::mutex> lock(series_mutex_);
+    topic_types_.emplace(topic, type);
+    auto & buffer = series_[topic];
+    buffer.add_message_time(t_seconds);
+    const ValueExtractor * extractor = extractor_registry_.get(type);
+    if (extractor != nullptr) {
+      for (const auto & sample : extractor->extract(*msg)) {
+        buffer.add_sample(sample.series_key, t_seconds, sample.value);
+      }
+    }
+  }
+
   if (!recording_.load()) { return; }
 
   // 在锁内只取 queue/writer 的 shared_ptr 本地副本，随即释放 session_mutex_，
