@@ -178,6 +178,8 @@ ColumnLayout {
                         width: trackLaneColumn.width
                         trackKind: model.trackKind
                         seriesList: model.seriesList
+                        isExpanded: model.isExpanded
+                        messageDots: model.messageDots
                         xMax: root.effectiveDurationSeconds
                         visibleStartSeconds: viewport.visibleStartSeconds
                         visibleDurationSeconds: viewport.boundedVisibleDuration

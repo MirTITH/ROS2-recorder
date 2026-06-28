@@ -138,9 +138,22 @@ ColumnLayout {
                     backendName: model.backendName
                     isVisible: model.isVisible
                     isCamera: model.isCamera
+                    isExpanded: model.isExpanded
+                    isPlottable: model.isPlottable
+                    seriesList: model.seriesList
                     onToggleVisibleRequested: {
                         if (root.controller && root.controller.toggleTopicVisible) {
                             root.controller.toggleTopicVisible(index)
+                        }
+                    }
+                    onToggleExpandRequested: {
+                        if (root.controller && root.controller.setTopicExpanded) {
+                            root.controller.setTopicExpanded(model.topicName, !model.isExpanded)
+                        }
+                    }
+                    onSeriesVisibilityRequested: function(seriesKey, visible) {
+                        if (root.controller && root.controller.setSeriesVisible) {
+                            root.controller.setSeriesVisible(model.topicName, seriesKey, visible)
                         }
                     }
                 }
