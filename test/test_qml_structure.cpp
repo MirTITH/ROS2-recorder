@@ -367,3 +367,26 @@ TEST(QmlStructure, TimelineViewportRenderingRulesAreExplicit)
   expect_contains(range_text, "mapToItem(track");
   expect_contains(range_text, "pressTrackX");
 }
+
+TEST(QmlStructure, TimelineRowsSupportExpandCollapseCurves)
+{
+  const std::string info = read_text(qml_dir() / "components" / "TimelineInfoRow.qml");
+  expect_contains(info, "expandToggleButton");
+  expect_contains(info, "toggleExpandRequested");
+  expect_contains(info, "seriesVisibilityRequested");
+  expect_contains(info, "isExpanded ? 120 : 32");
+
+  const std::string track = read_text(qml_dir() / "components" / "TimelineTrackRow.qml");
+  expect_contains(track, "dotsCanvas");
+  expect_contains(track, "messageDots");
+  expect_contains(track, "entry.visible === false");
+  expect_contains(track, "isExpanded ? 120 : 32");
+
+  const std::string info_col = read_text(qml_dir() / "components" / "TrackInfoColumn.qml");
+  expect_contains(info_col, "setTopicExpanded");
+  expect_contains(info_col, "setSeriesVisible");
+
+  const std::string lane_col = read_text(qml_dir() / "components" / "TrackLaneColumn.qml");
+  expect_contains(lane_col, "messageDots");
+  expect_contains(lane_col, "isExpanded");
+}
