@@ -1,6 +1,7 @@
 #include "data_recorder/app_controller.hpp"
 
 #include <QKeyEvent>
+#include <QStringList>
 
 #include <algorithm>
 #include <cctype>
@@ -10,6 +11,7 @@
 #include "data_recorder/recorder_engine.hpp"
 #include "data_recorder/session_manager.hpp"
 #include "data_recorder/session_player.hpp"
+#include "data_recorder/history_curve_loader.hpp"
 #include "data_recorder/topic_series.hpp"
 
 namespace data_recorder
@@ -82,6 +84,16 @@ AppController::AppController(
     });
   player_thread_->start();
 
+  curve_loader_thread_ = new QThread(this);
+  curve_loader_ = new HistoryCurveLoader();
+  curve_loader_->moveToThread(curve_loader_thread_);
+  connect(curve_loader_thread_, &QThread::finished, curve_loader_, &QObject::deleteLater);
+  connect(curve_loader_, &HistoryCurveLoader::curvesReady,
+    this, &AppController::onCurvesUpdated);
+  connect(curve_loader_, &HistoryCurveLoader::topicTypesReady,
+    this, &AppController::onTopicTypesUpdated);
+  curve_loader_thread_->start();
+
   refreshSessions();  // 启动扫描
 }
 
@@ -90,6 +102,10 @@ AppController::~AppController()
   if (player_thread_) {
     player_thread_->quit();
     player_thread_->wait();
+  }
+  if (curve_loader_thread_) {
+    curve_loader_thread_->quit();
+    curve_loader_thread_->wait();
   }
 }
 
@@ -370,6 +386,18 @@ void AppController::selectHistorySession(int row)
       QMetaObject::invokeMethod(player_, [p = player_, session] { p->load(session); },
         Qt::QueuedConnection);
     }
+    if (curve_loader_) {
+      QStringList topic_names;
+      for (const auto & e : session_topics) {
+        topic_names.push_back(QString::fromStdString(e.topic_name));
+      }
+      const QString dir = QString::fromStdString(session.directory);
+      QMetaObject::invokeMethod(curve_loader_,
+        [loader = curve_loader_, dir, topic_names] {
+          loader->scanTimestamps(dir, topic_names);
+        },
+        Qt::QueuedConnection);
+    }
   }
 }
 
@@ -468,6 +496,18 @@ void AppController::toggleTopicVisible(int row)
 void AppController::setTopicExpanded(const QString & topic_key, bool expanded)
 {
   topic_model_.setExpanded(topic_key, expanded);
+  if (expanded && history_mode_ && curve_loader_ &&
+    selected_session_row_ >= 0 &&
+    selected_session_row_ < static_cast<int>(scanned_sessions_.size()))
+  {
+    const QString dir = QString::fromStdString(
+      scanned_sessions_[static_cast<std::size_t>(selected_session_row_)].directory);
+    QMetaObject::invokeMethod(curve_loader_,
+      [loader = curve_loader_, dir, topic_key] {
+        loader->extractTopic(dir, topic_key);
+      },
+      Qt::QueuedConnection);
+  }
 }
 
 void AppController::setSeriesVisible(

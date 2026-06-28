@@ -22,6 +22,7 @@ class LiveBridge;
 class RecorderEngine;
 class SessionManager;
 class SessionPlayer;
+class HistoryCurveLoader;
 
 class AppController : public QObject
 {
@@ -120,6 +121,8 @@ private:
   SessionManager * session_manager_{nullptr};
   SessionPlayer * player_{nullptr};
   QThread * player_thread_{nullptr};
+  HistoryCurveLoader * curve_loader_{nullptr};
+  QThread * curve_loader_thread_{nullptr};
   std::vector<SessionRecord> scanned_sessions_;
   std::vector<TopicEntry> live_topics_;
   bool playing_{false};
