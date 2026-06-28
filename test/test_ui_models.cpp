@@ -466,6 +466,39 @@ TEST(TopicListModel, SeriesColorStablePerKey)
   EXPECT_EQ(find_series(list2, "force.y").value("color").toString(), color_y_1);
 }
 
+TEST(AppController, ExposesExpandAndSeriesVisibilityToModel)
+{
+  auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+  auto * model = controller.topicModel();
+  ASSERT_NE(model, nullptr);
+
+  // 找到 /joint_states 行
+  int joint_row = -1;
+  for (int r = 0; r < model->rowCount(); ++r) {
+    if (model->data(model->index(r, 0), data_recorder::TopicListModel::TopicNameRole)
+        .toString() == "/joint_states") {
+      joint_row = r;
+      break;
+    }
+  }
+  ASSERT_GE(joint_row, 0);
+
+  controller.setTopicExpanded("/joint_states", true);
+  EXPECT_TRUE(
+    model->data(model->index(joint_row, 0), data_recorder::TopicListModel::IsExpandedRole)
+      .toBool());
+
+  // registry 已注入：joint_states 类型已知后可绘制
+  model->updateTopicType("/joint_states", "sensor_msgs/msg/JointState");
+  EXPECT_TRUE(
+    model->data(model->index(joint_row, 0), data_recorder::TopicListModel::IsPlottableRole)
+      .toBool());
+
+  // setSeriesVisible 透传不崩（无 series 时安全无操作）
+  EXPECT_NO_FATAL_FAILURE(controller.setSeriesVisible("/joint_states", "pos/a", false));
+}
+
 TEST(TopicListModel, UpdateStatsBackfillsFrequencyAndResolution)
 {
   data_recorder::TopicListModel model;

@@ -40,6 +40,8 @@ AppController::AppController(
     });
 
   topic_model_.set_topics(config.topics);
+  register_builtin_extractors(extractor_registry_);
+  topic_model_.set_extractor_registry(&extractor_registry_);
   live_topics_ = config.topics;
   visible_camera_count_ = camera_grid_model_.rowCount();
 
@@ -458,6 +460,17 @@ bool AppController::triggerMarkerShortcut(const QString & shortcut)
 void AppController::toggleTopicVisible(int row)
 {
   topic_model_.toggleVisible(row);
+}
+
+void AppController::setTopicExpanded(const QString & topic_key, bool expanded)
+{
+  topic_model_.setExpanded(topic_key, expanded);
+}
+
+void AppController::setSeriesVisible(
+  const QString & topic_key, const QString & series_key, bool visible)
+{
+  topic_model_.setSeriesVisible(topic_key, series_key, visible);
 }
 
 bool AppController::eventFilter(QObject * watched, QEvent * event)

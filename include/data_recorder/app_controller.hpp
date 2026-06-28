@@ -13,6 +13,7 @@ class QEvent;
 #include "data_recorder/config_model.hpp"
 #include "data_recorder/recorder_types.hpp"
 #include "data_recorder/ui_models.hpp"
+#include "data_recorder/value_extractor.hpp"
 
 namespace data_recorder
 {
@@ -83,6 +84,9 @@ public:
   Q_INVOKABLE void detachFromLiveEdge();
   Q_INVOKABLE bool triggerMarkerShortcut(const QString & shortcut);
   Q_INVOKABLE void toggleTopicVisible(int row);
+  Q_INVOKABLE void setTopicExpanded(const QString & topic_key, bool expanded);
+  Q_INVOKABLE void setSeriesVisible(
+    const QString & topic_key, const QString & series_key, bool visible);
 
   bool eventFilter(QObject * watched, QEvent * event) override;
 
@@ -128,6 +132,7 @@ private:
   bool following_live_edge_{false};
   int visible_camera_count_{0};
   TopicListModel topic_model_;
+  ValueExtractorRegistry extractor_registry_;
   CameraGridModel camera_grid_model_;
   TagListModel tag_model_;
   EventMarkerModel event_marker_model_;
