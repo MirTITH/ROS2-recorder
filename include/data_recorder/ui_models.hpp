@@ -41,6 +41,7 @@ public:
     FrameSeqRole,
     IsExpandedRole,
     IsPlottableRole,
+    MessageDotsRole,
   };
 
   explicit TopicListModel(QObject * parent = nullptr);
@@ -63,6 +64,7 @@ public:
   void setExpanded(const QString & topic_key, bool expanded);
   void set_extractor_registry(const ValueExtractorRegistry * registry);
   void updateTopicType(const QString & topic_key, const QString & ros_type);
+  void updateMessageDots(const QString & topic_key, const std::vector<double> & seconds);
 
 private:
   struct TopicRow
@@ -79,6 +81,7 @@ private:
     int frame_seq{0};
     bool is_expanded{false};
     bool is_plottable{false};
+    QVariantList message_dots;
   };
 
   std::vector<TopicRow> topics_;

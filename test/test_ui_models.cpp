@@ -309,6 +309,42 @@ TEST(TopicListModel, IsPlottableFalseWithoutRegistry)
     model.data(model.index(0, 0), data_recorder::TopicListModel::IsPlottableRole).toBool());
 }
 
+TEST(TopicListModel, UpdateMessageDotsExposesTimestamps)
+{
+  data_recorder::TopicEntry topic;
+  topic.topic_name = "/joint_states";
+  topic.backend_name = "rosbag";
+
+  data_recorder::TopicListModel model;
+  model.set_topics({topic});
+
+  EXPECT_TRUE(
+    model.data(model.index(0, 0), data_recorder::TopicListModel::MessageDotsRole)
+      .toList().isEmpty());
+
+  int signal_count = 0;
+  QVector<int> changed_roles;
+  QObject::connect(
+    &model, &QAbstractItemModel::dataChanged,
+    [&](const QModelIndex &, const QModelIndex &, const QList<int> & roles) {
+      ++signal_count;
+      changed_roles = roles;
+    });
+
+  model.updateMessageDots("/joint_states", {0.0, 1.5, 3.0});
+  const auto dots =
+    model.data(model.index(0, 0), data_recorder::TopicListModel::MessageDotsRole).toList();
+  ASSERT_EQ(dots.size(), 3);
+  EXPECT_DOUBLE_EQ(dots[0].toDouble(), 0.0);
+  EXPECT_DOUBLE_EQ(dots[2].toDouble(), 3.0);
+  EXPECT_EQ(signal_count, 1);
+  EXPECT_TRUE(changed_roles.contains(data_recorder::TopicListModel::MessageDotsRole));
+
+  // 未知 topic 安全无操作
+  model.updateMessageDots("/nope", {9.0});
+  EXPECT_EQ(signal_count, 1);
+}
+
 TEST(TopicListModel, UpdateStatsBackfillsFrequencyAndResolution)
 {
   data_recorder::TopicListModel model;

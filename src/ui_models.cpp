@@ -110,6 +110,8 @@ QVariant TopicListModel::data(const QModelIndex & index, int role) const
       return row.is_expanded;
     case IsPlottableRole:
       return row.is_plottable;
+    case MessageDotsRole:
+      return row.message_dots;
     default:
       return {};
   }
@@ -158,6 +160,7 @@ QHash<int, QByteArray> TopicListModel::roleNames() const
     {FrameSeqRole, "frameSeq"},
     {IsExpandedRole, "isExpanded"},
     {IsPlottableRole, "isPlottable"},
+    {MessageDotsRole, "messageDots"},
   };
 }
 
@@ -233,6 +236,22 @@ void TopicListModel::updateTopicType(const QString & topic_key, const QString & 
     row.is_plottable = plottable;
     const auto idx = index(static_cast<int>(i), 0);
     emit dataChanged(idx, idx, {IsPlottableRole});
+    return;
+  }
+}
+
+void TopicListModel::updateMessageDots(
+  const QString & topic_key, const std::vector<double> & seconds)
+{
+  for (std::size_t i = 0; i < topics_.size(); ++i) {
+    auto & row = topics_[i];
+    if (QString::fromStdString(row.topic.topic_name) != topic_key) { continue; }
+    QVariantList dots;
+    dots.reserve(static_cast<int>(seconds.size()));
+    for (const double t : seconds) { dots.append(t); }
+    row.message_dots = std::move(dots);
+    const auto idx = index(static_cast<int>(i), 0);
+    emit dataChanged(idx, idx, {MessageDotsRole});
     return;
   }
 }
