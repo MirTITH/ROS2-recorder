@@ -47,6 +47,20 @@ void LiveBridge::set_live_edge(double seconds)
     Q_ARG(double, seconds));
 }
 
+void LiveBridge::push_curves(const QVariantList & topics)
+{
+  if (playback_mode_.load()) { return; }  // 回放模式由历史路径单独驱动
+  QMetaObject::invokeMethod(this, "curvesUpdated", Qt::QueuedConnection,
+    Q_ARG(QVariantList, topics));
+}
+
+void LiveBridge::push_topic_types(const QVariantList & types)
+{
+  if (playback_mode_.load()) { return; }
+  QMetaObject::invokeMethod(this, "topicTypesUpdated", Qt::QueuedConnection,
+    Q_ARG(QVariantList, types));
+}
+
 std::shared_ptr<const QImage> LiveBridge::latest_frame(const QString & topic_key) const
 {
   std::lock_guard<std::mutex> lock(mutex_);

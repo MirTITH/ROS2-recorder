@@ -3,6 +3,7 @@
 #include <QImage>
 #include <QObject>
 #include <QString>
+#include <QVariantList>
 
 #include <atomic>
 #include <map>
@@ -30,6 +31,8 @@ public:
   void set_live_edge(double seconds);
   void push_playback_frame(const QString & topic_key, std::shared_ptr<const QImage> image);
   void set_playback_mode(bool on);
+  void push_curves(const QVariantList & topics);
+  void push_topic_types(const QVariantList & types);
 
   // —— GUI 线程调用（image provider）——
   std::shared_ptr<const QImage> latest_frame(const QString & topic_key) const;
@@ -38,6 +41,8 @@ signals:
   void frameReady(const QString & topic_key, int seq);   // QueuedConnection
   void statsUpdated(const QVariantList & stats);          // QueuedConnection
   void liveEdgeChanged(double seconds);                   // QueuedConnection
+  void curvesUpdated(const QVariantList & topics);        // QueuedConnection
+  void topicTypesUpdated(const QVariantList & types);     // QueuedConnection
 
 private:
   mutable std::mutex mutex_;
