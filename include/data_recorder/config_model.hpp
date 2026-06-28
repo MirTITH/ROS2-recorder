@@ -22,6 +22,7 @@ struct TopicEntry
   std::string backend_name;
   int group_index{};
   TopicUiCategory ui_category{TopicUiCategory::NumericTrack};
+  bool default_expanded{false};
   std::map<std::string, std::string> params;
 };
 

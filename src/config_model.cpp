@@ -96,10 +96,29 @@ ConfigData ConfigModel::load_from_file(const std::string & path) const
 
       for (const auto & topic_node : group_node["topics"]) {
         TopicEntry topic;
-        topic.topic_name = topic_node.as<std::string>();
         topic.backend_name = backend_name;
         topic.group_index = group_index;
         topic.params = params;
+
+        if (topic_node.IsScalar()) {
+          topic.topic_name = topic_node.as<std::string>();
+          topic.default_expanded = false;
+        } else if (topic_node.IsMap()) {
+          if (topic_node.size() != 1) {
+            throw ConfigError("a topic map entry must have exactly one key (the topic name)");
+          }
+          const auto pair = *topic_node.begin();
+          topic.topic_name = pair.first.as<std::string>();
+          const auto & options = pair.second;
+          if (options && options.IsMap() && options["ui_expanded"]) {
+            topic.default_expanded = options["ui_expanded"].as<bool>();
+          } else {
+            topic.default_expanded = false;
+          }
+        } else {
+          throw ConfigError("each topic must be a string or a single-key map");
+        }
+
         topic.ui_category = is_camera_topic(topic.topic_name, topic.backend_name) ?
           TopicUiCategory::CameraPreview : TopicUiCategory::NumericTrack;
 

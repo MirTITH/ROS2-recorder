@@ -119,3 +119,70 @@ TEST(ConfigModel, ThrowsWhenFileMissing)
   const data_recorder::ConfigModel model;
   EXPECT_THROW(model.load_from_file("/tmp/does-not-exist-data-recorder.yaml"), data_recorder::ConfigError);
 }
+
+TEST(ConfigModel, ScalarTopicDefaultsToCollapsed)
+{
+  const auto path = write_temp_config(R"yaml(
+groups:
+  - topics:
+      - /joint_states
+)yaml");
+
+  const data_recorder::ConfigModel model;
+  const auto config = model.load_from_file(path);
+
+  ASSERT_EQ(config.topics.size(), 1u);
+  EXPECT_EQ(config.topics[0].topic_name, "/joint_states");
+  EXPECT_FALSE(config.topics[0].default_expanded);
+}
+
+TEST(ConfigModel, SingleKeyMapReadsUiExpanded)
+{
+  const auto path = write_temp_config(R"yaml(
+groups:
+  - topics:
+      - /tf
+      - /joint_states: { ui_expanded: true }
+      - /wrench: { ui_expanded: false }
+)yaml");
+
+  const data_recorder::ConfigModel model;
+  const auto config = model.load_from_file(path);
+
+  ASSERT_EQ(config.topics.size(), 3u);
+  EXPECT_EQ(config.topics[0].topic_name, "/tf");
+  EXPECT_FALSE(config.topics[0].default_expanded);          // 裸字符串
+  EXPECT_EQ(config.topics[1].topic_name, "/joint_states");
+  EXPECT_TRUE(config.topics[1].default_expanded);           // map ui_expanded: true
+  EXPECT_EQ(config.topics[2].topic_name, "/wrench");
+  EXPECT_FALSE(config.topics[2].default_expanded);          // map ui_expanded: false
+}
+
+TEST(ConfigModel, SingleKeyMapWithoutUiExpandedDefaultsCollapsed)
+{
+  const auto path = write_temp_config(R"yaml(
+groups:
+  - topics:
+      - /joint_states: {}
+)yaml");
+
+  const data_recorder::ConfigModel model;
+  const auto config = model.load_from_file(path);
+
+  ASSERT_EQ(config.topics.size(), 1u);
+  EXPECT_EQ(config.topics[0].topic_name, "/joint_states");
+  EXPECT_FALSE(config.topics[0].default_expanded);
+}
+
+TEST(ConfigModel, MultiKeyTopicMapThrows)
+{
+  const auto path = write_temp_config(R"yaml(
+groups:
+  - topics:
+      - /a: { ui_expanded: true }
+        /b: { ui_expanded: true }
+)yaml");
+
+  const data_recorder::ConfigModel model;
+  EXPECT_THROW(model.load_from_file(path), data_recorder::ConfigError);
+}
