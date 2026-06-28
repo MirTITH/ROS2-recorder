@@ -10,11 +10,13 @@
 #include <QVariantList>
 #include <QVector>
 
+#include <map>
 #include <string>
 #include <vector>
 
 #include "data_recorder/config_model.hpp"
 #include "data_recorder/recorder_types.hpp"
+#include "data_recorder/topic_series.hpp"
 
 namespace data_recorder
 {
@@ -65,6 +67,10 @@ public:
   void set_extractor_registry(const ValueExtractorRegistry * registry);
   void updateTopicType(const QString & topic_key, const QString & ros_type);
   void updateMessageDots(const QString & topic_key, const std::vector<double> & seconds);
+  void updateSeries(
+    const QString & topic_key,
+    const std::vector<TopicSeries::SeriesSnapshot> & series);
+  void setSeriesVisible(const QString & topic_key, const QString & series_key, bool visible);
 
 private:
   struct TopicRow
@@ -82,6 +88,10 @@ private:
     bool is_expanded{false};
     bool is_plottable{false};
     QVariantList message_dots;
+    // 按 series_key 稳定保留的 UI 状态，跨 updateSeries 刷新不丢。
+    std::map<std::string, bool> series_visible_override;
+    std::map<std::string, int> series_color_index;
+    int next_color_index{0};
   };
 
   std::vector<TopicRow> topics_;

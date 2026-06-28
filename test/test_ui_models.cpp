@@ -345,6 +345,127 @@ TEST(TopicListModel, UpdateMessageDotsExposesTimestamps)
   EXPECT_EQ(signal_count, 1);
 }
 
+namespace
+{
+QVariantMap find_series(const QVariantList & list, const QString & key)
+{
+  for (const auto & v : list) {
+    const auto m = v.toMap();
+    if (m.value("key").toString() == key) { return m; }
+  }
+  return {};
+}
+}  // namespace
+
+TEST(TopicListModel, UpdateSeriesBuildsStructuredEntries)
+{
+  data_recorder::TopicEntry topic;
+  topic.topic_name = "/joint_states";
+  topic.backend_name = "rosbag";
+
+  data_recorder::TopicListModel model;
+  model.set_topics({topic});
+
+  std::vector<data_recorder::TopicSeries::SeriesSnapshot> snap;
+  snap.push_back({"pos/a", {{0.0, 1.0}, {1.0, 2.0}}});
+  snap.push_back({"vel/a", {{0.0, 0.5}}});
+  model.updateSeries("/joint_states", snap);
+
+  const auto list =
+    model.data(model.index(0, 0), data_recorder::TopicListModel::SeriesListRole).toList();
+  ASSERT_EQ(list.size(), 2);
+
+  const auto pos = find_series(list, "pos/a");
+  ASSERT_FALSE(pos.isEmpty());
+  EXPECT_EQ(pos.value("label").toString().toStdString(), "pos/a");
+  EXPECT_TRUE(pos.value("visible").toBool());               // 默认可见
+  const auto pts = pos.value("points").toList();
+  ASSERT_EQ(pts.size(), 2);
+  EXPECT_DOUBLE_EQ(pts[0].toMap().value("x").toDouble(), 0.0);
+  EXPECT_DOUBLE_EQ(pts[0].toMap().value("y").toDouble(), 1.0);
+  EXPECT_DOUBLE_EQ(pts[1].toMap().value("x").toDouble(), 1.0);
+  EXPECT_DOUBLE_EQ(pts[1].toMap().value("y").toDouble(), 2.0);
+  const auto color = pos.value("color").toString();
+  EXPECT_TRUE(color.startsWith("#"));
+
+  const auto vel = find_series(list, "vel/a");
+  ASSERT_FALSE(vel.isEmpty());
+  EXPECT_FALSE(vel.value("visible").toBool());              // vel/ 默认隐藏
+}
+
+TEST(TopicListModel, SetSeriesVisiblePersistsAcrossUpdate)
+{
+  data_recorder::TopicEntry topic;
+  topic.topic_name = "/joint_states";
+  topic.backend_name = "rosbag";
+
+  data_recorder::TopicListModel model;
+  model.set_topics({topic});
+
+  std::vector<data_recorder::TopicSeries::SeriesSnapshot> snap;
+  snap.push_back({"pos/a", {{0.0, 1.0}}});
+  model.updateSeries("/joint_states", snap);
+
+  int signal_count = 0;
+  QVector<int> changed_roles;
+  QObject::connect(
+    &model, &QAbstractItemModel::dataChanged,
+    [&](const QModelIndex &, const QModelIndex &, const QList<int> & roles) {
+      ++signal_count;
+      changed_roles = roles;
+    });
+
+  model.setSeriesVisible("/joint_states", "pos/a", false);
+  EXPECT_EQ(signal_count, 1);
+  EXPECT_TRUE(changed_roles.contains(data_recorder::TopicListModel::SeriesListRole));
+  {
+    const auto list =
+      model.data(model.index(0, 0), data_recorder::TopicListModel::SeriesListRole).toList();
+    EXPECT_FALSE(find_series(list, "pos/a").value("visible").toBool());
+  }
+
+  // 再次回填曲线：用户设的隐藏应保留
+  std::vector<data_recorder::TopicSeries::SeriesSnapshot> snap2;
+  snap2.push_back({"pos/a", {{0.0, 1.0}, {2.0, 9.0}}});
+  model.updateSeries("/joint_states", snap2);
+  {
+    const auto list =
+      model.data(model.index(0, 0), data_recorder::TopicListModel::SeriesListRole).toList();
+    EXPECT_FALSE(find_series(list, "pos/a").value("visible").toBool());
+  }
+}
+
+TEST(TopicListModel, SeriesColorStablePerKey)
+{
+  data_recorder::TopicEntry topic;
+  topic.topic_name = "/wrench";
+  topic.backend_name = "rosbag";
+
+  data_recorder::TopicListModel model;
+  model.set_topics({topic});
+
+  std::vector<data_recorder::TopicSeries::SeriesSnapshot> snap;
+  snap.push_back({"force.x", {{0.0, 1.0}}});
+  snap.push_back({"force.y", {{0.0, 2.0}}});
+  model.updateSeries("/wrench", snap);
+  const auto list1 =
+    model.data(model.index(0, 0), data_recorder::TopicListModel::SeriesListRole).toList();
+  const auto color_x_1 = find_series(list1, "force.x").value("color").toString();
+  const auto color_y_1 = find_series(list1, "force.y").value("color").toString();
+  EXPECT_NE(color_x_1, color_y_1);  // 不同 key 不同色
+
+  // 重新回填（含新 key），已有 key 配色不变
+  std::vector<data_recorder::TopicSeries::SeriesSnapshot> snap2;
+  snap2.push_back({"force.x", {{0.0, 1.0}}});
+  snap2.push_back({"force.y", {{0.0, 2.0}}});
+  snap2.push_back({"force.z", {{0.0, 3.0}}});
+  model.updateSeries("/wrench", snap2);
+  const auto list2 =
+    model.data(model.index(0, 0), data_recorder::TopicListModel::SeriesListRole).toList();
+  EXPECT_EQ(find_series(list2, "force.x").value("color").toString(), color_x_1);
+  EXPECT_EQ(find_series(list2, "force.y").value("color").toString(), color_y_1);
+}
+
 TEST(TopicListModel, UpdateStatsBackfillsFrequencyAndResolution)
 {
   data_recorder::TopicListModel model;

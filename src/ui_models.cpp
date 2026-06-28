@@ -61,6 +61,12 @@ bool same_time(double lhs, double rhs)
   return lhs == rhs;
 }
 
+// 默认可见性：速度/力矩（vel/、eff/ 前缀）默认隐藏，其余默认可见。
+bool default_series_visible(const std::string & series_key)
+{
+  return series_key.rfind("vel/", 0) != 0 && series_key.rfind("eff/", 0) != 0;
+}
+
 }  // namespace
 
 TopicListModel::TopicListModel(QObject * parent)
@@ -252,6 +258,86 @@ void TopicListModel::updateMessageDots(
     row.message_dots = std::move(dots);
     const auto idx = index(static_cast<int>(i), 0);
     emit dataChanged(idx, idx, {MessageDotsRole});
+    return;
+  }
+}
+
+void TopicListModel::updateSeries(
+  const QString & topic_key,
+  const std::vector<TopicSeries::SeriesSnapshot> & series)
+{
+  for (std::size_t i = 0; i < topics_.size(); ++i) {
+    auto & row = topics_[i];
+    if (QString::fromStdString(row.topic.topic_name) != topic_key) { continue; }
+
+    QVariantList list;
+    list.reserve(static_cast<int>(series.size()));
+    for (const auto & s : series) {
+      // 配色按 key 稳定分配（首次见到该 key 时占用下一个色位）。
+      auto color_it = row.series_color_index.find(s.key);
+      if (color_it == row.series_color_index.end()) {
+        color_it = row.series_color_index.emplace(s.key, row.next_color_index++).first;
+      }
+      const QString color = QString::fromLatin1(
+        kSeriesColors[static_cast<std::size_t>(color_it->second) % kSeriesColors.size()]);
+
+      // 可见性：用户改过则用覆盖值，否则用默认规则。
+      const auto vis_it = row.series_visible_override.find(s.key);
+      const bool visible = vis_it != row.series_visible_override.end() ?
+        vis_it->second : default_series_visible(s.key);
+
+      QVariantList points;
+      points.reserve(static_cast<int>(s.points.size()));
+      for (const auto & p : s.points) {
+        QVariantMap point;
+        point.insert("x", p.first);
+        point.insert("y", p.second);
+        points.append(point);
+      }
+
+      QVariantMap entry;
+      entry.insert("key", QString::fromStdString(s.key));
+      entry.insert("label", QString::fromStdString(s.key));
+      entry.insert("color", color);
+      entry.insert("visible", visible);
+      entry.insert("points", points);
+      list.append(entry);
+    }
+
+    row.series_list = std::move(list);
+    const auto idx = index(static_cast<int>(i), 0);
+    emit dataChanged(idx, idx, {SeriesListRole});
+    return;
+  }
+}
+
+void TopicListModel::setSeriesVisible(
+  const QString & topic_key, const QString & series_key, bool visible)
+{
+  for (std::size_t i = 0; i < topics_.size(); ++i) {
+    auto & row = topics_[i];
+    if (QString::fromStdString(row.topic.topic_name) != topic_key) { continue; }
+
+    const std::string key = series_key.toStdString();
+    row.series_visible_override[key] = visible;
+
+    // 同步已构建的 seriesList 条目的 visible 字段。
+    bool changed = false;
+    for (auto & v : row.series_list) {
+      auto entry = v.toMap();
+      if (entry.value("key").toString() == series_key) {
+        if (entry.value("visible").toBool() != visible) {
+          entry.insert("visible", visible);
+          v = entry;
+          changed = true;
+        }
+        break;
+      }
+    }
+    if (changed) {
+      const auto idx = index(static_cast<int>(i), 0);
+      emit dataChanged(idx, idx, {SeriesListRole});
+    }
     return;
   }
 }
