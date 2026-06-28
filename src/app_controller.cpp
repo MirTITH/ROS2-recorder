@@ -496,6 +496,15 @@ void AppController::toggleTopicVisible(int row)
 void AppController::setTopicExpanded(const QString & topic_key, bool expanded)
 {
   topic_model_.setExpanded(topic_key, expanded);
+
+  // 维护展开集合并转发给引擎：仅展开的 topic 才接收重的 series 曲线负载（实时卡顿修复）。
+  if (expanded) {
+    expanded_topics_.insert(topic_key.toStdString());
+  } else {
+    expanded_topics_.erase(topic_key.toStdString());
+  }
+  if (engine_) { engine_->set_expanded_topics(expanded_topics_); }
+
   if (expanded && history_mode_ && curve_loader_ &&
     selected_session_row_ >= 0 &&
     selected_session_row_ < static_cast<int>(scanned_sessions_.size()))
@@ -630,6 +639,8 @@ void AppController::onCurvesUpdated(const QVariantList & topics)
     }
     topic_model_.updateSeries(topic_key, series);
   }
+  // 背压复位：本帧曲线已消费，允许引擎推下一帧。
+  if (engine_) { engine_->notify_curves_consumed(); }
 }
 
 void AppController::onFrameReady(const QString & key, int seq)

@@ -31,7 +31,8 @@ public:
   void set_live_edge(double seconds);
   void push_playback_frame(const QString & topic_key, std::shared_ptr<const QImage> image);
   void set_playback_mode(bool on);
-  void push_curves(const QVariantList & topics);
+  // 推曲线负载到 GUI；回放模式下被抑制并返回 false（调用方据此不武装背压）。
+  bool push_curves(const QVariantList & topics);
   void push_topic_types(const QVariantList & types);
 
   // —— GUI 线程调用（image provider）——

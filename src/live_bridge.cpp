@@ -47,11 +47,12 @@ void LiveBridge::set_live_edge(double seconds)
     Q_ARG(double, seconds));
 }
 
-void LiveBridge::push_curves(const QVariantList & topics)
+bool LiveBridge::push_curves(const QVariantList & topics)
 {
-  if (playback_mode_.load()) { return; }  // 回放模式由历史路径单独驱动
+  if (playback_mode_.load()) { return false; }  // 回放模式由历史路径单独驱动
   QMetaObject::invokeMethod(this, "curvesUpdated", Qt::QueuedConnection,
     Q_ARG(QVariantList, topics));
+  return true;
 }
 
 void LiveBridge::push_topic_types(const QVariantList & types)

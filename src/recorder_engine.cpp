@@ -88,9 +88,12 @@ RecorderEngine::RecorderEngine(
     if (bridge_) { bridge_->set_live_edge(seconds); }
   });
 
-  // 数值曲线快照推送（5 Hz）：把每 topic 的折叠点 + 抽稀曲线打成 QVariant 交 LiveBridge。
+  // 数值曲线快照推送（5 Hz）：把每 topic 的折叠点 + （仅展开 topic 的）抽稀曲线打成 QVariant
+  // 交 LiveBridge。背压：上一帧未被 GUI 消费前不推下一帧，防事件堆积致 UI 渐冻。
   curves_timer_ = node_->create_wall_timer(200ms, [this]() {
     if (!bridge_) { return; }
+    if (curves_in_flight_.load()) { return; }  // 背压：GUI 还没消费上一帧
+
     QVariantList topics;
     QVariantList new_types;
     {
@@ -103,34 +106,15 @@ RecorderEngine::RecorderEngine(
           new_types.push_back(tm);
         }
       }
-      for (auto & [topic, buffer] : series_) {
-        QVariantMap topic_map;
-        topic_map.insert("topicKey", QString::fromStdString(topic));
-
-        QVariantList dots;
-        for (const double t : buffer.message_times(/*budget=*/2000)) { dots.push_back(t); }
-        topic_map.insert("messageDots", dots);
-
-        QVariantList series_arr;
-        for (const auto & snap : buffer.snapshot(/*budget=*/2000)) {
-          QVariantMap series_map;
-          series_map.insert("key", QString::fromStdString(snap.key));
-          QVariantList points;
-          for (const auto & p : snap.points) {
-            QVariantMap pt;
-            pt.insert("x", p.first);
-            pt.insert("y", p.second);
-            points.push_back(pt);
-          }
-          series_map.insert("points", points);
-          series_arr.push_back(series_map);
-        }
-        topic_map.insert("series", series_arr);
-        topics.push_back(topic_map);
-      }
+      // 折叠点抽稀到 ~屏幕像素量级；series 仅对展开 topic 发，亦受预算约束。
+      topics = build_curve_payload(
+        series_, expanded_topics_, /*dot_budget=*/600, /*series_budget=*/600);
     }
     if (!new_types.isEmpty()) { bridge_->push_topic_types(new_types); }
-    if (!topics.isEmpty()) { bridge_->push_curves(topics); }
+    if (!topics.isEmpty()) {
+      // 仅当 push 实际被接受（非回放抑制）才武装背压，否则标志会永久卡住。
+      if (bridge_->push_curves(topics)) { curves_in_flight_.store(true); }
+    }
   });
 }
 
@@ -464,6 +448,17 @@ SessionRecord RecorderEngine::stop_session(
 double RecorderEngine::live_edge_seconds() const
 {
   return live_edge_seconds_.load();
+}
+
+void RecorderEngine::set_expanded_topics(const std::set<std::string> & topics)
+{
+  std::lock_guard<std::mutex> lock(series_mutex_);
+  expanded_topics_ = topics;
+}
+
+void RecorderEngine::notify_curves_consumed()
+{
+  curves_in_flight_.store(false);
 }
 
 }  // namespace data_recorder

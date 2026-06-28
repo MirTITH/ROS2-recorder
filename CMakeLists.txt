@@ -31,6 +31,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/camera_grid_model.hpp
   include/data_recorder/camera_image_provider.hpp
   include/data_recorder/config_model.hpp
+  include/data_recorder/curve_payload.hpp
   include/data_recorder/history_curve_loader.hpp
   include/data_recorder/live_bridge.hpp
   include/data_recorder/path_utils.hpp
@@ -53,6 +54,7 @@ set(DATA_RECORDER_SOURCES
   src/camera_grid_model.cpp
   src/camera_image_provider.cpp
   src/config_model.cpp
+  src/curve_payload.cpp
   src/history_curve_loader.cpp
   src/live_bridge.cpp
   src/recorder_engine.cpp
@@ -174,6 +176,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_topic_series test/test_topic_series.cpp)
   target_link_libraries(test_topic_series data_recorder_core)
+
+  ament_add_gtest(test_curve_payload test/test_curve_payload.cpp)
+  target_link_libraries(test_curve_payload data_recorder_core Qt6::Core)
 
   ament_add_gtest(test_recorder_engine_subscription test/test_recorder_engine_subscription.cpp)
   target_link_libraries(test_recorder_engine_subscription data_recorder_core)

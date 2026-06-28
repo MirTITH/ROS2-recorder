@@ -13,6 +13,7 @@
 #include <sensor_msgs/msg/image.hpp>
 
 #include "data_recorder/config_model.hpp"
+#include "data_recorder/curve_payload.hpp"
 #include "data_recorder/recorder_types.hpp"
 #include "data_recorder/rosbag_writer.hpp"
 #include "data_recorder/topic_rate_monitor.hpp"
@@ -47,6 +48,11 @@ public:
   bool is_recording() const { return recording_.load(); }
   double live_edge_seconds() const;
 
+  // 由 GUI 线程调：设置当前展开的 topic 集合（仅这些 topic 发重的 series 曲线数组）。
+  void set_expanded_topics(const std::set<std::string> & topics);
+  // 由 GUI 线程调：上一帧曲线负载已被消费，允许推下一帧（背压，防事件堆积卡死）。
+  void notify_curves_consumed();
+
 private:
   void setup_subscriptions();
   // 订阅一个 rosbag 话题；发布者尚未被发现则返回 false（留待 try_subscribe_pending 补订）。
@@ -80,7 +86,11 @@ private:
   std::map<std::string, TopicSeries> series_;        // topic -> 缓冲
   std::map<std::string, std::string> topic_types_;   // topic -> ROS 类型（首见记录）
   std::set<std::string> announced_types_;            // 已推过类型的 topic（防重复）
-  std::mutex series_mutex_;                           // 保护以上四者（spin 写，timer 读）
+  std::set<std::string> expanded_topics_;            // GUI 展开的 topic（仅这些发 series）
+  std::mutex series_mutex_;                           // 保护以上五者（spin 写，timer 读）
+  // 背压：上一帧曲线负载是否仍在 GUI 队列中未消费。true 时跳过本次推送，
+  // 防止 5 Hz 生产快于 GUI 消费导致事件无限堆积、UI 渐冻。
+  std::atomic<bool> curves_in_flight_{false};
 
   // 一路相机的视频 sink：队列 + 懒建 recorder（首帧定尺寸）。
   struct VideoSink

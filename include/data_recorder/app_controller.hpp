@@ -5,6 +5,8 @@
 #include <QThread>
 #include <QVariantList>
 
+#include <set>
+#include <string>
 #include <vector>
 
 class QEvent;
@@ -123,6 +125,7 @@ private:
   QThread * player_thread_{nullptr};
   HistoryCurveLoader * curve_loader_{nullptr};
   QThread * curve_loader_thread_{nullptr};
+  std::set<std::string> expanded_topics_;  // 当前展开的 topic（转发给引擎，仅这些发 series 曲线）
   std::vector<SessionRecord> scanned_sessions_;
   std::vector<TopicEntry> live_topics_;
   bool playing_{false};
