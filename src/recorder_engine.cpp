@@ -406,6 +406,15 @@ std::string RecorderEngine::start_session()
   record_start_ros_ns_ = node_->now().nanoseconds();
   live_edge_seconds_.store(0.0);
 
+  // 时间轴零点已重置：清掉录制前按旧零点积累的曲线/折叠点缓冲，否则旧点会与新录制叠加。
+  // 类型也重新通告（清 announced_），让 GUI 在新会话重新点亮 chevron。
+  {
+    std::lock_guard<std::mutex> slock(series_mutex_);
+    series_.clear();
+    topic_types_.clear();
+    announced_types_.clear();
+  }
+
   recording_.store(true);
   return session_id_;
 }

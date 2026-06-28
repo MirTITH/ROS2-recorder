@@ -239,6 +239,7 @@ void AppController::toggleRecording()
     // 开始
     event_marker_model_.clearInstances();
     tag_model_.clearSelection();  // 清标签选择，每次录制从干净状态开始
+    topic_model_.clearCurves();   // 清上次会话残留的折叠点/曲线，避免与新录制叠加
     if (engine_) {
       const std::string id = engine_->start_session();
       if (id.empty()) {

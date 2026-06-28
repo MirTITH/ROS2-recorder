@@ -342,6 +342,21 @@ void TopicListModel::setSeriesVisible(
   }
 }
 
+void TopicListModel::clearCurves()
+{
+  if (topics_.empty()) { return; }
+  for (auto & row : topics_) {
+    row.message_dots = QVariantList();
+    row.series_list = QVariantList();
+    row.series_visible_override.clear();
+    row.series_color_index.clear();
+    row.next_color_index = 0;
+  }
+  const auto top = index(0, 0);
+  const auto bottom = index(static_cast<int>(topics_.size()) - 1, 0);
+  emit dataChanged(top, bottom, {MessageDotsRole, SeriesListRole});
+}
+
 void TopicListModel::updateStats(const QString & topic_key, double hz, int width, int height)
 {
   for (std::size_t i = 0; i < topics_.size(); ++i) {

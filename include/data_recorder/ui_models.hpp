@@ -71,6 +71,8 @@ public:
     const QString & topic_key,
     const std::vector<TopicSeries::SeriesSnapshot> & series);
   void setSeriesVisible(const QString & topic_key, const QString & series_key, bool visible);
+  // 清空所有行的折叠点/曲线与每行可见性/配色覆盖（开始新录制时调，避免上次会话残留叠加）。
+  void clearCurves();
 
 private:
   struct TopicRow

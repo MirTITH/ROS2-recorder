@@ -466,6 +466,44 @@ TEST(TopicListModel, SeriesColorStablePerKey)
   EXPECT_EQ(find_series(list2, "force.y").value("color").toString(), color_y_1);
 }
 
+TEST(TopicListModel, ClearCurvesEmptiesDotsAndSeries)
+{
+  data_recorder::TopicEntry topic;
+  topic.topic_name = "/joint_states";
+  topic.backend_name = "rosbag";
+
+  data_recorder::TopicListModel model;
+  model.set_topics({topic});
+
+  model.updateMessageDots("/joint_states", {0.0, 1.0, 2.0});
+  std::vector<data_recorder::TopicSeries::SeriesSnapshot> snap;
+  snap.push_back({"pos/a", {{0.0, 1.0}, {1.0, 2.0}}});
+  model.updateSeries("/joint_states", snap);
+  // 用户改过可见性：clearCurves 后该覆盖也应复位（新会话从干净状态开始）。
+  model.setSeriesVisible("/joint_states", "pos/a", false);
+
+  const auto idx = model.index(0, 0);
+  ASSERT_FALSE(model.data(idx, data_recorder::TopicListModel::MessageDotsRole).toList().isEmpty());
+  ASSERT_FALSE(model.data(idx, data_recorder::TopicListModel::SeriesListRole).toList().isEmpty());
+
+  int signal_count = 0;
+  QObject::connect(
+    &model, &QAbstractItemModel::dataChanged,
+    [&](const QModelIndex &, const QModelIndex &, const QList<int> &) { ++signal_count; });
+
+  model.clearCurves();
+
+  EXPECT_TRUE(model.data(idx, data_recorder::TopicListModel::MessageDotsRole).toList().isEmpty());
+  EXPECT_TRUE(model.data(idx, data_recorder::TopicListModel::SeriesListRole).toList().isEmpty());
+  EXPECT_GE(signal_count, 1);  // 至少发了一次 dataChanged 触发 QML 重绘
+
+  // 复位可见性覆盖：再次回填 pos/a 应恢复默认可见（pos/ 默认可见）。
+  model.updateSeries("/joint_states", snap);
+  const auto list =
+    model.data(idx, data_recorder::TopicListModel::SeriesListRole).toList();
+  EXPECT_TRUE(find_series(list, "pos/a").value("visible").toBool());
+}
+
 TEST(AppController, ExposesExpandAndSeriesVisibilityToModel)
 {
   auto config = make_config_fixture();
