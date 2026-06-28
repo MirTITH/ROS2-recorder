@@ -34,6 +34,8 @@ groups:
       - /tf
       - /tf_static
       - /joint_states
+      - /left_arm_controller/joint_trajectory
+      - /right_arm_controller/joint_trajectory
     backend: rosbag
 
   # Image topic -> encoded to video with libav (accurate per-frame PTS + sidecar CSV).
