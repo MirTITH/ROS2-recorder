@@ -37,6 +37,7 @@ public:
     SeriesListRole,
     ResolutionTextRole,
     FrameSeqRole,
+    IsExpandedRole,
   };
 
   explicit TopicListModel(QObject * parent = nullptr);
@@ -56,6 +57,8 @@ public:
 
   void set_topics(std::vector<TopicEntry> topics);
 
+  void setExpanded(const QString & topic_key, bool expanded);
+
 private:
   struct TopicRow
   {
@@ -69,6 +72,7 @@ private:
     QString resolution_text;
     QVariantList series_list;
     int frame_seq{0};
+    bool is_expanded{false};
   };
 
   std::vector<TopicRow> topics_;

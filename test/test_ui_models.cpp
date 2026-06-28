@@ -188,6 +188,60 @@ TEST(TopicListModel, ClassifiesCameraNumericAndEmptyTracks)
   EXPECT_FALSE(model.data(model.index(2, 0), data_recorder::TopicListModel::IsDrawableRole).toBool());
 }
 
+TEST(TopicListModel, IsExpandedInitializesFromDefaultExpanded)
+{
+  data_recorder::TopicEntry collapsed;
+  collapsed.topic_name = "/tf";
+  collapsed.backend_name = "rosbag";
+  collapsed.default_expanded = false;
+
+  data_recorder::TopicEntry expanded;
+  expanded.topic_name = "/joint_states";
+  expanded.backend_name = "rosbag";
+  expanded.default_expanded = true;
+
+  data_recorder::TopicListModel model;
+  model.set_topics({collapsed, expanded});
+
+  EXPECT_FALSE(
+    model.data(model.index(0, 0), data_recorder::TopicListModel::IsExpandedRole).toBool());
+  EXPECT_TRUE(
+    model.data(model.index(1, 0), data_recorder::TopicListModel::IsExpandedRole).toBool());
+}
+
+TEST(TopicListModel, SetExpandedTogglesAndEmitsDataChanged)
+{
+  data_recorder::TopicEntry topic;
+  topic.topic_name = "/joint_states";
+  topic.backend_name = "rosbag";
+
+  data_recorder::TopicListModel model;
+  model.set_topics({topic});
+
+  int signal_count = 0;
+  QVector<int> changed_roles;
+  QObject::connect(
+    &model, &QAbstractItemModel::dataChanged,
+    [&](const QModelIndex &, const QModelIndex &, const QList<int> & roles) {
+      ++signal_count;
+      changed_roles = roles;
+    });
+
+  model.setExpanded("/joint_states", true);
+  EXPECT_TRUE(
+    model.data(model.index(0, 0), data_recorder::TopicListModel::IsExpandedRole).toBool());
+  EXPECT_EQ(signal_count, 1);
+  EXPECT_TRUE(changed_roles.contains(data_recorder::TopicListModel::IsExpandedRole));
+
+  // 同值不重复发信号
+  model.setExpanded("/joint_states", true);
+  EXPECT_EQ(signal_count, 1);
+
+  // 未知 topic 安全无操作
+  model.setExpanded("/nope", true);
+  EXPECT_EQ(signal_count, 1);
+}
+
 TEST(TopicListModel, UpdateStatsBackfillsFrequencyAndResolution)
 {
   data_recorder::TopicListModel model;

@@ -104,6 +104,8 @@ QVariant TopicListModel::data(const QModelIndex & index, int role) const
       return row.resolution_text;
     case FrameSeqRole:
       return row.frame_seq;
+    case IsExpandedRole:
+      return row.is_expanded;
     default:
       return {};
   }
@@ -150,6 +152,7 @@ QHash<int, QByteArray> TopicListModel::roleNames() const
     {SeriesListRole, "seriesList"},
     {ResolutionTextRole, "resolutionText"},
     {FrameSeqRole, "frameSeq"},
+    {IsExpandedRole, "isExpanded"},
   };
 }
 
@@ -190,10 +193,24 @@ void TopicListModel::set_topics(std::vector<TopicEntry> topics)
       static_cast<std::size_t>(i) % kSeriesColors.size()]);
     row.frequency_text = QString();      // 等引擎回填
     row.resolution_text = QString();
-    row.series_list = QVariantList();    // v1 数值留空
+    row.series_list = QVariantList();    // 曲线由 updateSeries 回填
+    row.is_expanded = row.topic.default_expanded;
     topics_.push_back(std::move(row));
   }
   endResetModel();
+}
+
+void TopicListModel::setExpanded(const QString & topic_key, bool expanded)
+{
+  for (std::size_t i = 0; i < topics_.size(); ++i) {
+    auto & row = topics_[i];
+    if (QString::fromStdString(row.topic.topic_name) != topic_key) { continue; }
+    if (row.is_expanded == expanded) { return; }
+    row.is_expanded = expanded;
+    const auto idx = index(static_cast<int>(i), 0);
+    emit dataChanged(idx, idx, {IsExpandedRole});
+    return;
+  }
 }
 
 void TopicListModel::updateStats(const QString & topic_key, double hz, int width, int height)
