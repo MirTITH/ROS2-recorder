@@ -31,6 +31,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/camera_grid_model.hpp
   include/data_recorder/camera_image_provider.hpp
   include/data_recorder/config_model.hpp
+  include/data_recorder/history_curve_loader.hpp
   include/data_recorder/live_bridge.hpp
   include/data_recorder/path_utils.hpp
   include/data_recorder/recorder_engine.hpp
@@ -52,6 +53,7 @@ set(DATA_RECORDER_SOURCES
   src/camera_grid_model.cpp
   src/camera_image_provider.cpp
   src/config_model.cpp
+  src/history_curve_loader.cpp
   src/live_bridge.cpp
   src/recorder_engine.cpp
   src/rosbag_writer.cpp
@@ -161,6 +163,10 @@ if(BUILD_TESTING)
   ament_add_gtest(test_rosbag_writer test/test_rosbag_writer.cpp)
   target_link_libraries(test_rosbag_writer data_recorder_core)
   ament_target_dependencies(test_rosbag_writer rclcpp rosbag2_cpp std_msgs)
+
+  ament_add_gtest(test_history_curve_loader test/test_history_curve_loader.cpp)
+  target_link_libraries(test_history_curve_loader data_recorder_core Qt6::Test)
+  ament_target_dependencies(test_history_curve_loader rclcpp rosbag2_cpp sensor_msgs)
 
   ament_add_gtest(test_value_extractor test/test_value_extractor.cpp)
   target_link_libraries(test_value_extractor data_recorder_core)
