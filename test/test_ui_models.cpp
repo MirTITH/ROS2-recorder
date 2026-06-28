@@ -1317,6 +1317,26 @@ TEST(AppController, TimelineDurationGrowsWithLiveEdgeAndEmitsOnlyWhenSpanChanges
   EXPECT_EQ(timeline_duration_changed_count, 1);
 }
 
+TEST(AppController, IdleLiveEdgeUpdatesDoNotExtendTimelineDuration)
+{
+  const auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+
+  int timeline_duration_changed_count = 0;
+  QObject::connect(
+    &controller,
+    &data_recorder::AppController::timelineDurationSecondsChanged,
+    [&timeline_duration_changed_count]() {
+      ++timeline_duration_changed_count;
+    });
+
+  controller.advanceLiveEdge(120.0);
+
+  EXPECT_FALSE(controller.recording());
+  EXPECT_DOUBLE_EQ(controller.timelineDurationSeconds(), 60.0);
+  EXPECT_EQ(timeline_duration_changed_count, 0);
+}
+
 TEST(AppController, PlayheadBeyondLiveEdgeStillExtendsTimelineDuration)
 {
   const auto config = make_config_fixture();

@@ -438,6 +438,9 @@ void AppController::setPlayheadSeconds(double seconds)
 
 void AppController::advanceLiveEdge(double seconds)
 {
+  if (!recording_) {
+    return;
+  }
   const double clamped_seconds = std::max(0.0, seconds);
   if (live_edge_seconds_ == clamped_seconds) {
     return;

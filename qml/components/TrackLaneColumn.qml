@@ -14,6 +14,7 @@ ColumnLayout {
     property real effectiveDurationSeconds: 1
     property int rulerLabelTickStride: 10
     property alias contentY: trackLaneList.contentY
+    readonly property bool showTimelineData: !!controller && (controller.recording || controller.historyMode)
 
     signal contentScrolled()
 
@@ -180,6 +181,7 @@ ColumnLayout {
                         seriesList: model.seriesList
                         isExpanded: model.isExpanded
                         messageDots: model.messageDots
+                        showData: root.showTimelineData
                         xMax: root.effectiveDurationSeconds
                         visibleStartSeconds: viewport.visibleStartSeconds
                         visibleDurationSeconds: viewport.boundedVisibleDuration

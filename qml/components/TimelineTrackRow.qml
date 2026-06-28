@@ -7,6 +7,7 @@ Rectangle {
     property string trackKind: "empty"
     property var seriesList: []
     property bool isExpanded: false
+    property bool showData: true
     property var messageDots: []
     property real xMax: 60
     property real visibleStartSeconds: 0
@@ -14,8 +15,10 @@ Rectangle {
     property real plotTopPadding: 4
     property real plotBottomPadding: 4
     property real sampleMarkerSpacingThreshold: 12
+    readonly property int collapsedHeight: 32
+    readonly property int expandedHeight: 120
 
-    height: isExpanded ? 120 : 32
+    height: root.isExpanded ? root.expandedHeight : root.collapsedHeight
     color: trackKind === "empty" ? Theme.surfaceAlt : Theme.surface
 
     function boundedDuration() {
@@ -160,7 +163,7 @@ Rectangle {
         id: curveCanvas
 
         anchors.fill: parent
-        visible: root.trackKind === "numeric" && root.isExpanded
+        visible: root.showData && root.trackKind === "numeric" && root.isExpanded
         onWidthChanged: requestPaint()
         onHeightChanged: requestPaint()
 
@@ -243,7 +246,7 @@ Rectangle {
 
         anchors.fill: parent
         // 折叠态：所有 rosbag 数据行（numeric/empty）都画节奏点；相机行不画。
-        visible: !root.isExpanded && root.trackKind !== "camera"
+        visible: root.showData && !root.isExpanded && root.trackKind !== "camera"
         onWidthChanged: requestPaint()
         onHeightChanged: requestPaint()
 
@@ -275,6 +278,7 @@ Rectangle {
     onSeriesListChanged: curveCanvas.requestPaint()
     onMessageDotsChanged: dotsCanvas.requestPaint()
     onIsExpandedChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
+    onShowDataChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
     onVisibleStartSecondsChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
     onVisibleDurationSecondsChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
 

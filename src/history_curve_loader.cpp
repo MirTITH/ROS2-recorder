@@ -4,6 +4,7 @@
 
 #include <cstring>
 #include <filesystem>
+#include <limits>
 #include <map>
 #include <vector>
 
@@ -78,7 +79,7 @@ void HistoryCurveLoader::scanTimestamps(
     if (!topic_names.isEmpty() && !topic_names.contains(QString::fromStdString(topic))) {
       continue;
     }
-    TopicSeries buffer;
+    TopicSeries buffer(times.size());
     for (const double t : times) { buffer.add_message_time(t); }
 
     QVariantMap topic_map;
@@ -125,7 +126,7 @@ void HistoryCurveLoader::extractTopic(
   }
   const ValueExtractor * extractor = type.empty() ? nullptr : registry_.get(type);
 
-  TopicSeries buffer;
+  TopicSeries buffer(std::numeric_limits<std::size_t>::max());
   bool first = true;
   int64_t base_ns = 0;
   while (reader.has_next()) {

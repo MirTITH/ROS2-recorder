@@ -14,11 +14,14 @@ Rectangle {
     property bool isExpanded: false
     property bool isPlottable: false
     property var seriesList: []
+    readonly property int collapsedHeight: 32
+    readonly property int expandedHeight: 120
     signal toggleVisibleRequested()
     signal toggleExpandRequested()
     signal seriesVisibilityRequested(string seriesKey, bool visible)
 
-    height: isExpanded ? 120 : 32
+    height: root.isExpanded ? root.expandedHeight : root.collapsedHeight
+    clip: true
     color: Theme.surfaceAlt
     border.color: Theme.border
     border.width: 0
@@ -27,21 +30,23 @@ Rectangle {
         anchors.fill: parent
         anchors.leftMargin: 8
         anchors.rightMargin: 6
-        anchors.topMargin: 5
-        anchors.bottomMargin: 5
-        spacing: 2
+        anchors.topMargin: 2
+        anchors.bottomMargin: 2
+        spacing: 1
 
         Label {
             Layout.fillWidth: true
+            Layout.preferredHeight: 12
             text: root.topicName
             color: Theme.textPrimary
-            font.pixelSize: 11
+            font.pixelSize: 10
             font.bold: true
             elide: Text.ElideMiddle
         }
 
         RowLayout {
             Layout.fillWidth: true
+            Layout.preferredHeight: 14
             spacing: 6
 
             Button {
@@ -49,10 +54,12 @@ Rectangle {
 
                 objectName: "expandToggleButton_" + root.topicName
                 enabled: root.isPlottable
-                Layout.preferredWidth: 18
-                Layout.preferredHeight: 18
+                Layout.preferredWidth: 16
+                Layout.preferredHeight: 14
                 padding: 0
                 Accessible.name: root.isExpanded ? "折叠曲线" : "展开曲线"
+                ToolTip.visible: hovered && enabled
+                ToolTip.text: root.isExpanded ? "折叠曲线" : "展开曲线"
                 onClicked: root.toggleExpandRequested()
 
                 background: Rectangle {
@@ -60,12 +67,15 @@ Rectangle {
                     border.width: 0
                 }
 
-                contentItem: Label {
-                    text: root.isExpanded ? "∨" : ">"
-                    color: root.isPlottable ? Theme.textPrimary : Theme.textMuted
-                    font.pixelSize: 11
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                contentItem: Image {
+                    anchors.centerIn: parent
+                    width: 12
+                    height: 12
+                    source: root.isExpanded ?
+                        "../assets/icons/chevron-down.svg" :
+                        "../assets/icons/chevron-right.svg"
+                    opacity: root.isPlottable ? 1.0 : 0.4
+                    fillMode: Image.PreserveAspectFit
                 }
             }
 
@@ -105,51 +115,130 @@ Rectangle {
             }
         }
 
-        Flow {
+        Item {
+            id: legendViewport
+
             Layout.fillWidth: true
+            Layout.fillHeight: true
             visible: root.isExpanded
-            spacing: 6
+            clip: true
 
-            Repeater {
-                model: root.isExpanded ? (root.seriesList || []) : []
+            Flickable {
+                id: legendFlickable
 
-                delegate: Rectangle {
-                    required property var modelData
+                anchors.fill: parent
+                clip: true
+                interactive: false
+                boundsBehavior: Flickable.StopAtBounds
+                contentWidth: Math.max(width, legendFlow.childrenRect.x + legendFlow.childrenRect.width)
+                contentHeight: legendFlow.implicitHeight
 
-                    objectName: "seriesChip_" + root.topicName + "_" + (modelData.key || "")
-                    height: 16
-                    radius: 8
-                    width: chipRow.implicitWidth + 12
-                    color: Theme.surface
-                    border.width: 1
-                    border.color: Theme.gridLine
-                    opacity: (modelData.visible === false) ? 0.45 : 1.0
+                Flow {
+                    id: legendFlow
 
-                    Row {
-                        id: chipRow
-                        anchors.centerIn: parent
-                        spacing: 4
+                    width: legendFlickable.width
+                    spacing: 6
 
-                        Rectangle {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 8
-                            height: 8
-                            radius: 4
-                            color: modelData.color || "#2563eb"
-                        }
+                    Repeater {
+                        model: root.isExpanded ? (root.seriesList || []) : []
 
-                        Label {
-                            text: modelData.label || modelData.key || ""
-                            color: Theme.textPrimary
-                            font.pixelSize: 9
+                        delegate: Rectangle {
+                            required property var modelData
+
+                            objectName: "seriesChip_" + root.topicName + "_" + (modelData.key || "")
+                            property string seriesKey: modelData.key || ""
+                            property bool seriesVisible: modelData.visible !== false
+                            height: 16
+                            radius: 8
+                            width: chipRow.implicitWidth + 12
+                            color: Theme.surface
+                            border.width: 1
+                            border.color: Theme.gridLine
+                            opacity: (modelData.visible === false) ? 0.45 : 1.0
+
+                            Row {
+                                id: chipRow
+                                anchors.centerIn: parent
+                                spacing: 4
+
+                                Rectangle {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 8
+                                    height: 8
+                                    radius: 4
+                                    color: modelData.color || "#2563eb"
+                                }
+
+                                Label {
+                                    text: modelData.label || modelData.key || ""
+                                    color: Theme.textPrimary
+                                    font.pixelSize: 9
+                                }
+                            }
+
                         }
                     }
+                }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: root.seriesVisibilityRequested(
-                            modelData.key || "", !(modelData.visible !== false))
+                ScrollBar.vertical: ScrollBar {
+                    id: legendVerticalScrollBar
+                    policy: ScrollBar.AsNeeded
+                }
+
+                ScrollBar.horizontal: ScrollBar {
+                    id: legendHorizontalScrollBar
+                    policy: ScrollBar.AsNeeded
+                }
+            }
+
+            MouseArea {
+                id: legendHitArea
+
+                anchors.fill: parent
+                anchors.rightMargin: legendVerticalScrollBar.visible ? legendVerticalScrollBar.width : 0
+                acceptedButtons: Qt.LeftButton
+                cursorShape: Qt.PointingHandCursor
+                hoverEnabled: true
+                preventStealing: true
+
+                function boundedScroll(value, maximum) {
+                    return Math.max(0, Math.min(Math.max(0, maximum), value))
+                }
+
+                function chipAt(mouse) {
+                    for (var index = 0; index < legendFlow.children.length; ++index) {
+                        var chip = legendFlow.children[index]
+                        if (!chip || chip.seriesKey === undefined) {
+                            continue
+                        }
+                        var point = legendHitArea.mapToItem(chip, mouse.x, mouse.y)
+                        if (point.x >= 0 && point.x <= chip.width &&
+                            point.y >= 0 && point.y <= chip.height) {
+                            return chip
+                        }
                     }
+                    return null
+                }
+
+                onClicked: function(mouse) {
+                    var chip = chipAt(mouse)
+                    if (chip && chip.seriesKey !== "") {
+                        root.seriesVisibilityRequested(chip.seriesKey, !chip.seriesVisible)
+                    }
+                }
+
+                onWheel: function(wheel) {
+                    var delta = -wheel.angleDelta.y / 2
+                    if (wheel.modifiers & Qt.ShiftModifier) {
+                        legendFlickable.contentX = boundedScroll(
+                            legendFlickable.contentX + delta,
+                            legendFlickable.contentWidth - legendFlickable.width)
+                    } else {
+                        legendFlickable.contentY = boundedScroll(
+                            legendFlickable.contentY + delta,
+                            legendFlickable.contentHeight - legendFlickable.height)
+                    }
+                    wheel.accepted = true
                 }
             }
         }

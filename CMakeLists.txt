@@ -35,6 +35,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/history_curve_loader.hpp
   include/data_recorder/live_bridge.hpp
   include/data_recorder/path_utils.hpp
+  include/data_recorder/recording_time.hpp
   include/data_recorder/recorder_engine.hpp
   include/data_recorder/recorder_types.hpp
   include/data_recorder/rosbag_writer.hpp
@@ -133,6 +134,7 @@ if(BUILD_TESTING)
   ament_add_gtest(test_qml_structure test/test_qml_structure.cpp)
   target_compile_definitions(test_qml_structure PRIVATE
     DATA_RECORDER_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml"
+    DATA_RECORDER_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
   )
 
   ament_add_gtest(test_ui_models test/test_ui_models.cpp)
@@ -143,6 +145,9 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_topic_rate_monitor test/test_topic_rate_monitor.cpp)
   target_link_libraries(test_topic_rate_monitor data_recorder_core)
+
+  ament_add_gtest(test_recording_time test/test_recording_time.cpp)
+  target_link_libraries(test_recording_time data_recorder_core)
 
   ament_add_gtest(test_writer_queue test/test_writer_queue.cpp)
   target_link_libraries(test_writer_queue data_recorder_core)

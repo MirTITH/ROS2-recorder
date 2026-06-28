@@ -11,6 +11,7 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 
 #include <rclcpp/serialization.hpp>
@@ -19,6 +20,7 @@
 
 #include "data_recorder/live_bridge.hpp"
 #include "data_recorder/path_utils.hpp"
+#include "data_recorder/recording_time.hpp"
 #include "data_recorder/session_manager.hpp"
 
 namespace fs = std::filesystem;
@@ -29,6 +31,8 @@ namespace data_recorder
 
 namespace
 {
+constexpr std::size_t kLiveCurveBufferMaxPoints = std::numeric_limits<std::size_t>::max();
+
 std::string file_name_for_topic(const std::string & topic)
 {
   return file_base_for_topic(topic);
@@ -78,12 +82,9 @@ RecorderEngine::RecorderEngine(
   // 还能捕获录制开始后才启动/重启的发布者。
   resubscribe_timer_ = node_->create_wall_timer(500ms, [this]() { try_subscribe_pending(); });
 
-  record_start_steady_ns_.store(
-    std::chrono::steady_clock::now().time_since_epoch().count());
+  record_start_steady_ns_.store(steady_now_ns());
   live_edge_timer_ = node_->create_wall_timer(33ms, [this]() {
-    const int64_t now_ns = std::chrono::steady_clock::now().time_since_epoch().count();
-    const int64_t elapsed_ns = now_ns - record_start_steady_ns_.load();
-    const double seconds = static_cast<double>(elapsed_ns) / 1e9;
+    const double seconds = relative_seconds(steady_now_ns(), record_start_steady_ns_.load());
     live_edge_seconds_.store(seconds);
     if (bridge_) { bridge_->set_live_edge(seconds); }
   });
@@ -213,18 +214,30 @@ void RecorderEngine::on_rosbag_message(
   std::shared_ptr<rclcpp::SerializedMessage> msg)
 {
   const int64_t now_ns = node_->now().nanoseconds();
+  const int64_t now_steady_ns = steady_now_ns();
   {
     std::lock_guard<std::mutex> lock(rate_mutex_);
     auto it = rate_monitors_.find(topic);
     if (it != rate_monitors_.end()) { it->second.record(now_ns); }
   }
 
-  // 数值曲线：记折叠点；可绘制类型则反序列化提取标量。用 live edge 秒做时间轴（与播放头同源）。
-  const double t_seconds = live_edge_seconds_.load();
+  // 类型发现独立于录制状态，便于 UI 在开录前就知道哪些 topic 可展开。
   {
     std::lock_guard<std::mutex> lock(series_mutex_);
     topic_types_.emplace(topic, type);
-    auto & buffer = series_[topic];
+  }
+
+  if (!recording_.load()) { return; }
+
+  // 数值曲线：录制中记折叠点；可绘制类型则反序列化提取标量。用每条消息到达时的
+  // steady-clock 相对时间做 x 轴，避免高频 topic 共用 33ms live-edge timer 时间而画出竖线尖峰。
+  // 这里不能使用 TopicSeries 默认 20000 点环形缓冲，否则高频 topic 在几分钟内就会只剩尾部。
+  const double t_seconds = relative_seconds(now_steady_ns, record_start_steady_ns_.load());
+  {
+    std::lock_guard<std::mutex> lock(series_mutex_);
+    auto [buffer_it, inserted] = series_.try_emplace(topic, kLiveCurveBufferMaxPoints);
+    (void)inserted;
+    auto & buffer = buffer_it->second;
     buffer.add_message_time(t_seconds);
     const ValueExtractor * extractor = extractor_registry_.get(type);
     if (extractor != nullptr) {
@@ -399,8 +412,7 @@ std::string RecorderEngine::start_session()
     }
   }
 
-  record_start_steady_ns_.store(
-    std::chrono::steady_clock::now().time_since_epoch().count());
+  record_start_steady_ns_.store(steady_now_ns());
   record_start_unix_ = std::chrono::duration<double>(
     std::chrono::system_clock::now().time_since_epoch()).count();
   record_start_ros_ns_ = node_->now().nanoseconds();

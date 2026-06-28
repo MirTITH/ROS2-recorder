@@ -14,6 +14,11 @@ std::filesystem::path qml_dir()
   return std::filesystem::path(DATA_RECORDER_QML_DIR);
 }
 
+std::filesystem::path source_dir()
+{
+  return std::filesystem::path(DATA_RECORDER_SOURCE_DIR);
+}
+
 std::string read_text(const std::filesystem::path & path)
 {
   std::ifstream input(path);
@@ -368,19 +373,82 @@ TEST(QmlStructure, TimelineViewportRenderingRulesAreExplicit)
   expect_contains(range_text, "pressTrackX");
 }
 
+TEST(QmlStructure, TimelineTrackRowsHideDataOutsideRecordingAndHistory)
+{
+  const std::string lane_text = read_text(qml_dir() / "components" / "TrackLaneColumn.qml");
+  const std::string track_text = read_text(qml_dir() / "components" / "TimelineTrackRow.qml");
+
+  expect_contains(lane_text, "readonly property bool showTimelineData");
+  expect_contains(lane_text, "controller.recording || controller.historyMode");
+  expect_contains(lane_text, "showData: root.showTimelineData");
+
+  expect_contains(track_text, "property bool showData: true");
+  expect_contains(track_text, "visible: root.showData && root.trackKind === \"numeric\" && root.isExpanded");
+  expect_contains(track_text, "visible: root.showData && !root.isExpanded && root.trackKind !== \"camera\"");
+  expect_contains(track_text, "onShowDataChanged");
+}
+
+TEST(QmlStructure, TimelineLegendUsesStableHitArea)
+{
+  const std::string info = read_text(qml_dir() / "components" / "TimelineInfoRow.qml");
+
+  expect_contains(info, "id: legendHitArea");
+  expect_contains(info, "interactive: false");
+  expect_contains(info, "function chipAt");
+  expect_contains(info, "legendHitArea.mapToItem(chip");
+  expect_contains(info, "cursorShape: Qt.PointingHandCursor");
+  expect_contains(info, "onClicked: function(mouse)");
+  expect_contains(info, "onWheel: function(wheel)");
+  expect_contains(info, "root.seriesVisibilityRequested(chip.seriesKey, !chip.seriesVisible)");
+  expect_not_contains(info, "id: legendChipMouseArea");
+}
+
+TEST(RecorderEngineStructure, LiveCurveBufferKeepsFullRecordingSpan)
+{
+  const std::string engine = read_text(source_dir() / "src" / "recorder_engine.cpp");
+
+  expect_contains(engine, "kLiveCurveBufferMaxPoints");
+  expect_contains(engine, "std::numeric_limits<std::size_t>::max()");
+  expect_contains(engine, "series_.try_emplace(topic, kLiveCurveBufferMaxPoints)");
+  expect_contains(engine, "if (!recording_.load()) { return; }");
+  expect_not_contains(engine, "auto & buffer = series_[topic];");
+}
+
+TEST(RecorderEngineStructure, LiveCurveSamplesUsePerMessageTime)
+{
+  const std::string engine = read_text(source_dir() / "src" / "recorder_engine.cpp");
+
+  expect_contains(engine, "#include \"data_recorder/recording_time.hpp\"");
+  expect_contains(engine, "const int64_t now_steady_ns = steady_now_ns();");
+  expect_contains(engine, "const double t_seconds = relative_seconds(now_steady_ns, record_start_steady_ns_.load());");
+  expect_not_contains(engine, "const double t_seconds = live_edge_seconds_.load();");
+}
+
 TEST(QmlStructure, TimelineRowsSupportExpandCollapseCurves)
 {
   const std::string info = read_text(qml_dir() / "components" / "TimelineInfoRow.qml");
   expect_contains(info, "expandToggleButton");
   expect_contains(info, "toggleExpandRequested");
   expect_contains(info, "seriesVisibilityRequested");
-  expect_contains(info, "isExpanded ? 120 : 32");
+  expect_contains(info, "readonly property int collapsedHeight: 32");
+  expect_contains(info, "readonly property int expandedHeight: 120");
+  expect_contains(info, "chevron-down.svg");
+  expect_contains(info, "chevron-right.svg");
+  expect_not_contains(info, "text: root.isExpanded ? \"∨\" : \">\"");
+  expect_contains(info, "id: legendFlickable");
+  expect_contains(info, "clip: true");
+  expect_contains(info, "contentHeight: legendFlow.implicitHeight");
+  expect_contains(info, "ScrollBar.vertical: ScrollBar");
+  expect_contains(info, "ScrollBar.horizontal: ScrollBar");
+  expect_contains(info, "id: legendHitArea");
+  expect_contains(info, "root.seriesVisibilityRequested(chip.seriesKey, !chip.seriesVisible)");
 
   const std::string track = read_text(qml_dir() / "components" / "TimelineTrackRow.qml");
   expect_contains(track, "dotsCanvas");
   expect_contains(track, "messageDots");
   expect_contains(track, "entry.visible === false");
-  expect_contains(track, "isExpanded ? 120 : 32");
+  expect_contains(track, "readonly property int collapsedHeight: 32");
+  expect_contains(track, "readonly property int expandedHeight: 120");
 
   const std::string info_col = read_text(qml_dir() / "components" / "TrackInfoColumn.qml");
   expect_contains(info_col, "setTopicExpanded");
@@ -389,4 +457,7 @@ TEST(QmlStructure, TimelineRowsSupportExpandCollapseCurves)
   const std::string lane_col = read_text(qml_dir() / "components" / "TrackLaneColumn.qml");
   expect_contains(lane_col, "messageDots");
   expect_contains(lane_col, "isExpanded");
+
+  EXPECT_TRUE(std::filesystem::exists(qml_dir() / "assets" / "icons" / "chevron-down.svg"));
+  EXPECT_TRUE(std::filesystem::exists(qml_dir() / "assets" / "icons" / "chevron-right.svg"));
 }

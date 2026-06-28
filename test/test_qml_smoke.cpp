@@ -12,6 +12,7 @@
 #include <QTest>
 #include <QTimer>
 #include <QUrl>
+#include <QVariantMap>
 #include <QWindow>
 
 #include <memory>
@@ -155,6 +156,36 @@ QQuickItem * find_required_camera_preview_tile(QObject * root, const QString & t
   }
   EXPECT_NE(item, nullptr) << topic_name.toStdString();
   return item;
+}
+
+int find_topic_row(data_recorder::TopicListModel * model, const QString & topic_name)
+{
+  if (model == nullptr) {
+    return -1;
+  }
+  for (int row = 0; row < model->rowCount(); ++row) {
+    if (model->data(model->index(row, 0), data_recorder::TopicListModel::TopicNameRole)
+        .toString() == topic_name)
+    {
+      return row;
+    }
+  }
+  return -1;
+}
+
+bool series_visible(data_recorder::TopicListModel * model, int topic_row, const QString & series_key)
+{
+  const auto series_list =
+    model->data(model->index(topic_row, 0), data_recorder::TopicListModel::SeriesListRole)
+      .toList();
+  for (const auto & value : series_list) {
+    const auto entry = value.toMap();
+    if (entry.value("key").toString() == series_key) {
+      return entry.value("visible").toBool();
+    }
+  }
+  ADD_FAILURE() << "Series not found: " << series_key.toStdString();
+  return false;
 }
 
 class QmlSmokeTest : public ::testing::Test
@@ -362,6 +393,112 @@ TEST_F(QmlSmokeTest, CameraVisibilityButtonTogglesPreview)
 
   EXPECT_EQ(visible_camera_spy.count(), 1);
   EXPECT_EQ(controller_->visibleCameraCount(), 0);
+}
+
+TEST_F(QmlSmokeTest, ClickingSeriesLegendChipTogglesVisibilityBothWays)
+{
+  auto * model = controller_->topicModel();
+  const int joint_row = find_topic_row(model, "/joint_states");
+  ASSERT_GE(joint_row, 0);
+
+  QVariantMap type;
+  type.insert("topicKey", "/joint_states");
+  type.insert("rosType", "sensor_msgs/msg/JointState");
+  controller_->onTopicTypesUpdated(QVariantList{type});
+
+  QVariantMap point;
+  point.insert("x", 0.0);
+  point.insert("y", 1.0);
+  QVariantMap series;
+  series.insert("key", "pos/a");
+  series.insert("points", QVariantList{point});
+  QVariantMap topic;
+  topic.insert("topicKey", "/joint_states");
+  topic.insert("messageDots", QVariantList{0.0});
+  topic.insert("series", QVariantList{series});
+
+  controller_->setTopicExpanded("/joint_states", true);
+  controller_->onCurvesUpdated(QVariantList{topic});
+  QCoreApplication::processEvents();
+  QTest::qWait(25);
+
+  auto * chip =
+    qobject_cast<QQuickItem *>(find_required(root_, "seriesChip_/joint_states_pos/a"));
+  ASSERT_NE(chip, nullptr);
+  ASSERT_GT(chip->width(), 8.0);
+  ASSERT_TRUE(series_visible(model, joint_row, "pos/a"));
+
+  QPoint chip_text_position =
+    chip->mapToScene(QPointF(chip->width() - 2.0, chip->height() / 2.0)).toPoint();
+  QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, chip_text_position);
+  QCoreApplication::processEvents();
+  EXPECT_FALSE(series_visible(model, joint_row, "pos/a"));
+
+  chip = qobject_cast<QQuickItem *>(find_required(root_, "seriesChip_/joint_states_pos/a"));
+  ASSERT_NE(chip, nullptr);
+  chip_text_position =
+    chip->mapToScene(QPointF(chip->width() - 2.0, chip->height() / 2.0)).toPoint();
+  QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, chip_text_position);
+  QCoreApplication::processEvents();
+  EXPECT_TRUE(series_visible(model, joint_row, "pos/a"));
+}
+
+TEST_F(QmlSmokeTest, ClickingScrolledSeriesLegendChipTogglesVisibility)
+{
+  auto * model = controller_->topicModel();
+  const int joint_row = find_topic_row(model, "/joint_states");
+  ASSERT_GE(joint_row, 0);
+
+  QVariantMap type;
+  type.insert("topicKey", "/joint_states");
+  type.insert("rosType", "sensor_msgs/msg/JointState");
+  controller_->onTopicTypesUpdated(QVariantList{type});
+
+  QVariantList series_list;
+  for (int index = 0; index < 30; ++index) {
+    QVariantMap point;
+    point.insert("x", 0.0);
+    point.insert("y", double(index));
+
+    QVariantMap series;
+    series.insert("key", QString("pos/joint_%1").arg(index, 2, 10, QLatin1Char('0')));
+    series.insert("points", QVariantList{point});
+    series_list.push_back(series);
+  }
+
+  QVariantMap topic;
+  topic.insert("topicKey", "/joint_states");
+  topic.insert("messageDots", QVariantList{0.0});
+  topic.insert("series", series_list);
+
+  controller_->setTopicExpanded("/joint_states", true);
+  controller_->onCurvesUpdated(QVariantList{topic});
+  QCoreApplication::processEvents();
+  QTest::qWait(25);
+
+  auto * chip =
+    qobject_cast<QQuickItem *>(find_required(root_, "seriesChip_/joint_states_pos/joint_29"));
+  ASSERT_NE(chip, nullptr);
+
+  QQuickItem * flickable = chip;
+  while (flickable != nullptr && !flickable->property("contentY").isValid()) {
+    flickable = flickable->parentItem();
+  }
+  ASSERT_NE(flickable, nullptr);
+
+  const double max_content_y =
+    flickable->property("contentHeight").toDouble() - flickable->height();
+  ASSERT_GT(max_content_y, 0.0);
+  ASSERT_TRUE(flickable->setProperty("contentY", max_content_y));
+  QCoreApplication::processEvents();
+  QTest::qWait(25);
+
+  ASSERT_TRUE(series_visible(model, joint_row, "pos/joint_29"));
+  const QPoint chip_position =
+    chip->mapToScene(QPointF(chip->width() / 2.0, chip->height() / 2.0)).toPoint();
+  QTest::mouseClick(window_, Qt::LeftButton, Qt::NoModifier, chip_position);
+  QCoreApplication::processEvents();
+  EXPECT_FALSE(series_visible(model, joint_row, "pos/joint_29"));
 }
 
 TEST_F(QmlSmokeTest, PressingCameraPreviewDoesNotHideTile)

@@ -18,14 +18,14 @@ namespace fs = std::filesystem;
 namespace
 {
 // 在 <tmp>/rosbag 写若干 JointState（a,b 两关节，position 递增）。返回 session_dir(<tmp>)。
-std::string write_joint_state_bag(const fs::path & tmp)
+std::string write_joint_state_bag(const fs::path & tmp, int message_count = 5)
 {
   fs::remove_all(tmp);
   const std::string bag_dir = (tmp / "rosbag").string();
   rclcpp::Serialization<sensor_msgs::msg::JointState> ser;
   data_recorder::RosbagWriter writer(bag_dir, /*storage_id=*/"");
   writer.add_topic("/joint_states", "sensor_msgs/msg/JointState", "");
-  for (int i = 0; i < 5; ++i) {
+  for (int i = 0; i < message_count; ++i) {
     sensor_msgs::msg::JointState msg;
     msg.name = {"a", "b"};
     msg.position = {static_cast<double>(i), static_cast<double>(i) * 2.0};
@@ -79,6 +79,44 @@ TEST(HistoryCurveLoader, ScanTimestampsEmitsDotsAndTypes)
   const auto dots = topic.value("messageDots").toList();
   EXPECT_EQ(dots.size(), 5);
   EXPECT_TRUE(topic.value("series").toList().isEmpty());  // 扫描阶段不带曲线
+
+  fs::remove_all(tmp);
+}
+
+TEST(HistoryCurveLoader, LongTopicDownsamplingKeepsFullSessionSpan)
+{
+  const auto tmp = fs::temp_directory_path() / "dr_history_long_topic_test";
+  constexpr int kMessageCount = 20005;
+  const std::string session_dir = write_joint_state_bag(tmp, kMessageCount);
+  constexpr double kLastSeconds = static_cast<double>(kMessageCount - 1) * 0.001;
+
+  data_recorder::HistoryCurveLoader loader;
+  QSignalSpy curves_spy(&loader, &data_recorder::HistoryCurveLoader::curvesReady);
+
+  loader.scanTimestamps(QString::fromStdString(session_dir), {"/joint_states"});
+
+  ASSERT_EQ(curves_spy.count(), 1);
+  auto topics = curves_spy.at(0).at(0).toList();
+  auto topic = find_topic(topics, "/joint_states");
+  ASSERT_FALSE(topic.isEmpty());
+  auto dots = topic.value("messageDots").toList();
+  ASSERT_FALSE(dots.isEmpty());
+  EXPECT_DOUBLE_EQ(dots.front().toDouble(), 0.0);
+  EXPECT_NEAR(dots.back().toDouble(), kLastSeconds, 1e-9);
+
+  curves_spy.clear();
+  loader.extractTopic(QString::fromStdString(session_dir), "/joint_states");
+
+  ASSERT_EQ(curves_spy.count(), 1);
+  topics = curves_spy.at(0).at(0).toList();
+  topic = find_topic(topics, "/joint_states");
+  ASSERT_FALSE(topic.isEmpty());
+  const auto pos_a = find_series(topic.value("series").toList(), "pos/a");
+  ASSERT_FALSE(pos_a.isEmpty());
+  const auto pts = pos_a.value("points").toList();
+  ASSERT_FALSE(pts.isEmpty());
+  EXPECT_DOUBLE_EQ(pts.front().toMap().value("x").toDouble(), 0.0);
+  EXPECT_NEAR(pts.back().toMap().value("x").toDouble(), kLastSeconds, 1e-9);
 
   fs::remove_all(tmp);
 }
