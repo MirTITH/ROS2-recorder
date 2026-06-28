@@ -38,6 +38,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/session_player.hpp
   include/data_recorder/topic_rate_monitor.hpp
   include/data_recorder/ui_models.hpp
+  include/data_recorder/value_extractor.hpp
   include/data_recorder/video_clip_reader.hpp
   include/data_recorder/video_recorder.hpp
   include/data_recorder/writer_queue.hpp
@@ -55,6 +56,7 @@ set(DATA_RECORDER_SOURCES
   src/session_player.cpp
   src/topic_rate_monitor.cpp
   src/ui_models.cpp
+  src/value_extractor.cpp
   src/video_clip_reader.cpp
   src/video_recorder.cpp
   src/writer_queue.cpp
@@ -155,6 +157,10 @@ if(BUILD_TESTING)
   ament_add_gtest(test_rosbag_writer test/test_rosbag_writer.cpp)
   target_link_libraries(test_rosbag_writer data_recorder_core)
   ament_target_dependencies(test_rosbag_writer rclcpp rosbag2_cpp std_msgs)
+
+  ament_add_gtest(test_value_extractor test/test_value_extractor.cpp)
+  target_link_libraries(test_value_extractor data_recorder_core)
+  ament_target_dependencies(test_value_extractor rclcpp)
 
   ament_add_gtest(test_recorder_engine_subscription test/test_recorder_engine_subscription.cpp)
   target_link_libraries(test_recorder_engine_subscription data_recorder_core)
