@@ -11,9 +11,14 @@ Rectangle {
     property string backendName: ""
     property bool isVisible: true
     property bool isCamera: false
+    property bool isExpanded: false
+    property bool isPlottable: false
+    property var seriesList: []
     signal toggleVisibleRequested()
+    signal toggleExpandRequested()
+    signal seriesVisibilityRequested(string seriesKey, bool visible)
 
-    height: 48
+    height: isExpanded ? 120 : 32
     color: Theme.surfaceAlt
     border.color: Theme.border
     border.width: 0
@@ -38,6 +43,31 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             spacing: 6
+
+            Button {
+                id: expandToggleButton
+
+                objectName: "expandToggleButton_" + root.topicName
+                enabled: root.isPlottable
+                Layout.preferredWidth: 18
+                Layout.preferredHeight: 18
+                padding: 0
+                Accessible.name: root.isExpanded ? "折叠曲线" : "展开曲线"
+                onClicked: root.toggleExpandRequested()
+
+                background: Rectangle {
+                    color: expandToggleButton.hovered ? Theme.gridLine : "transparent"
+                    border.width: 0
+                }
+
+                contentItem: Label {
+                    text: root.isExpanded ? "∨" : ">"
+                    color: root.isPlottable ? Theme.textPrimary : Theme.textMuted
+                    font.pixelSize: 11
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
 
             Label {
                 Layout.fillWidth: true
@@ -71,6 +101,55 @@ Rectangle {
                     height: 16
                     source: root.isVisible ? "../assets/icons/eye.svg" : "../assets/icons/eye-off.svg"
                     fillMode: Image.PreserveAspectFit
+                }
+            }
+        }
+
+        Flow {
+            Layout.fillWidth: true
+            visible: root.isExpanded
+            spacing: 6
+
+            Repeater {
+                model: root.isExpanded ? (root.seriesList || []) : []
+
+                delegate: Rectangle {
+                    required property var modelData
+
+                    objectName: "seriesChip_" + root.topicName + "_" + (modelData.key || "")
+                    height: 16
+                    radius: 8
+                    width: chipRow.implicitWidth + 12
+                    color: Theme.surface
+                    border.width: 1
+                    border.color: Theme.gridLine
+                    opacity: (modelData.visible === false) ? 0.45 : 1.0
+
+                    Row {
+                        id: chipRow
+                        anchors.centerIn: parent
+                        spacing: 4
+
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: modelData.color || "#2563eb"
+                        }
+
+                        Label {
+                            text: modelData.label || modelData.key || ""
+                            color: Theme.textPrimary
+                            font.pixelSize: 9
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: root.seriesVisibilityRequested(
+                            modelData.key || "", !(modelData.visible !== false))
+                    }
                 }
             }
         }
