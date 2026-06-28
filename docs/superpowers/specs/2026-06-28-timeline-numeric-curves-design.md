@@ -163,5 +163,8 @@ groups:
 - **人工**：带 GUI 跑，展开 `/joint_states` 看曲线、切 chip 显隐、力矩行展开（参照既有 xwd+ffmpeg 截图核验法）。
 
 ## 注意
-- 本仓 C++ 是 ament 风格，仓内 `.clang-format` 是 LLVM、会误导——不要跑 clang-format，手动匹配周边风格。
+- 代码风格：本仓 C++ 是 ament 风格。包根已放官方 `ament_clang_format` 配置 `.clang-format`
+  （`BasedOnStyle: Google` + `PointerAlignment: Middle` + 类/函数/struct 后换行大括号 + `ColumnLimit: 100`
+  + `ReflowComments: false`），与现有代码一致，并因是**最近**的配置而屏蔽掉工作区根那份会误导的 LLVM
+  `.clang-format`。可用 clang-format 格式化本包（本机如未装：`apt install clang-format`）。
 - extractor 需链接对应消息包（sensor_msgs / geometry_msgs / trajectory_msgs），CMakeLists 加依赖。
