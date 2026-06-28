@@ -13,7 +13,9 @@
 
 #include "data_recorder/app_controller.hpp"
 #include "data_recorder/session_manager.hpp"
+#include "data_recorder/topic_series.hpp"
 #include "data_recorder/ui_models.hpp"
+#include "data_recorder/value_extractor.hpp"
 #include "data_recorder/video_recorder.hpp"
 
 #include <QCoreApplication>
@@ -240,6 +242,71 @@ TEST(TopicListModel, SetExpandedTogglesAndEmitsDataChanged)
   // 未知 topic 安全无操作
   model.setExpanded("/nope", true);
   EXPECT_EQ(signal_count, 1);
+}
+
+TEST(TopicListModel, IsPlottableFromRegistryByType)
+{
+  data_recorder::ValueExtractorRegistry registry;
+  data_recorder::register_builtin_extractors(registry);
+
+  data_recorder::TopicEntry topic;
+  topic.topic_name = "/joint_states";
+  topic.backend_name = "rosbag";
+
+  data_recorder::TopicListModel model;
+  model.set_extractor_registry(&registry);
+  model.set_topics({topic});
+
+  // 类型未知前不可绘制
+  EXPECT_FALSE(
+    model.data(model.index(0, 0), data_recorder::TopicListModel::IsPlottableRole).toBool());
+
+  int signal_count = 0;
+  QVector<int> changed_roles;
+  QObject::connect(
+    &model, &QAbstractItemModel::dataChanged,
+    [&](const QModelIndex &, const QModelIndex &, const QList<int> & roles) {
+      ++signal_count;
+      changed_roles = roles;
+    });
+
+  model.updateTopicType("/joint_states", "sensor_msgs/msg/JointState");
+  EXPECT_TRUE(
+    model.data(model.index(0, 0), data_recorder::TopicListModel::IsPlottableRole).toBool());
+  EXPECT_EQ(signal_count, 1);
+  EXPECT_TRUE(changed_roles.contains(data_recorder::TopicListModel::IsPlottableRole));
+}
+
+TEST(TopicListModel, IsPlottableFalseForUnsupportedType)
+{
+  data_recorder::ValueExtractorRegistry registry;
+  data_recorder::register_builtin_extractors(registry);
+
+  data_recorder::TopicEntry topic;
+  topic.topic_name = "/tf";
+  topic.backend_name = "rosbag";
+
+  data_recorder::TopicListModel model;
+  model.set_extractor_registry(&registry);
+  model.set_topics({topic});
+
+  model.updateTopicType("/tf", "tf2_msgs/msg/TFMessage");
+  EXPECT_FALSE(
+    model.data(model.index(0, 0), data_recorder::TopicListModel::IsPlottableRole).toBool());
+}
+
+TEST(TopicListModel, IsPlottableFalseWithoutRegistry)
+{
+  data_recorder::TopicEntry topic;
+  topic.topic_name = "/joint_states";
+  topic.backend_name = "rosbag";
+
+  data_recorder::TopicListModel model;  // 未注入 registry
+  model.set_topics({topic});
+
+  model.updateTopicType("/joint_states", "sensor_msgs/msg/JointState");
+  EXPECT_FALSE(
+    model.data(model.index(0, 0), data_recorder::TopicListModel::IsPlottableRole).toBool());
 }
 
 TEST(TopicListModel, UpdateStatsBackfillsFrequencyAndResolution)

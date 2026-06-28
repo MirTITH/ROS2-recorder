@@ -19,6 +19,8 @@
 namespace data_recorder
 {
 
+class ValueExtractorRegistry;
+
 class TopicListModel : public QAbstractListModel
 {
   Q_OBJECT
@@ -38,6 +40,7 @@ public:
     ResolutionTextRole,
     FrameSeqRole,
     IsExpandedRole,
+    IsPlottableRole,
   };
 
   explicit TopicListModel(QObject * parent = nullptr);
@@ -58,6 +61,8 @@ public:
   void set_topics(std::vector<TopicEntry> topics);
 
   void setExpanded(const QString & topic_key, bool expanded);
+  void set_extractor_registry(const ValueExtractorRegistry * registry);
+  void updateTopicType(const QString & topic_key, const QString & ros_type);
 
 private:
   struct TopicRow
@@ -73,9 +78,11 @@ private:
     QVariantList series_list;
     int frame_seq{0};
     bool is_expanded{false};
+    bool is_plottable{false};
   };
 
   std::vector<TopicRow> topics_;
+  const ValueExtractorRegistry * registry_{nullptr};
 };
 
 class TagListModel : public QAbstractListModel

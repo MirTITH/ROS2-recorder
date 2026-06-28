@@ -1,5 +1,7 @@
 #include "data_recorder/ui_models.hpp"
 
+#include "data_recorder/value_extractor.hpp"
+
 #include <QVariantMap>
 
 #include <algorithm>
@@ -106,6 +108,8 @@ QVariant TopicListModel::data(const QModelIndex & index, int role) const
       return row.frame_seq;
     case IsExpandedRole:
       return row.is_expanded;
+    case IsPlottableRole:
+      return row.is_plottable;
     default:
       return {};
   }
@@ -153,6 +157,7 @@ QHash<int, QByteArray> TopicListModel::roleNames() const
     {ResolutionTextRole, "resolutionText"},
     {FrameSeqRole, "frameSeq"},
     {IsExpandedRole, "isExpanded"},
+    {IsPlottableRole, "isPlottable"},
   };
 }
 
@@ -209,6 +214,25 @@ void TopicListModel::setExpanded(const QString & topic_key, bool expanded)
     row.is_expanded = expanded;
     const auto idx = index(static_cast<int>(i), 0);
     emit dataChanged(idx, idx, {IsExpandedRole});
+    return;
+  }
+}
+
+void TopicListModel::set_extractor_registry(const ValueExtractorRegistry * registry)
+{
+  registry_ = registry;
+}
+
+void TopicListModel::updateTopicType(const QString & topic_key, const QString & ros_type)
+{
+  const bool plottable = registry_ != nullptr && registry_->has(ros_type.toStdString());
+  for (std::size_t i = 0; i < topics_.size(); ++i) {
+    auto & row = topics_[i];
+    if (QString::fromStdString(row.topic.topic_name) != topic_key) { continue; }
+    if (row.is_plottable == plottable) { return; }
+    row.is_plottable = plottable;
+    const auto idx = index(static_cast<int>(i), 0);
+    emit dataChanged(idx, idx, {IsPlottableRole});
     return;
   }
 }
