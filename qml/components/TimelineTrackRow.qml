@@ -6,6 +6,8 @@ Rectangle {
 
     property string trackKind: "empty"
     property var seriesList: []
+    property bool isExpanded: false
+    property var messageDots: []
     property real xMax: 60
     property real visibleStartSeconds: 0
     property real visibleDurationSeconds: 60
@@ -13,7 +15,7 @@ Rectangle {
     property real plotBottomPadding: 4
     property real sampleMarkerSpacingThreshold: 12
 
-    height: 48
+    height: isExpanded ? 120 : 32
     color: trackKind === "empty" ? Theme.surfaceAlt : Theme.surface
 
     function boundedDuration() {
@@ -158,7 +160,7 @@ Rectangle {
         id: curveCanvas
 
         anchors.fill: parent
-        visible: root.trackKind === "numeric"
+        visible: root.trackKind === "numeric" && root.isExpanded
         onWidthChanged: requestPaint()
         onHeightChanged: requestPaint()
 
@@ -174,7 +176,11 @@ Rectangle {
             var minY = -1
             var maxY = 1
             for (var seriesIndex = 0; seriesIndex < entries.length; ++seriesIndex) {
-                var points = (entries[seriesIndex] || {}).points || []
+                var rangeEntry = entries[seriesIndex] || {}
+                if (rangeEntry.visible === false) {
+                    continue
+                }
+                var points = rangeEntry.points || []
                 for (var pointIndex = 0; pointIndex < points.length; ++pointIndex) {
                     var yValue = Number(points[pointIndex].y)
                     if (isFinite(yValue)) {
@@ -200,6 +206,9 @@ Rectangle {
 
             for (var drawSeriesIndex = 0; drawSeriesIndex < entries.length; ++drawSeriesIndex) {
                 var entry = entries[drawSeriesIndex] || {}
+                if (entry.visible === false) {
+                    continue
+                }
                 var sourcePoints = entry.points || []
                 var color = root.seriesColor(entry.color)
                 var drawablePoints = root.collectDrawablePoints(sourcePoints)
@@ -229,10 +238,45 @@ Rectangle {
         }
     }
 
-    onTrackKindChanged: curveCanvas.requestPaint()
+    Canvas {
+        id: dotsCanvas
+
+        anchors.fill: parent
+        // 折叠态：所有 rosbag 数据行（numeric/empty）都画节奏点；相机行不画。
+        visible: !root.isExpanded && root.trackKind !== "camera"
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+
+        onPaint: {
+            var ctx = getContext("2d")
+            ctx.clearRect(0, 0, width, height)
+            ctx.fillStyle = Theme.surface
+            ctx.fillRect(0, 0, width, height)
+
+            var dots = root.messageDots || []
+            var baselineY = height / 2
+            ctx.fillStyle = Theme.tickStrong
+            var start = root.visibleStartSeconds
+            var end = root.visibleEndSeconds()
+            for (var i = 0; i < dots.length; ++i) {
+                var t = Number(dots[i])
+                if (!isFinite(t) || t < start || t > end) {
+                    continue
+                }
+                var x = root.xToPixel(t, width)
+                ctx.beginPath()
+                ctx.arc(x, baselineY, 1.5, 0, Math.PI * 2)
+                ctx.fill()
+            }
+        }
+    }
+
+    onTrackKindChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
     onSeriesListChanged: curveCanvas.requestPaint()
-    onVisibleStartSecondsChanged: curveCanvas.requestPaint()
-    onVisibleDurationSecondsChanged: curveCanvas.requestPaint()
+    onMessageDotsChanged: dotsCanvas.requestPaint()
+    onIsExpandedChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
+    onVisibleStartSecondsChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
+    onVisibleDurationSecondsChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
 
     Rectangle {
         anchors.left: parent.left
