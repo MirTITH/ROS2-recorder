@@ -5,12 +5,16 @@
 #include <QStringList>
 #include <QVariantList>
 
+#include <cstddef>
 #include <string>
 
 #include "data_recorder/value_extractor.hpp"
 
 namespace data_recorder
 {
+
+// 历史曲线每序列点预算：画布约 700px，600 点已足够；与实时模式一致。
+constexpr std::size_t kHistorySeriesBudget = 600;
 
 // 历史会话数值曲线回读器。设计为可直接同步调用（测试）或 moveToThread 后经队列调用
 // （AppController）。读 <session_dir>/rosbag：scanTimestamps 一遍取折叠点；

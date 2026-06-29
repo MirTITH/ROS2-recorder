@@ -150,7 +150,7 @@ void HistoryCurveLoader::extractTopic(
   topic_map.insert("messageDots", dots);
 
   QVariantList series_arr;
-  for (const auto & snap : buffer.snapshot(/*budget=*/2000)) {
+  for (const auto & snap : buffer.snapshot(kHistorySeriesBudget)) {
     QVariantMap series_map;
     series_map.insert("key", QString::fromStdString(snap.key));
     QVariantList points;

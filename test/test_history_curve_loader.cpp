@@ -150,3 +150,28 @@ TEST(HistoryCurveLoader, ExtractTopicEmitsSeries)
 
   fs::remove_all(tmp);
 }
+
+TEST(HistoryCurveLoader, ExtractTopicDownsamplesSeriesToBudget)
+{
+  const auto tmp = fs::temp_directory_path() / "dr_history_budget_test";
+  constexpr int kMessageCount = 1300;  // > 历史序列预算(600)
+  const std::string session_dir = write_joint_state_bag(tmp, kMessageCount);
+
+  data_recorder::HistoryCurveLoader loader;
+  QSignalSpy curves_spy(&loader, &data_recorder::HistoryCurveLoader::curvesReady);
+  loader.extractTopic(QString::fromStdString(session_dir), "/joint_states");
+
+  ASSERT_EQ(curves_spy.count(), 1);
+  const auto topics = curves_spy.at(0).at(0).toList();
+  const auto topic = find_topic(topics, "/joint_states");
+  ASSERT_FALSE(topic.isEmpty());
+  const auto pos_a = find_series(topic.value("series").toList(), "pos/a");
+  ASSERT_FALSE(pos_a.isEmpty());
+  const auto pts = pos_a.value("points").toList();
+  EXPECT_LE(pts.size(), data_recorder::kHistorySeriesBudget);  // 抽稀到历史预算以内
+  // 端点（首尾时间）必须保留：bag 第 i 条消息相对起点 t = i*0.001s，共 1300 条。
+  ASSERT_FALSE(pts.isEmpty());
+  EXPECT_DOUBLE_EQ(pts.front().toMap().value("x").toDouble(), 0.0);
+  EXPECT_NEAR(pts.back().toMap().value("x").toDouble(), 1.299, 1e-9);
+  fs::remove_all(tmp);
+}
