@@ -12,7 +12,6 @@
 #include "data_recorder/session_manager.hpp"
 #include "data_recorder/session_player.hpp"
 #include "data_recorder/history_curve_loader.hpp"
-#include "data_recorder/profiling.hpp"
 #include "data_recorder/topic_series.hpp"
 
 namespace data_recorder
@@ -530,19 +529,6 @@ void AppController::setSeriesVisible(
   topic_model_.setSeriesVisible(topic_key, series_key, visible);
 }
 
-bool AppController::profilingEnabled() const
-{
-  return dr_profile_enabled();
-}
-
-void AppController::logProfile(const QString & label, double ms, const QString & extra)
-{
-  if (!dr_profile_enabled()) { return; }
-  std::cerr << "[DR_PROFILE] " << label.toStdString() << ": " << ms << " ms";
-  if (!extra.isEmpty()) { std::cerr << " [" << extra.toStdString() << "]"; }
-  std::cerr << std::endl;
-}
-
 bool AppController::eventFilter(QObject * watched, QEvent * event)
 {
   if (event->type() != QEvent::KeyPress) {
@@ -630,12 +616,6 @@ void AppController::onTopicTypesUpdated(const QVariantList & types)
 
 void AppController::onCurvesUpdated(const QVariantList & topics)
 {
-  // 性能探针（DR_PROFILE）：本槽在 GUI 线程把 worker 发来的 QVariant 点解析回 C++ 再回填模型，
-  // 是展开高频话题（如 /joint_states 99 序列）卡顿的首要怀疑点。统计 series 数与总点数。
-  ScopeTimer _curves_timer{"onCurvesUpdated"};
-  int series_count = 0;
-  long long point_count = 0;
-
   for (const auto & v : topics) {
     const auto m = v.toMap();
     const QString topic_key = m.value("topicKey").toString();
@@ -662,16 +642,7 @@ void AppController::onCurvesUpdated(const QVariantList & topics)
       }
       series.push_back(std::move(snap));
     }
-    series_count += static_cast<int>(series.size());
-    for (const auto & snap : series) { point_count += static_cast<long long>(snap.points.size()); }
     topic_model_.updateSeries(topic_key, series);
-  }
-
-  if (dr_profile_enabled()) {
-    _curves_timer.set_extra(
-      "topics=" + std::to_string(topics.size()) +
-      " series=" + std::to_string(series_count) +
-      " points=" + std::to_string(point_count));
   }
   // 背压复位：本帧曲线已消费，允许引擎推下一帧。
   if (engine_) { engine_->notify_curves_consumed(); }

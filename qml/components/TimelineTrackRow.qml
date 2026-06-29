@@ -19,10 +19,6 @@ Rectangle {
     readonly property int collapsedHeight: 32
     readonly property int expandedHeight: 120
 
-    // 性能探针：上层把 appController 传进来（可空）。仅当 profilingEnabled 时计时并回传 C++ 打日志。
-    property var profiler: null
-    property string profilerTag: ""
-
     // 曲线缓存：仅在 seriesList 变化时重建（见 rebuildCache）。平移/缩放只重绘、不重建。
     // _cachedSeries: [{ xs: Float64Array, ys: Float64Array, color }]（仅含可见序列）
     property var _cachedSeries: []
@@ -63,20 +59,10 @@ Rectangle {
 
     // 把 seriesList 一次性转成扁平 Float64Array 缓存 + 全局纵轴范围。
     function rebuildCache() {
-        var profiling = root.profiler && root.profiler.profilingEnabled
-        var t0 = profiling ? new Date().getTime() : 0
         var built = CurvePlot.buildSeriesCache(root.seriesList || [])
         root._cachedSeries = built.series
         root._cachedMinY = built.minY
         root._cachedMaxY = built.maxY
-        if (profiling) {
-            var pts = 0
-            for (var i = 0; i < built.series.length; ++i) { pts += built.series[i].xs.length }
-            root.profiler.logProfile(
-                "QML.rebuildCache " + root.profilerTag,
-                new Date().getTime() - t0,
-                "series=" + built.series.length + " points=" + pts)
-        }
     }
 
     function drawSampleMarkers(ctx, xs, ys, lo, hi, color, minY, maxY, top, plotHeightValue, widthValue) {
@@ -102,8 +88,6 @@ Rectangle {
         onHeightChanged: requestPaint()
 
         onPaint: {
-            var _prof = root.profiler && root.profiler.profilingEnabled
-            var _t0 = _prof ? new Date().getTime() : 0
             var ctx = getContext("2d")
             ctx.clearRect(0, 0, width, height)
             ctx.fillStyle = Theme.surface
@@ -167,12 +151,6 @@ Rectangle {
                             ctx, xs, ys, lo, hi, color, minY, maxY, top, plotHeight, width)
                     }
                 }
-            }
-            if (_prof) {
-                root.profiler.logProfile(
-                    "QML.curvePaint " + root.profilerTag,
-                    new Date().getTime() - _t0,
-                    "series=" + cache.length + " w=" + Math.round(width))
             }
         }
     }
