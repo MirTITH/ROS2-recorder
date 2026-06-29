@@ -653,11 +653,12 @@ void AppController::onCurvesUpdated(const QVariantList & topics)
       const auto sm = s.toMap();
       TopicSeries::SeriesSnapshot snap;
       snap.key = sm.value("key").toString().toStdString();
-      const auto pts = sm.value("points").toList();
-      snap.points.reserve(static_cast<std::size_t>(pts.size()));
-      for (const auto & p : pts) {
-        const auto pm = p.toMap();
-        snap.points.emplace_back(pm.value("x").toDouble(), pm.value("y").toDouble());
+      const auto xs = sm.value("xs").toList();
+      const auto ys = sm.value("ys").toList();
+      const qsizetype n = std::min(xs.size(), ys.size());  // 防御：按较短截断
+      snap.points.reserve(static_cast<std::size_t>(n));
+      for (qsizetype i = 0; i < n; ++i) {
+        snap.points.emplace_back(xs.at(i).toDouble(), ys.at(i).toDouble());
       }
       series.push_back(std::move(snap));
     }

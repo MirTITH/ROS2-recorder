@@ -5,6 +5,8 @@
 #include <QKeyEvent>
 #include <QModelIndex>
 #include <QObject>
+#include <QList>
+#include <QVariant>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QVector>
@@ -379,12 +381,15 @@ TEST(TopicListModel, UpdateSeriesBuildsStructuredEntries)
   ASSERT_FALSE(pos.isEmpty());
   EXPECT_EQ(pos.value("label").toString().toStdString(), "pos/a");
   EXPECT_TRUE(pos.value("visible").toBool());               // 默认可见
-  const auto pts = pos.value("points").toList();
-  ASSERT_EQ(pts.size(), 2);
-  EXPECT_DOUBLE_EQ(pts[0].toMap().value("x").toDouble(), 0.0);
-  EXPECT_DOUBLE_EQ(pts[0].toMap().value("y").toDouble(), 1.0);
-  EXPECT_DOUBLE_EQ(pts[1].toMap().value("x").toDouble(), 1.0);
-  EXPECT_DOUBLE_EQ(pts[1].toMap().value("y").toDouble(), 2.0);
+  const auto xs = pos.value("xs").toList();
+  const auto ys = pos.value("ys").toList();
+  ASSERT_EQ(xs.size(), 2);
+  ASSERT_EQ(ys.size(), 2);
+  EXPECT_DOUBLE_EQ(xs[0].toDouble(), 0.0);
+  EXPECT_DOUBLE_EQ(ys[0].toDouble(), 1.0);
+  EXPECT_DOUBLE_EQ(xs[1].toDouble(), 1.0);
+  EXPECT_DOUBLE_EQ(ys[1].toDouble(), 2.0);
+  EXPECT_FALSE(pos.contains("points"));
   const auto color = pos.value("color").toString();
   EXPECT_TRUE(color.startsWith("#"));
 
@@ -573,12 +578,10 @@ TEST(AppController, OnCurvesUpdatedFillsDotsAndSeries)
   }
   ASSERT_GE(joint_row, 0);
 
-  QVariantMap point;
-  point.insert("x", 0.5);
-  point.insert("y", 1.25);
   QVariantMap series;
   series.insert("key", "pos/a");
-  series.insert("points", QVariantList{point});
+  series.insert("xs", QVariant::fromValue(QList<double>{0.5}));
+  series.insert("ys", QVariant::fromValue(QList<double>{1.25}));
   QVariantMap topic;
   topic.insert("topicKey", "/joint_states");
   topic.insert("messageDots", QVariantList{0.5, 1.0});
@@ -598,10 +601,47 @@ TEST(AppController, OnCurvesUpdatedFillsDotsAndSeries)
   ASSERT_EQ(list.size(), 1);
   const auto entry = list[0].toMap();
   EXPECT_EQ(entry.value("key").toString().toStdString(), "pos/a");
-  const auto pts = entry.value("points").toList();
-  ASSERT_EQ(pts.size(), 1);
-  EXPECT_DOUBLE_EQ(pts[0].toMap().value("x").toDouble(), 0.5);
-  EXPECT_DOUBLE_EQ(pts[0].toMap().value("y").toDouble(), 1.25);
+  const auto xs = entry.value("xs").toList();
+  const auto ys = entry.value("ys").toList();
+  ASSERT_EQ(xs.size(), 1);
+  ASSERT_EQ(ys.size(), 1);
+  EXPECT_DOUBLE_EQ(xs[0].toDouble(), 0.5);
+  EXPECT_DOUBLE_EQ(ys[0].toDouble(), 1.25);
+}
+
+TEST(AppController, OnCurvesUpdatedTruncatesMismatchedXsYs)
+{
+  auto config = make_config_fixture();
+  data_recorder::AppController controller(config);
+  auto * model = controller.topicModel();
+
+  int joint_row = -1;
+  for (int r = 0; r < model->rowCount(); ++r) {
+    if (model->data(model->index(r, 0), data_recorder::TopicListModel::TopicNameRole)
+        .toString() == "/joint_states") { joint_row = r; break; }
+  }
+  ASSERT_GE(joint_row, 0);
+
+  QVariantMap series;
+  series.insert("key", "pos/a");
+  series.insert("xs", QVariant::fromValue(QList<double>{0.5, 0.6, 0.7}));  // 3
+  series.insert("ys", QVariant::fromValue(QList<double>{1.25}));           // 1
+  QVariantMap topic;
+  topic.insert("topicKey", "/joint_states");
+  topic.insert("messageDots", QVariantList{0.0});
+  topic.insert("series", QVariantList{series});
+
+  controller.onCurvesUpdated(QVariantList{topic});
+
+  const auto list =
+    model->data(model->index(joint_row, 0), data_recorder::TopicListModel::SeriesListRole).toList();
+  ASSERT_EQ(list.size(), 1);
+  const auto entry = list.front().toMap();
+  // 按较短（ys=1）截断
+  EXPECT_EQ(entry.value("xs").toList().size(), 1);
+  EXPECT_EQ(entry.value("ys").toList().size(), 1);
+  EXPECT_DOUBLE_EQ(entry.value("xs").toList().front().toDouble(), 0.5);
+  EXPECT_DOUBLE_EQ(entry.value("ys").toList().front().toDouble(), 1.25);
 }
 
 TEST(TopicListModel, UpdateStatsBackfillsFrequencyAndResolution)

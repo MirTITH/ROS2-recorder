@@ -2,6 +2,8 @@
 
 #include "data_recorder/value_extractor.hpp"
 
+#include <QList>
+#include <QVariant>
 #include <QVariantMap>
 
 #include <algorithm>
@@ -286,13 +288,13 @@ void TopicListModel::updateSeries(
       const bool visible = vis_it != row.series_visible_override.end() ?
         vis_it->second : default_series_visible(s.key);
 
-      QVariantList points;
-      points.reserve(static_cast<int>(s.points.size()));
+      QList<double> xs;
+      QList<double> ys;
+      xs.reserve(static_cast<qsizetype>(s.points.size()));
+      ys.reserve(static_cast<qsizetype>(s.points.size()));
       for (const auto & p : s.points) {
-        QVariantMap point;
-        point.insert("x", p.first);
-        point.insert("y", p.second);
-        points.append(point);
+        xs.push_back(p.first);
+        ys.push_back(p.second);
       }
 
       QVariantMap entry;
@@ -300,7 +302,8 @@ void TopicListModel::updateSeries(
       entry.insert("label", QString::fromStdString(s.key));
       entry.insert("color", color);
       entry.insert("visible", visible);
-      entry.insert("points", points);
+      entry.insert("xs", QVariant::fromValue(xs));
+      entry.insert("ys", QVariant::fromValue(ys));
       list.append(entry);
     }
 
