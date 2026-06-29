@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import "."
+import "curve_plot.js" as CurvePlot
 
 Rectangle {
     id: root
@@ -17,6 +18,12 @@ Rectangle {
     property real sampleMarkerSpacingThreshold: 12
     readonly property int collapsedHeight: 32
     readonly property int expandedHeight: 120
+
+    // 曲线缓存：仅在 seriesList 变化时重建（见 rebuildCache）。平移/缩放只重绘、不重建。
+    // _cachedSeries: [{ xs: Float64Array, ys: Float64Array, color }]（仅含可见序列）
+    property var _cachedSeries: []
+    property real _cachedMinY: -1
+    property real _cachedMaxY: 1
 
     height: root.isExpanded ? root.expandedHeight : root.collapsedHeight
     color: trackKind === "empty" ? Theme.surfaceAlt : Theme.surface
@@ -42,87 +49,6 @@ Rectangle {
         return visibleStartSeconds + boundedDuration()
     }
 
-    function numericPoint(point) {
-        var xValue = Number(point.x)
-        var yValue = Number(point.y)
-        if (!isFinite(xValue) || !isFinite(yValue)) {
-            return null
-        }
-        return { x: xValue, y: yValue, boundary: false }
-    }
-
-    function interpolateBoundaryPoint(leftPoint, rightPoint, targetX) {
-        var span = rightPoint.x - leftPoint.x
-        if (!isFinite(span) || Math.abs(span) < 0.000000001) {
-            return null
-        }
-        var ratio = (targetX - leftPoint.x) / span
-        return {
-            x: targetX,
-            y: leftPoint.y + (rightPoint.y - leftPoint.y) * ratio,
-            boundary: true
-        }
-    }
-
-    function collectDrawablePoints(points) {
-        var start = visibleStartSeconds
-        var end = visibleEndSeconds()
-        var before = null
-        var after = null
-        var inside = []
-
-        for (var index = 0; index < points.length; ++index) {
-            var candidate = numericPoint(points[index])
-            if (candidate === null) {
-                continue
-            }
-            if (candidate.x < start) {
-                before = candidate
-            } else if (candidate.x > end) {
-                after = candidate
-                break
-            } else {
-                inside.push(candidate)
-            }
-        }
-
-        var drawable = []
-        var leftSource = inside.length > 0 ? inside[0] : after
-        if (before !== null && leftSource !== null && before.x < start && leftSource.x > start) {
-            var leftBoundary = interpolateBoundaryPoint(before, leftSource, start)
-            if (leftBoundary !== null) {
-                drawable.push(leftBoundary)
-            }
-        }
-
-        for (var insideIndex = 0; insideIndex < inside.length; ++insideIndex) {
-            drawable.push(inside[insideIndex])
-        }
-
-        var rightSource = inside.length > 0 ? inside[inside.length - 1] : before
-        if (rightSource !== null && after !== null && rightSource.x < end && after.x > end) {
-            var rightBoundary = interpolateBoundaryPoint(rightSource, after, end)
-            if (rightBoundary !== null) {
-                drawable.push(rightBoundary)
-            }
-        }
-
-        return drawable
-    }
-
-    function collectVisibleSamples(points) {
-        var start = visibleStartSeconds
-        var end = visibleEndSeconds()
-        var samples = []
-        for (var index = 0; index < points.length; ++index) {
-            var candidate = numericPoint(points[index])
-            if (candidate !== null && candidate.x >= start && candidate.x <= end) {
-                samples.push(candidate)
-            }
-        }
-        return samples
-    }
-
     function xToPixel(xValue, widthValue) {
         return ((xValue - visibleStartSeconds) / boundedDuration()) * widthValue
     }
@@ -131,27 +57,21 @@ Rectangle {
         return top + (1 - ((yValue - minY) / Math.max(0.001, maxY - minY))) * plotHeightValue
     }
 
-    function averageSampleSpacing(samples, widthValue) {
-        if (samples.length < 2) {
-            return widthValue
-        }
-        var firstX = xToPixel(samples[0].x, widthValue)
-        var lastX = xToPixel(samples[samples.length - 1].x, widthValue)
-        return Math.abs(lastX - firstX) / Math.max(1, samples.length - 1)
+    // 把 seriesList 一次性转成扁平 Float64Array 缓存 + 全局纵轴范围。
+    function rebuildCache() {
+        var built = CurvePlot.buildSeriesCache(root.seriesList || [])
+        root._cachedSeries = built.series
+        root._cachedMinY = built.minY
+        root._cachedMaxY = built.maxY
     }
 
-    function shouldDrawSampleMarkers(samples, widthValue) {
-        return samples.length === 1 || averageSampleSpacing(samples, widthValue) >= sampleMarkerSpacingThreshold
-    }
-
-    function drawSampleMarkers(ctx, samples, color, minY, maxY, top, plotHeightValue, widthValue) {
+    function drawSampleMarkers(ctx, xs, ys, lo, hi, color, minY, maxY, top, plotHeightValue, widthValue) {
         ctx.fillStyle = Theme.surface
         ctx.strokeStyle = color
         ctx.lineWidth = 1
-        for (var index = 0; index < samples.length; ++index) {
-            var sample = samples[index]
-            var x = xToPixel(sample.x, widthValue)
-            var y = yToPixel(sample.y, minY, maxY, top, plotHeightValue)
+        for (var index = lo; index <= hi; ++index) {
+            var x = xToPixel(xs[index], widthValue)
+            var y = yToPixel(ys[index], minY, maxY, top, plotHeightValue)
             ctx.beginPath()
             ctx.arc(x, y, 2, 0, Math.PI * 2)
             ctx.fill()
@@ -175,27 +95,8 @@ Rectangle {
 
             var top = root.plotTop()
             var plotHeight = root.plotHeight()
-            var entries = root.seriesList || []
-            var minY = -1
-            var maxY = 1
-            for (var seriesIndex = 0; seriesIndex < entries.length; ++seriesIndex) {
-                var rangeEntry = entries[seriesIndex] || {}
-                if (rangeEntry.visible === false) {
-                    continue
-                }
-                var points = rangeEntry.points || []
-                for (var pointIndex = 0; pointIndex < points.length; ++pointIndex) {
-                    var yValue = Number(points[pointIndex].y)
-                    if (isFinite(yValue)) {
-                        minY = Math.min(minY, yValue)
-                        maxY = Math.max(maxY, yValue)
-                    }
-                }
-            }
-            if (minY === maxY) {
-                minY -= 1
-                maxY += 1
-            }
+            var minY = root._cachedMinY
+            var maxY = root._cachedMaxY
 
             ctx.strokeStyle = Theme.gridLine
             ctx.lineWidth = 1
@@ -207,35 +108,48 @@ Rectangle {
                 ctx.stroke()
             }
 
-            for (var drawSeriesIndex = 0; drawSeriesIndex < entries.length; ++drawSeriesIndex) {
-                var entry = entries[drawSeriesIndex] || {}
-                if (entry.visible === false) {
+            var start = root.visibleStartSeconds
+            var end = root.visibleEndSeconds()
+            var cache = root._cachedSeries || []
+            for (var s = 0; s < cache.length; ++s) {
+                var entry = cache[s]
+                var xs = entry.xs
+                var ys = entry.ys
+                if (xs.length === 0) {
                     continue
                 }
-                var sourcePoints = entry.points || []
                 var color = root.seriesColor(entry.color)
-                var drawablePoints = root.collectDrawablePoints(sourcePoints)
 
-                if (drawablePoints.length >= 2) {
+                var poly = CurvePlot.drawablePolyline(xs, ys, start, end)
+                if (poly.xs.length >= 2) {
                     ctx.beginPath()
                     ctx.strokeStyle = color
                     ctx.lineWidth = 1.5
-                    for (var drawPointIndex = 0; drawPointIndex < drawablePoints.length; ++drawPointIndex) {
-                        var point = drawablePoints[drawPointIndex]
-                        var x = root.xToPixel(point.x, width)
-                        var yPixel = root.yToPixel(point.y, minY, maxY, top, plotHeight)
-                        if (drawPointIndex === 0) {
-                            ctx.moveTo(x, yPixel)
+                    for (var p = 0; p < poly.xs.length; ++p) {
+                        var lineX = root.xToPixel(poly.xs[p], width)
+                        var lineY = root.yToPixel(poly.ys[p], minY, maxY, top, plotHeight)
+                        if (p === 0) {
+                            ctx.moveTo(lineX, lineY)
                         } else {
-                            ctx.lineTo(x, yPixel)
+                            ctx.lineTo(lineX, lineY)
                         }
                     }
                     ctx.stroke()
                 }
 
-                var visibleSamples = root.collectVisibleSamples(sourcePoints)
-                if (root.shouldDrawSampleMarkers(visibleSamples, width)) {
-                    root.drawSampleMarkers(ctx, visibleSamples, color, minY, maxY, top, plotHeight, width)
+                var range = CurvePlot.visibleIndexRange(xs, start, end)
+                var lo = range.lo
+                var hi = range.hi
+                if (hi >= lo) {
+                    var visibleCount = hi - lo + 1
+                    var firstPx = root.xToPixel(xs[lo], width)
+                    var lastPx = root.xToPixel(xs[hi], width)
+                    var avgSpacing = visibleCount < 2 ?
+                        width : Math.abs(lastPx - firstPx) / Math.max(1, visibleCount - 1)
+                    if (visibleCount === 1 || avgSpacing >= root.sampleMarkerSpacingThreshold) {
+                        root.drawSampleMarkers(
+                            ctx, xs, ys, lo, hi, color, minY, maxY, top, plotHeight, width)
+                    }
                 }
             }
         }
@@ -275,12 +189,14 @@ Rectangle {
     }
 
     onTrackKindChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
-    onSeriesListChanged: curveCanvas.requestPaint()
+    onSeriesListChanged: { root.rebuildCache(); curveCanvas.requestPaint() }
     onMessageDotsChanged: dotsCanvas.requestPaint()
     onIsExpandedChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
     onShowDataChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
     onVisibleStartSecondsChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
     onVisibleDurationSecondsChanged: { curveCanvas.requestPaint(); dotsCanvas.requestPaint() }
+
+    Component.onCompleted: root.rebuildCache()
 
     Rectangle {
         anchors.left: parent.left

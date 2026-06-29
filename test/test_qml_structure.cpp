@@ -356,14 +356,21 @@ TEST(QmlStructure, TimelineViewportRenderingRulesAreExplicit)
   expect_contains(curve_text, "property real plotTopPadding: 4");
   expect_contains(curve_text, "property real plotBottomPadding: 4");
   expect_contains(curve_text, "property real sampleMarkerSpacingThreshold: 12");
-  expect_contains(curve_text, "function collectDrawablePoints");
-  expect_contains(curve_text, "function interpolateBoundaryPoint");
-  expect_contains(curve_text, "function collectVisibleSamples");
-  expect_contains(curve_text, "function shouldDrawSampleMarkers");
+  expect_contains(curve_text, "import \"curve_plot.js\" as CurvePlot");
+  expect_contains(curve_text, "function rebuildCache");
+  expect_contains(curve_text, "CurvePlot.buildSeriesCache");
+  expect_contains(curve_text, "CurvePlot.drawablePolyline");
+  expect_contains(curve_text, "CurvePlot.visibleIndexRange");
   expect_contains(curve_text, "function drawSampleMarkers");
-  expect_contains(curve_text, "boundary: true");
-  expect_contains(curve_text, "boundary: false");
   expect_contains(curve_text, "ctx.arc");
+
+  const std::string curveplot_text = read_text(qml_dir() / "components" / "curve_plot.js");
+  EXPECT_TRUE(std::filesystem::exists(qml_dir() / "components" / "curve_plot.js"));
+  expect_contains(curveplot_text, "function buildSeriesCache");
+  expect_contains(curveplot_text, "function drawablePolyline");
+  expect_contains(curveplot_text, "function visibleIndexRange");
+  expect_contains(curveplot_text, "entry.visible === false");
+  expect_contains(curveplot_text, "Float64Array");
 
   expect_contains(range_text, "id: thumbBody");
   expect_contains(range_text, "color: Theme.tickStrong");
@@ -446,7 +453,7 @@ TEST(QmlStructure, TimelineRowsSupportExpandCollapseCurves)
   const std::string track = read_text(qml_dir() / "components" / "TimelineTrackRow.qml");
   expect_contains(track, "dotsCanvas");
   expect_contains(track, "messageDots");
-  expect_contains(track, "entry.visible === false");
+  expect_contains(track, "onSeriesListChanged: { root.rebuildCache(); curveCanvas.requestPaint() }");
   expect_contains(track, "readonly property int collapsedHeight: 32");
   expect_contains(track, "readonly property int expandedHeight: 120");
 
