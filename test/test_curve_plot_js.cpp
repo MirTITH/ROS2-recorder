@@ -77,14 +77,14 @@ TEST_F(CurvePlotJs, VisibleIndexRangeEmptyWhenWindowBetweenPoints)
 TEST_F(CurvePlotJs, BuildSeriesCacheSkipsHiddenAndKeepsBaselineRange)
 {
   QJSValue r = eval(
-    "var sl=[{visible:true,color:'#111111',points:[{x:0,y:0.5},{x:1,y:0.25}]},"
-    "        {visible:false,color:'#222222',points:[{x:0,y:99}]}];"
+    "var sl=[{visible:true,color:'#111111',xs:[0,1],ys:[0.5,0.25]},"
+    "        {visible:false,color:'#222222',xs:[0],ys:[99]}];"
     "var c=buildSeriesCache(sl);"
     "[c.series.length,c.minY,c.maxY,c.series[0].xs.length,c.series[0].ys[0]];");
   ASSERT_TRUE(r.isArray());
-  EXPECT_EQ(r.property(0).toInt(), 1);             // hidden skipped
-  EXPECT_DOUBLE_EQ(r.property(1).toNumber(), -1);  // baseline [-1,1] kept (0.25 > -1)
-  EXPECT_DOUBLE_EQ(r.property(2).toNumber(), 1);   // baseline kept (0.5 < 1)
+  EXPECT_EQ(r.property(0).toInt(), 1);
+  EXPECT_DOUBLE_EQ(r.property(1).toNumber(), -1);
+  EXPECT_DOUBLE_EQ(r.property(2).toNumber(), 1);
   EXPECT_EQ(r.property(3).toInt(), 2);
   EXPECT_DOUBLE_EQ(r.property(4).toNumber(), 0.5);
 }
@@ -92,10 +92,20 @@ TEST_F(CurvePlotJs, BuildSeriesCacheSkipsHiddenAndKeepsBaselineRange)
 TEST_F(CurvePlotJs, BuildSeriesCacheExpandsRangeBeyondBaseline)
 {
   QJSValue r = eval(
-    "var c=buildSeriesCache([{visible:true,points:[{x:0,y:-3},{x:1,y:5}]}]);"
+    "var c=buildSeriesCache([{visible:true,xs:[0,1],ys:[-3,5]}]);"
     "[c.minY,c.maxY];");
   EXPECT_DOUBLE_EQ(r.property(0).toNumber(), -3);
   EXPECT_DOUBLE_EQ(r.property(1).toNumber(), 5);
+}
+
+TEST_F(CurvePlotJs, BuildSeriesCacheTruncatesMismatchedLengths)
+{
+  QJSValue r = eval(
+    "var c=buildSeriesCache([{visible:true,xs:[0,1,2],ys:[10,20]}]);"
+    "[c.series[0].xs.length,c.series[0].ys.length];");
+  ASSERT_TRUE(r.isArray());
+  EXPECT_EQ(r.property(0).toInt(), 2);  // 按 ys 较短截断
+  EXPECT_EQ(r.property(1).toInt(), 2);
 }
 
 TEST_F(CurvePlotJs, DrawablePolylineInterpolatesToWindowEdges)

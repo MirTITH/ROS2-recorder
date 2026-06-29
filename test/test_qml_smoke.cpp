@@ -12,6 +12,7 @@
 #include <QTest>
 #include <QTimer>
 #include <QUrl>
+#include <QList>
 #include <QVariantMap>
 #include <QWindow>
 
@@ -406,12 +407,10 @@ TEST_F(QmlSmokeTest, ClickingSeriesLegendChipTogglesVisibilityBothWays)
   type.insert("rosType", "sensor_msgs/msg/JointState");
   controller_->onTopicTypesUpdated(QVariantList{type});
 
-  QVariantMap point;
-  point.insert("x", 0.0);
-  point.insert("y", 1.0);
   QVariantMap series;
   series.insert("key", "pos/a");
-  series.insert("points", QVariantList{point});
+  series.insert("xs", QVariant::fromValue(QList<double>{0.0}));
+  series.insert("ys", QVariant::fromValue(QList<double>{1.0}));
   QVariantMap topic;
   topic.insert("topicKey", "/joint_states");
   topic.insert("messageDots", QVariantList{0.0});
@@ -456,13 +455,10 @@ TEST_F(QmlSmokeTest, ClickingScrolledSeriesLegendChipTogglesVisibility)
 
   QVariantList series_list;
   for (int index = 0; index < 30; ++index) {
-    QVariantMap point;
-    point.insert("x", 0.0);
-    point.insert("y", double(index));
-
     QVariantMap series;
     series.insert("key", QString("pos/joint_%1").arg(index, 2, 10, QLatin1Char('0')));
-    series.insert("points", QVariantList{point});
+    series.insert("xs", QVariant::fromValue(QList<double>{0.0}));
+    series.insert("ys", QVariant::fromValue(QList<double>{double(index)}));
     series_list.push_back(series);
   }
 

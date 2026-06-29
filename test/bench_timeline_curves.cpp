@@ -17,6 +17,7 @@
 #include <QQuickItem>
 #include <QTest>
 #include <QUrl>
+#include <QList>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QWindow>
@@ -51,19 +52,21 @@ QVariantMap make_joint_payload(int series, int points)
 {
   QVariantList series_arr;
   for (int s = 0; s < series; ++s) {
-    QVariantList pts;
+    QList<double> xs;
+    QList<double> ys;
+    xs.reserve(points);
+    ys.reserve(points);
     for (int i = 0; i < points; ++i) {
       const double t = static_cast<double>(i) / static_cast<double>(points) * 12.0;  // 0..12s
-      QVariantMap pt;
-      pt.insert("x", t);
-      pt.insert("y", std::sin(t + s * 0.1) * (1.0 + s % 5));
-      pts.push_back(pt);
+      xs.push_back(t);
+      ys.push_back(std::sin(t + s * 0.1) * (1.0 + s % 5));
     }
     QVariantMap sm;
-    // 一半 pos/（默认可见），一半 vel/（默认隐藏）—— 贴近真实可见/隐藏比例。
+    // 三类前缀：pos/（默认可见）、vel/ 与 eff/（默认隐藏）—— 贴近真实可见/隐藏比例。
     const QString prefix = (s % 3 == 0) ? "pos/" : (s % 3 == 1 ? "vel/" : "eff/");
     sm.insert("key", prefix + QString("joint_%1").arg(s, 2, 10, QLatin1Char('0')));
-    sm.insert("points", pts);
+    sm.insert("xs", QVariant::fromValue(xs));
+    sm.insert("ys", QVariant::fromValue(ys));
     series_arr.push_back(sm);
   }
 

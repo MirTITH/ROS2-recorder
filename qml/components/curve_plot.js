@@ -2,11 +2,11 @@
 // 无 QML / Canvas 依赖，可被 TimelineTrackRow.qml 导入，也可在 QJSEngine 中直接 evaluate 单测。
 // （刻意不加 .pragma library，以便测试直接对本文件文本求值。）
 
-// 从 seriesList（[{color, visible, points:[{x,y}]}]）构建扁平数组缓存。
-// 仅纳入 visible !== false 的序列；逐点过滤非有限值。
+// 从 seriesList（[{color, visible, xs:[double], ys:[double]}]）构建扁平数组缓存。
+// 仅纳入 visible !== false 的序列；逐点过滤非有限值；xs/ys 不等长时按较短截断。
 // 纵轴范围以 [-1, 1] 为基线再按数据扩展（与原 onPaint 行为一致）。
 // 返回 { series:[{xs:Float64Array, ys:Float64Array, color}], minY, maxY }。
-// 约定：每个 points 元素均为 {x,y} 对象（由 C++ updateSeries 保证，不含 null）。
+// 约定：xs/ys 为并列数值数组（由 C++ updateSeries 保证）。
 function buildSeriesCache(seriesList) {
     var entries = seriesList || []
     var out = []
@@ -17,14 +17,15 @@ function buildSeriesCache(seriesList) {
         if (entry.visible === false) {
             continue
         }
-        var points = entry.points || []
-        var n = points.length
+        var srcXs = entry.xs || []
+        var srcYs = entry.ys || []
+        var n = Math.min(srcXs.length, srcYs.length)  // 不等长按较短截断
         var xs = new Float64Array(n)
         var ys = new Float64Array(n)
         var count = 0
         for (var j = 0; j < n; ++j) {
-            var px = Number(points[j].x)
-            var py = Number(points[j].y)
+            var px = Number(srcXs[j])
+            var py = Number(srcYs[j])
             if (!isFinite(px) || !isFinite(py)) {
                 continue
             }
