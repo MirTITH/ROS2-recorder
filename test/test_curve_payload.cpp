@@ -59,7 +59,16 @@ TEST(CurvePayload, ExpandedTopicCarriesSeries)
   ASSERT_FALSE(js.isEmpty());
   const auto arr = js.value("series").toList();
   ASSERT_EQ(arr.size(), 1);
-  EXPECT_EQ(arr[0].toMap().value("key").toString().toStdString(), "pos/a");
+  const auto entry = arr[0].toMap();
+  EXPECT_EQ(entry.value("key").toString().toStdString(), "pos/a");
+  EXPECT_FALSE(entry.contains("points"));  // 旧逐点表示已移除
+  const auto xs = entry.value("xs").toList();
+  const auto ys = entry.value("ys").toList();
+  ASSERT_EQ(xs.size(), ys.size());
+  EXPECT_EQ(xs.size(), 10);
+  ASSERT_FALSE(xs.isEmpty());
+  EXPECT_DOUBLE_EQ(xs.front().toDouble(), 0.0);   // 首点 t=0
+  EXPECT_DOUBLE_EQ(ys.front().toDouble(), 0.0);   // 首点 v=0
 }
 
 // 折叠点受预算上限约束（即便 /tf 这类高频话题灌入大量消息，也不会发上万个点给 GUI）。

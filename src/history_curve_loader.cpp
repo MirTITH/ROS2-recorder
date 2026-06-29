@@ -11,6 +11,7 @@
 #include <rclcpp/serialized_message.hpp>
 #include <rosbag2_cpp/reader.hpp>
 
+#include "data_recorder/curve_payload.hpp"
 #include "data_recorder/topic_series.hpp"
 
 namespace data_recorder
@@ -151,17 +152,7 @@ void HistoryCurveLoader::extractTopic(
 
   QVariantList series_arr;
   for (const auto & snap : buffer.snapshot(kHistorySeriesBudget)) {
-    QVariantMap series_map;
-    series_map.insert("key", QString::fromStdString(snap.key));
-    QVariantList points;
-    for (const auto & p : snap.points) {
-      QVariantMap pt;
-      pt.insert("x", p.first);
-      pt.insert("y", p.second);
-      points.push_back(pt);
-    }
-    series_map.insert("points", points);
-    series_arr.push_back(series_map);
+    series_arr.push_back(snap_to_series_map(snap));
   }
   topic_map.insert("series", series_arr);
 

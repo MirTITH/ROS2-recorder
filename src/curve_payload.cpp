@@ -1,10 +1,29 @@
 #include "data_recorder/curve_payload.hpp"
 
+#include <QList>
 #include <QString>
+#include <QVariant>
 #include <QVariantMap>
 
 namespace data_recorder
 {
+
+QVariantMap snap_to_series_map(const TopicSeries::SeriesSnapshot & snap)
+{
+  QList<double> xs;
+  QList<double> ys;
+  xs.reserve(static_cast<qsizetype>(snap.points.size()));
+  ys.reserve(static_cast<qsizetype>(snap.points.size()));
+  for (const auto & p : snap.points) {
+    xs.push_back(p.first);
+    ys.push_back(p.second);
+  }
+  QVariantMap series_map;
+  series_map.insert("key", QString::fromStdString(snap.key));
+  series_map.insert("xs", QVariant::fromValue(xs));
+  series_map.insert("ys", QVariant::fromValue(ys));
+  return series_map;
+}
 
 QVariantList build_curve_payload(
   const std::map<std::string, TopicSeries> & series,
@@ -25,17 +44,7 @@ QVariantList build_curve_payload(
     QVariantList series_arr;
     if (expanded_topics.count(topic) != 0) {
       for (const auto & snap : buffer.snapshot(series_budget)) {
-        QVariantMap series_map;
-        series_map.insert("key", QString::fromStdString(snap.key));
-        QVariantList points;
-        for (const auto & p : snap.points) {
-          QVariantMap pt;
-          pt.insert("x", p.first);
-          pt.insert("y", p.second);
-          points.push_back(pt);
-        }
-        series_map.insert("points", points);
-        series_arr.push_back(series_map);
+        series_arr.push_back(snap_to_series_map(snap));
       }
     }
     topic_map.insert("series", series_arr);

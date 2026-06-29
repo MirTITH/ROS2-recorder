@@ -113,10 +113,12 @@ TEST(HistoryCurveLoader, LongTopicDownsamplingKeepsFullSessionSpan)
   ASSERT_FALSE(topic.isEmpty());
   const auto pos_a = find_series(topic.value("series").toList(), "pos/a");
   ASSERT_FALSE(pos_a.isEmpty());
-  const auto pts = pos_a.value("points").toList();
-  ASSERT_FALSE(pts.isEmpty());
-  EXPECT_DOUBLE_EQ(pts.front().toMap().value("x").toDouble(), 0.0);
-  EXPECT_NEAR(pts.back().toMap().value("x").toDouble(), kLastSeconds, 1e-9);
+  const auto pts_xs = pos_a.value("xs").toList();
+  ASSERT_FALSE(pts_xs.isEmpty());
+  EXPECT_DOUBLE_EQ(pts_xs.front().toDouble(), 0.0);
+  EXPECT_NEAR(pts_xs.back().toDouble(), kLastSeconds, 1e-9);
+  const auto pts_ys = pos_a.value("ys").toList();
+  ASSERT_EQ(pts_xs.size(), pts_ys.size());
 
   fs::remove_all(tmp);
 }
@@ -139,14 +141,16 @@ TEST(HistoryCurveLoader, ExtractTopicEmitsSeries)
   const auto series = topic.value("series").toList();
   const auto pos_a = find_series(series, "pos/a");
   ASSERT_FALSE(pos_a.isEmpty());
-  const auto pts = pos_a.value("points").toList();
-  EXPECT_EQ(pts.size(), 5);  // 5 条消息，未超抽稀预算
-  // pos/a 末值 = 4（第 5 条 position[0]）
-  EXPECT_DOUBLE_EQ(pts.last().toMap().value("y").toDouble(), 4.0);
+  const auto pos_a_ys = pos_a.value("ys").toList();
+  ASSERT_EQ(pos_a.value("xs").toList().size(), 5);  // 5 条消息，未超抽稀预算
+  ASSERT_EQ(pos_a_ys.size(), 5);
+  EXPECT_DOUBLE_EQ(pos_a_ys.last().toDouble(), 4.0);  // pos/a 末值 = 4
 
   const auto pos_b = find_series(series, "pos/b");
   ASSERT_FALSE(pos_b.isEmpty());
-  EXPECT_DOUBLE_EQ(pos_b.value("points").toList().last().toMap().value("y").toDouble(), 8.0);
+  const auto pos_b_ys = pos_b.value("ys").toList();
+  ASSERT_FALSE(pos_b_ys.isEmpty());
+  EXPECT_DOUBLE_EQ(pos_b_ys.last().toDouble(), 8.0);
 
   fs::remove_all(tmp);
 }
@@ -167,11 +171,13 @@ TEST(HistoryCurveLoader, ExtractTopicDownsamplesSeriesToBudget)
   ASSERT_FALSE(topic.isEmpty());
   const auto pos_a = find_series(topic.value("series").toList(), "pos/a");
   ASSERT_FALSE(pos_a.isEmpty());
-  const auto pts = pos_a.value("points").toList();
-  EXPECT_LE(pts.size(), data_recorder::kHistorySeriesBudget);  // 抽稀到历史预算以内
+  const auto pts_xs = pos_a.value("xs").toList();
+  const auto pts_ys = pos_a.value("ys").toList();
+  ASSERT_EQ(pts_xs.size(), pts_ys.size());
+  EXPECT_LE(pts_xs.size(), data_recorder::kHistorySeriesBudget);  // 抽稀到历史预算以内
   // 端点（首尾时间）必须保留：bag 第 i 条消息相对起点 t = i*0.001s，共 1300 条。
-  ASSERT_FALSE(pts.isEmpty());
-  EXPECT_DOUBLE_EQ(pts.front().toMap().value("x").toDouble(), 0.0);
-  EXPECT_NEAR(pts.back().toMap().value("x").toDouble(), 1.299, 1e-9);
+  ASSERT_FALSE(pts_xs.isEmpty());
+  EXPECT_DOUBLE_EQ(pts_xs.front().toDouble(), 0.0);
+  EXPECT_NEAR(pts_xs.back().toDouble(), 1.299, 1e-9);
   fs::remove_all(tmp);
 }
