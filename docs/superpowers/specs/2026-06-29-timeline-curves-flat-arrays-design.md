@@ -96,6 +96,14 @@ worker: snapshot → series{xs:QList<double>, ys:QList<double>}   [无 QVariantM
 - **xs/ys 等长假设**：消费端与 `buildSeriesCache` 都按 `min(xs.length, ys.length)` 防御，避免越界。
 - **QList<double> 封送**：确认 QML 端 `entry.xs` 取到的是可索引数组（QList<double> → JS Array）；冒烟测试实测。
 
-## 结果（实现后填写）
-- onCurvesUpdated: 171ms → ___ ms
-- 其余阶段对照：___
+## 结果（实测）
+
+基准 `bench_timeline_curves 99 600 30`（99 序列 × 600 点 = 59,400 点），同机对照：
+
+| 阶段 | 改造前（round 1） | 改造后（round 2） | 变化 |
+|---|---|---|---|
+| **onCurvesUpdated**（GUI 线程 QVariant 往返） | 171.3 ms | **18.2 ms** | **9.4× 更快** |
+| QML.rebuildCache | 3 ms | 4 ms | 持平 |
+| QML.curvePaint（每行/帧） | 5–8 ms | 8–15 ms | 持平 |
+
+主因 `onCurvesUpdated` 降一个数量级达成（目标 <~20ms）。实时模式下 200ms 推送周期内该槽占用从 ~85% 降到 ~9%，UI 不再被堵。全部 186 测试绿（含新增 2 个不等长截断用例）。
