@@ -175,6 +175,11 @@ if(BUILD_TESTING)
   target_link_libraries(test_history_curve_loader data_recorder_core Qt6::Test)
   ament_target_dependencies(test_history_curve_loader rclcpp rosbag2_cpp sensor_msgs)
 
+  ament_add_gtest(test_curve_plot_js test/test_curve_plot_js.cpp)
+  target_link_libraries(test_curve_plot_js Qt6::Qml)
+  target_compile_definitions(test_curve_plot_js PRIVATE
+    DATA_RECORDER_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
+
   ament_add_gtest(test_value_extractor test/test_value_extractor.cpp)
   target_link_libraries(test_value_extractor data_recorder_core)
   ament_target_dependencies(test_value_extractor rclcpp sensor_msgs geometry_msgs trajectory_msgs)
