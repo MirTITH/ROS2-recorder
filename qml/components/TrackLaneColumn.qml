@@ -185,6 +185,8 @@ ColumnLayout {
                         xMax: root.effectiveDurationSeconds
                         visibleStartSeconds: viewport.visibleStartSeconds
                         visibleDurationSeconds: viewport.boundedVisibleDuration
+                        profiler: root.controller
+                        profilerTag: model.topicName !== undefined ? model.topicName : ""
                     }
                 }
             }

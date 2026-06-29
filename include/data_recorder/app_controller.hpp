@@ -91,6 +91,12 @@ public:
   Q_INVOKABLE void setSeriesVisible(
     const QString & topic_key, const QString & series_key, bool visible);
 
+  // 性能探针（仅当环境变量 DR_PROFILE 启用）：QML 侧把分阶段耗时交回 C++ 统一打到 stderr，
+  // 与 C++ 侧 ScopeTimer 同一开关、同一输出流，便于对照。禁用时 QML 直接跳过、零开销。
+  Q_PROPERTY(bool profilingEnabled READ profilingEnabled CONSTANT)
+  bool profilingEnabled() const;
+  Q_INVOKABLE void logProfile(const QString & label, double ms, const QString & extra);
+
   bool eventFilter(QObject * watched, QEvent * event) override;
 
   void onCurvesUpdated(const QVariantList & topics);

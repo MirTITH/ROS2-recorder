@@ -115,6 +115,12 @@ install(DIRECTORY config
 )
 
 if(BUILD_TESTING)
+  # 手动性能基准（非自动化测试）：复现展开曲线热路径，配合 DR_PROFILE=1 输出分阶段耗时。
+  add_executable(bench_timeline_curves test/bench_timeline_curves.cpp)
+  target_link_libraries(bench_timeline_curves data_recorder_core Qt6::Widgets Qt6::Test)
+  target_compile_definitions(bench_timeline_curves PRIVATE
+    DATA_RECORDER_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
+
   ament_add_gtest(test_config_model test/test_config_model.cpp)
   target_link_libraries(test_config_model data_recorder_core)
 
