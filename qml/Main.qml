@@ -77,6 +77,7 @@ ApplicationWindow {
                             SplitView.preferredHeight: 65
                             SplitView.minimumHeight: 20
                             model: appController.tagModel
+                            controller: appController
                         }
                     }
 

@@ -7,6 +7,7 @@ Panel {
     id: root
 
     property var model
+    property var controller
 
     title: "记录标签"
 
@@ -16,6 +17,9 @@ Panel {
         clip: true
         contentWidth: width
         contentHeight: tagFlow.implicitHeight
+        // 未录制且非历史时整组置灰不可编辑（标签跟随选中的数据源）。
+        enabled: !!root.controller && (root.controller.recording || root.controller.historyMode)
+        opacity: enabled ? 1.0 : 0.45
 
         Flow {
             id: tagFlow
@@ -49,8 +53,8 @@ Panel {
                     }
 
                     onClicked: {
-                        if (root.model && root.model.select) {
-                            root.model.select(index)
+                        if (root.controller && root.controller.toggleTag) {
+                            root.controller.toggleTag(index)
                         }
                     }
                 }

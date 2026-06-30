@@ -468,3 +468,23 @@ TEST(QmlStructure, TimelineRowsSupportExpandCollapseCurves)
   EXPECT_TRUE(std::filesystem::exists(qml_dir() / "assets" / "icons" / "chevron-down.svg"));
   EXPECT_TRUE(std::filesystem::exists(qml_dir() / "assets" / "icons" / "chevron-right.svg"));
 }
+
+TEST(QmlStructure, TagPanelEditsFollowSelectedSource)
+{
+  const std::string tags_panel = read_text(qml_dir() / "components" / "RecordingTagsPanel.qml");
+  const std::string sessions_panel = read_text(qml_dir() / "components" / "RecordingSessionsPanel.qml");
+  const std::string main_text = read_text(qml_dir() / "Main.qml");
+
+  // 底部面板经 controller.toggleTag，按录制/历史态置灰。
+  expect_contains(tags_panel, "property var controller");
+  expect_contains(tags_panel, "controller.toggleTag(index)");
+  expect_contains(tags_panel, "root.controller.recording || root.controller.historyMode");
+  // Main.qml 给底部面板传 controller。
+  expect_contains(main_text, "RecordingTagsPanel {");
+
+  // 会话行用 Repeater 渲染 tags 数组；旧单标签角色已移除（黑块修复）。
+  expect_contains(sessions_panel, "Repeater {");
+  expect_contains(sessions_panel, "TagChip {");
+  expect_not_contains(sessions_panel, "model.tagName");
+  expect_not_contains(sessions_panel, "model.tagColor");
+}

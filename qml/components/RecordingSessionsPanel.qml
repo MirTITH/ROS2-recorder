@@ -56,6 +56,16 @@ Panel {
                     font.bold: onlineDataSourceRow.selected
                     elide: Text.ElideRight
                 }
+
+                Repeater {
+                    model: root.controller ? root.controller.tagModel : null
+                    delegate: TagChip {
+                        visible: model.isSelected
+                        label: model.name
+                        chipColor: model.color
+                        maxTextWidth: 54
+                    }
+                }
             }
 
             MouseArea {
@@ -95,6 +105,7 @@ Panel {
                 opacity: enabled ? 1.0 : 0.45
 
                 readonly property bool selected: root.controller && root.controller.historyMode && root.controller.selectedSessionRow === index
+                readonly property var rowTags: model.tags
 
                 ToolTip.visible: hoverHandler.hovered
                 ToolTip.text: model.folderName + "\n时长: " + model.fullDuration + "\n磁盘: " + model.sizeText
@@ -135,10 +146,13 @@ Panel {
                             color: Theme.textMuted
                             font.pixelSize: 11
                         }
-                        TagChip {
-                            label: model.tagName
-                            chipColor: model.tagColor
-                            maxTextWidth: 54
+                        Repeater {
+                            model: rowTags
+                            delegate: TagChip {
+                                label: modelData.name
+                                chipColor: modelData.color
+                                maxTextWidth: 54
+                            }
                         }
                     }
                 }
