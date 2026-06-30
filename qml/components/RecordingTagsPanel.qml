@@ -49,6 +49,7 @@ Panel {
                     contentItem: TagChip {
                         label: model.name
                         chipColor: model.color
+                        selected: model.isSelected
                         maxTextWidth: 72
                     }
 
