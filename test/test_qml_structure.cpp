@@ -124,7 +124,7 @@ TEST(QmlStructure, AppChromeUsesStatusBarForRecording)
   expect_contains(status_text, "readonly property bool isRecording");
   expect_contains(status_text, "readonly property string statusText");
   expect_contains(status_text, "text: root.statusText");
-  expect_contains(status_text, "text: \"磁盘 --\"");
+  expect_contains(status_text, "controller.diskSpaceText");
   expect_not_contains(status_text, "outputDirectory");
   expect_not_contains(status_text, "保存目录");
 }

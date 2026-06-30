@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QString>
 #include <QThread>
+#include <QTimer>
 #include <QVariantList>
 
 #include <set>
@@ -49,6 +50,8 @@ class AppController : public QObject
   Q_PROPERTY(TagListModel * tagModel READ tagModel CONSTANT)
   Q_PROPERTY(EventMarkerModel * eventMarkerModel READ eventMarkerModel CONSTANT)
   Q_PROPERTY(RecordingSessionModel * recordingSessionModel READ recordingSessionModel CONSTANT)
+  Q_PROPERTY(QString diskSpaceText READ diskSpaceText NOTIFY diskSpaceTextChanged)
+  Q_PROPERTY(bool diskSpaceLow READ diskSpaceLow NOTIFY diskSpaceLowChanged)
 
 public:
   explicit AppController(
@@ -71,6 +74,8 @@ public:
   bool followingLiveEdge() const;
   QString modeText() const;
   int visibleCameraCount() const;
+  QString diskSpaceText() const;
+  bool diskSpaceLow() const;
   TopicListModel * topicModel();
   CameraGridModel * cameraGridModel();
   TagListModel * tagModel();
@@ -116,11 +121,14 @@ signals:
   void followingLiveEdgeChanged();
   void modeTextChanged();
   void visibleCameraCountChanged();
+  void diskSpaceTextChanged();
+  void diskSpaceLowChanged();
 
 private:
   void refreshVisibleCameraCount();
   QString statusTextForCurrentState() const;
   void refreshStatusText();
+  void refreshDiskSpace();
   void onStatsUpdated(const QVariantList & stats);
   void onFrameReady(const QString & key, int seq);
   void onLiveEdge(double seconds);
@@ -154,6 +162,9 @@ private:
   TagListModel tag_model_;
   EventMarkerModel event_marker_model_;
   RecordingSessionModel recording_session_model_;
+  QTimer disk_timer_;
+  QString disk_space_text_{"磁盘 -- / --"};
+  bool disk_space_low_{false};
 };
 
 }  // namespace data_recorder

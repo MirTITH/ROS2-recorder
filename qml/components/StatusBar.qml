@@ -34,8 +34,8 @@ Rectangle {
         }
 
         Label {
-            text: "磁盘 --"
-            color: Theme.textMuted
+            text: controller ? controller.diskSpaceText : "磁盘 -- / --"
+            color: (controller && controller.diskSpaceLow) ? Theme.danger : Theme.textMuted
             font.pixelSize: 11
         }
     }

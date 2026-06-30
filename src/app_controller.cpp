@@ -1,7 +1,9 @@
 #include "data_recorder/app_controller.hpp"
 
 #include <QKeyEvent>
+#include <QStorageInfo>
 #include <QStringList>
+#include <QTimer>
 
 #include <algorithm>
 #include <cctype>
@@ -22,6 +24,7 @@ namespace
 // 默认标尺长度：录制时间轴在实时端/播放头尚未超过该跨度前固定显示这么长，
 // 之后随实时端增长，保证播放头始终落在可寻址区间内。
 constexpr double kDefaultTimelineSpanSeconds = 60.0;
+constexpr qint64 kDiskWarnBytes = 10LL * 1'000'000'000;  // 10 GB
 }  // namespace
 
 AppController::AppController(
@@ -95,6 +98,11 @@ AppController::AppController(
   curve_loader_thread_->start();
 
   refreshSessions();  // 启动扫描
+
+  connect(&disk_timer_, &QTimer::timeout, this, &AppController::refreshDiskSpace);
+  disk_timer_.setInterval(30'000);
+  disk_timer_.start();
+  refreshDiskSpace();
 }
 
 AppController::~AppController()
@@ -127,6 +135,16 @@ QString AppController::statusText() const
 bool AppController::recording() const
 {
   return recording_;
+}
+
+QString AppController::diskSpaceText() const
+{
+  return disk_space_text_;
+}
+
+bool AppController::diskSpaceLow() const
+{
+  return disk_space_low_;
 }
 
 bool AppController::playing() const
@@ -715,6 +733,29 @@ void AppController::onFrameReady(const QString & key, int seq)
 void AppController::onLiveEdge(double seconds)
 {
   advanceLiveEdge(seconds);  // 复用现有方法
+}
+
+void AppController::refreshDiskSpace()
+{
+  QStorageInfo info(output_directory_);
+  if (info.bytesTotal() <= 0) {
+    return;
+  }
+
+  const double avail_gb = info.bytesAvailable() / 1'000'000'000.0;
+  const double total_gb = info.bytesTotal() / 1'000'000'000.0;
+  const QString text =
+    QString("磁盘 %1 / %2 GB").arg(avail_gb, 0, 'f', 1).arg(total_gb, 0, 'f', 1);
+  const bool low = info.bytesAvailable() < kDiskWarnBytes;
+
+  if (text != disk_space_text_) {
+    disk_space_text_ = text;
+    emit diskSpaceTextChanged();
+  }
+  if (low != disk_space_low_) {
+    disk_space_low_ = low;
+    emit diskSpaceLowChanged();
+  }
 }
 
 void AppController::refreshSessions()
