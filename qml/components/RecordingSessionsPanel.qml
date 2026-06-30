@@ -58,7 +58,8 @@ Panel {
                 }
 
                 Repeater {
-                    model: root.controller ? root.controller.tagModel : null
+                    // 仅录制中显示在线标签；历史模式下 tagModel 被历史会话标签覆盖，不应出现在在线行。
+                    model: (root.controller && root.controller.recording) ? root.controller.tagModel : null
                     delegate: TagChip {
                         visible: model.isSelected
                         label: model.name
