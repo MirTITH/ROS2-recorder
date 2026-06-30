@@ -1844,6 +1844,53 @@ TEST(AppControllerHistoryTest, SelectHistoryEntersPlaybackMode)
   fs::remove_all(out);
 }
 
+TEST(AppControllerTags, HistorySessionTagToggleWritesYamlAndUpdatesRow)
+{
+  namespace fs = std::filesystem;
+  const fs::path tmp = fs::temp_directory_path() / "dr_appctrl_tag_rw";
+  fs::remove_all(tmp);
+  const fs::path dir = tmp / "2026-06-30_09-00-00";
+  fs::create_directories(dir);
+
+  // 先写一个无标签会话（带 topics/annotation 以验证无损）。
+  data_recorder::SessionManager mgr;
+  data_recorder::SessionRecord rec;
+  rec.session_id = "2026-06-30_09-00-00";
+  rec.directory = dir.string();
+  rec.duration_seconds = 12.0;
+  rec.topics = {{"/joint_states", "rosbag"}};
+  rec.annotations = {{"碰撞", "c", "point", "#e03131", 3.0, 0.0}};
+  mgr.write_session_yaml(rec);
+
+  data_recorder::ConfigData config;
+  config.output_dir = tmp.string();
+  config.tags = {{"成功", "#2f9e44"}, {"力控", "#7c4dff"}};
+  data_recorder::AppController controller(config, nullptr, nullptr, &mgr);
+  // refreshSessions 在构造时扫描 output_dir，应已发现该会话；选中它。
+  ASSERT_GT(controller.recordingSessionModel()->rowCount(), 0);
+  controller.selectHistorySession(0);
+
+  // 点「成功」(行0)：写回 + 刷新行。
+  controller.toggleTag(0);
+
+  // 模型行已更新。
+  const auto tags_role = data_recorder::RecordingSessionModel::TagsRole;
+  const auto list = controller.recordingSessionModel()
+    ->data(controller.recordingSessionModel()->index(0, 0), tags_role).toList();
+  ASSERT_EQ(list.size(), 1);
+  EXPECT_EQ(list[0].toMap().value("name").toString().toStdString(), "成功");
+
+  // 落盘且无损：重扫，tags 在、annotation 仍在。
+  auto rescanned = mgr.scan(tmp.string());
+  ASSERT_EQ(rescanned.size(), 1u);
+  ASSERT_EQ(rescanned.front().tags.size(), 1u);
+  EXPECT_EQ(rescanned.front().tags.front().name, "成功");
+  ASSERT_EQ(rescanned.front().annotations.size(), 1u);
+  EXPECT_EQ(rescanned.front().annotations.front().name, "碰撞");
+
+  fs::remove_all(tmp);
+}
+
 TEST(AppControllerHistoryTest, MarkerShortcutIsNoOpInHistoryMode)
 {
   namespace fs = std::filesystem;

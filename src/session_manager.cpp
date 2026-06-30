@@ -19,46 +19,65 @@ std::string SessionManager::create_session_directory(
   return fs::absolute(dir).string();
 }
 
-void SessionManager::write_session_yaml(const SessionRecord & record) const
+bool SessionManager::write_session_yaml(const SessionRecord & record) const
 {
-  YAML::Node root;
-  root["session"] = record.session_id;
-  YAML::Node recorded_at;
-  recorded_at["unix"] = record.unix_time;
-  recorded_at["ros_time_ns"] = record.ros_time_ns;
-  root["recorded_at"] = recorded_at;
-  root["duration_seconds"] = record.duration_seconds;
+  // 此函数现也从 GUI 线程的 Q_INVOKABLE（toggleTag）调用：yaml-cpp 操作非 noexcept，
+  // 逃逸异常 = std::terminate，故全程 try/catch。写临时文件再原子重命名，崩溃/失败绝不截断真文件。
+  try {
+    YAML::Node root;
+    root["session"] = record.session_id;
+    YAML::Node recorded_at;
+    recorded_at["unix"] = record.unix_time;
+    recorded_at["ros_time_ns"] = record.ros_time_ns;
+    root["recorded_at"] = recorded_at;
+    root["duration_seconds"] = record.duration_seconds;
 
-  for (const auto & topic : record.topics) {
-    YAML::Node t;
-    t["name"] = topic.name;
-    t["backend"] = topic.backend;
-    root["topics"].push_back(t);
-  }
-  for (const auto & tag : record.tags) {
-    YAML::Node t;
-    t["name"] = tag.name;
-    t["color"] = tag.color;
-    root["tags"].push_back(t);
-  }
-  for (const auto & a : record.annotations) {
-    YAML::Node n;
-    n["name"] = a.name;
-    n["shortcut"] = a.shortcut;
-    n["kind"] = a.kind;
-    n["color"] = a.color;
-    if (a.kind == "range") {
-      n["start"] = a.t;
-      n["end"] = a.end;
-    } else {
-      n["t"] = a.t;
+    for (const auto & topic : record.topics) {
+      YAML::Node t;
+      t["name"] = topic.name;
+      t["backend"] = topic.backend;
+      root["topics"].push_back(t);
     }
-    root["annotations"].push_back(n);
-  }
+    for (const auto & tag : record.tags) {
+      YAML::Node t;
+      t["name"] = tag.name;
+      t["color"] = tag.color;
+      root["tags"].push_back(t);
+    }
+    for (const auto & a : record.annotations) {
+      YAML::Node n;
+      n["name"] = a.name;
+      n["shortcut"] = a.shortcut;
+      n["kind"] = a.kind;
+      n["color"] = a.color;
+      if (a.kind == "range") {
+        n["start"] = a.t;
+        n["end"] = a.end;
+      } else {
+        n["t"] = a.t;
+      }
+      root["annotations"].push_back(n);
+    }
 
-  const fs::path path = fs::path(record.directory) / "session.yaml";
-  std::ofstream out(path);
-  out << "# 由 data_recorder 在停止录制时自动生成\n" << root;
+    const fs::path path = fs::path(record.directory) / "session.yaml";
+    const fs::path tmp_path = fs::path(record.directory) / "session.yaml.tmp";
+    {
+      std::ofstream out(tmp_path);
+      if (!out.is_open()) { return false; }
+      out << "# 由 data_recorder 在停止录制时自动生成\n" << root;
+      out.flush();
+      if (out.fail()) { return false; }
+    }  // close before rename
+    std::error_code ec;
+    fs::rename(tmp_path, path, ec);
+    if (ec) {
+      fs::remove(tmp_path, ec);  // 清理临时文件，忽略二次错误
+      return false;
+    }
+    return true;
+  } catch (const std::exception &) {
+    return false;
+  }
 }
 
 uint64_t SessionManager::directory_size(const std::string & dir)

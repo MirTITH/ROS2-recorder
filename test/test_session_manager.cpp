@@ -114,3 +114,42 @@ TEST(SessionManager, CreateSessionDirectoryMakesTimestampedSubdir)
 
   fs::remove_all(tmp);
 }
+
+TEST(SessionManager, RewriteWithNewTagsPreservesOtherFields)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_session_retag";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp / "2026-06-30_10-00-00");
+
+  data_recorder::SessionManager mgr;
+  auto record = make_record("2026-06-30_10-00-00");
+  record.directory = (tmp / "2026-06-30_10-00-00").string();
+  mgr.write_session_yaml(record);
+
+  // 改 tags 后重写。
+  record.tags = {{"成功", "#2f9e44"}, {"力控", "#7c4dff"}};
+  mgr.write_session_yaml(record);
+
+  auto sessions = mgr.scan(tmp.string());
+  ASSERT_EQ(sessions.size(), 1u);
+  const auto & s = sessions.front();
+  ASSERT_EQ(s.tags.size(), 2u);
+  EXPECT_EQ(s.tags[0].name, "成功");
+  EXPECT_EQ(s.tags[1].name, "力控");
+  // 其它字段无损
+  ASSERT_EQ(s.annotations.size(), 4u);
+  ASSERT_EQ(s.topics.size(), 2u);
+  EXPECT_NEAR(s.duration_seconds, 42.512, 1e-6);
+
+  fs::remove_all(tmp);
+}
+
+TEST(SessionManager, WriteToMissingDirectoryReturnsFalseNoThrow)
+{
+  data_recorder::SessionManager mgr;
+  auto record = make_record("2026-06-30_11-00-00");
+  record.directory = "/nonexistent_dir_xyz/2026-06-30_11-00-00";  // 不存在的目录
+  bool ok = true;
+  EXPECT_NO_THROW({ ok = mgr.write_session_yaml(record); });
+  EXPECT_FALSE(ok);
+}

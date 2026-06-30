@@ -257,6 +257,7 @@ void AppController::toggleRecording()
     }
     recording_ = false;
     refreshSessions();
+    tag_model_.clearSelection();  // 清空「在线数据」行标签（已随会话写入历史）
   }
 
   if (recording_) {
@@ -527,6 +528,39 @@ void AppController::setSeriesVisible(
   const QString & topic_key, const QString & series_key, bool visible)
 {
   topic_model_.setSeriesVisible(topic_key, series_key, visible);
+}
+
+void AppController::toggleTag(int tag_row)
+{
+  // 未录制且非历史：面板本应置灰，这里双保险忽略。
+  if (!recording_ && !history_mode_) { return; }
+
+  tag_model_.select(tag_row);  // toggle 内存勾选
+
+  // 录制中：仅改内存，停录时随会话一次性写入（exportSelectedTags）。UI 经 IsSelectedRole 即时反映。
+  if (recording_) { return; }
+
+  // 仅历史会话才写回；其余状态前面已挡，这里再次显式守卫。
+  if (!history_mode_) { return; }
+
+  // 选中历史会话：写回该会话 session.yaml + 刷新行。
+  if (selected_session_row_ < 0 ||
+    selected_session_row_ >= static_cast<int>(scanned_sessions_.size()))
+  {
+    return;
+  }
+  const auto tags = tag_model_.exportSelectedTags();
+  auto & record = scanned_sessions_[static_cast<std::size_t>(selected_session_row_)];
+  const auto previous_tags = record.tags;
+  record.tags = tags;
+  // 先落盘，仅写成功才更新内存/模型行（写盘失败则回滚，保持内存与磁盘一致）。
+  const bool written = session_manager_ && session_manager_->write_session_yaml(record);
+  if (!written) {
+    record.tags = previous_tags;  // 写盘失败：回滚内存，保持与磁盘一致
+    tag_model_.select(tag_row);   // 撤销面板勾选，使 UI 与磁盘一致
+    return;
+  }
+  recording_session_model_.updateSessionTags(selected_session_row_, tags);
 }
 
 bool AppController::eventFilter(QObject * watched, QEvent * event)

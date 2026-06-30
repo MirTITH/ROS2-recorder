@@ -17,7 +17,7 @@ public:
     const std::string & output_dir, const std::string & session_id) const;
 
   // 把 record 序列化为 <record.directory>/session.yaml。
-  void write_session_yaml(const SessionRecord & record) const;
+  bool write_session_yaml(const SessionRecord & record) const;
 
   // 扫描 output_dir 各子目录，读 session.yaml（无则跳过），现算 size_bytes；按 session_id 降序（新在前）。
   std::vector<SessionRecord> scan(const std::string & output_dir) const;

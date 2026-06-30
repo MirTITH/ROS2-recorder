@@ -91,6 +91,10 @@ public:
   Q_INVOKABLE void setSeriesVisible(
     const QString & topic_key, const QString & series_key, bool visible);
 
+  // 底部「记录标签」面板点击入口：按当前状态分派——录制中切换内存勾选（停录时随会话写入）；
+  // 选中历史会话时即时切换并同步写回该会话 session.yaml + 刷新行；未录制且非历史为 no-op。
+  Q_INVOKABLE void toggleTag(int tag_row);
+
   bool eventFilter(QObject * watched, QEvent * event) override;
 
   void onCurvesUpdated(const QVariantList & topics);
