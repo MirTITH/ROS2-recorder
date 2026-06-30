@@ -107,6 +107,7 @@ Panel {
 
                 readonly property bool selected: root.controller && root.controller.historyMode && root.controller.selectedSessionRow === index
                 readonly property var rowTags: model.tags
+                readonly property int sessionIndex: index
 
                 ToolTip.visible: hoverHandler.hovered
                 ToolTip.text: model.folderName + "\n时长: " + model.fullDuration + "\n磁盘: " + model.sizeText
@@ -153,6 +154,21 @@ Panel {
                                 label: modelData.name
                                 chipColor: modelData.color
                                 maxTextWidth: 54
+
+                                // 右键删除该历史标签;只接收右键,左键透传给行选中 MouseArea。
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.RightButton
+                                    z: 2
+                                    enabled: !(root.controller && root.controller.recording)
+                                    onPressed: function(mouse) {
+                                        if (mouse.button === Qt.RightButton) {
+                                            tagContextMenu.tagIndex = index
+                                            tagContextMenu.popup()
+                                            mouse.accepted = true
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -174,6 +190,22 @@ Panel {
                     anchors.bottom: parent.bottom
                     height: 1
                     color: Theme.gridLine
+                }
+
+                Menu {
+                    id: tagContextMenu
+
+                    property int tagIndex: -1
+
+                    MenuItem {
+                        text: "删除"
+                        onTriggered: {
+                            if (root.controller && root.controller.removeSessionTag
+                                && tagContextMenu.tagIndex >= 0) {
+                                root.controller.removeSessionTag(sessionIndex, tagContextMenu.tagIndex)
+                            }
+                        }
+                    }
                 }
             }
 
