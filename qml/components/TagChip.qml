@@ -8,6 +8,7 @@ Rectangle {
     property string label: ""
     property color chipColor: "#94a3b8"
     property int maxTextWidth: 72
+    property bool selected: true
     readonly property real luminance: 0.2126 * chipColor.r + 0.7152 * chipColor.g + 0.0722 * chipColor.b
     readonly property bool dotOnly: labelText.implicitWidth > maxTextWidth
     readonly property real availableTextWidth: Math.max(0, Math.min(maxTextWidth, width - 12))
@@ -17,7 +18,9 @@ Rectangle {
     implicitWidth: dotOnly ? 10 : Math.min(maxTextWidth, labelText.implicitWidth) + 12
     implicitHeight: 18
     radius: dotOnly ? width / 2 : 9
-    color: chipColor
+    color: root.selected ? root.chipColor : "transparent"
+    border.width: root.selected ? 0 : 1
+    border.color: root.chipColor
     clip: true
 
     Label {
@@ -25,7 +28,8 @@ Rectangle {
         anchors.centerIn: parent
         visible: !root.dotOnly && root.hasTextRoom
         text: root.label
-        color: root.luminance > 0.56 ? Theme.textPrimary : Theme.surface
+        color: root.selected ? (root.luminance > 0.56 ? Theme.textPrimary : Theme.surface)
+                             : root.chipColor
         font.pixelSize: 10
         elide: Text.ElideRight
         width: root.hasTextRoom ? root.availableTextWidth : 0
