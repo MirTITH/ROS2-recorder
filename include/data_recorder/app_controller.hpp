@@ -95,6 +95,10 @@ public:
   // 选中历史会话时即时切换并同步写回该会话 session.yaml + 刷新行；未录制且非历史为 no-op。
   Q_INVOKABLE void toggleTag(int tag_row);
 
+  // 历史数据面板:右键删除某历史会话的指定标签(按下标定位)。写回 session.yaml 并刷新行;
+  // 若该行正是当前载入的历史会话,同步左侧「记录标签」面板勾选高亮。录制中为 no-op。
+  Q_INVOKABLE void removeSessionTag(int session_row, int tag_index);
+
   bool eventFilter(QObject * watched, QEvent * event) override;
 
   void onCurvesUpdated(const QVariantList & topics);

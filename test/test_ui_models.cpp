@@ -1981,6 +1981,79 @@ TEST(AppControllerTags, HistoryToggleKeepsOrphanTagNotInVocabulary)
   fs::remove_all(tmp);
 }
 
+TEST(AppControllerTags, RemoveSessionTagDeletesByIndexAndWritesYaml)
+{
+  namespace fs = std::filesystem;
+  const fs::path tmp = fs::temp_directory_path() / "dr_appctrl_remove_tag";
+  fs::remove_all(tmp);
+  const fs::path dir = tmp / "2026-06-30_11-00-00";
+  fs::create_directories(dir);
+
+  data_recorder::SessionManager mgr;
+  data_recorder::SessionRecord rec;
+  rec.session_id = "2026-06-30_11-00-00";
+  rec.directory = dir.string();
+  rec.duration_seconds = 5.0;
+  rec.tags = {{"成功", "#2f9e44"}, {"左手", "#1763c9"}};  // 词表内 + 孤儿
+  mgr.write_session_yaml(rec);
+
+  data_recorder::ConfigData config;
+  config.output_dir = tmp.string();
+  config.tags = {{"成功", "#2f9e44"}};
+  data_recorder::AppController controller(config, nullptr, nullptr, &mgr);
+  ASSERT_GT(controller.recordingSessionModel()->rowCount(), 0);
+
+  // 删除下标 1(「左手」孤儿)——无需先选中该行。
+  controller.removeSessionTag(0, 1);
+
+  const auto tags_role = data_recorder::RecordingSessionModel::TagsRole;
+  const auto list = controller.recordingSessionModel()
+    ->data(controller.recordingSessionModel()->index(0, 0), tags_role).toList();
+  ASSERT_EQ(list.size(), 1);
+  EXPECT_EQ(list[0].toMap().value("name").toString().toStdString(), "成功");
+
+  // 落盘:重扫只剩「成功」。
+  auto rescanned = mgr.scan(tmp.string());
+  ASSERT_EQ(rescanned.size(), 1u);
+  ASSERT_EQ(rescanned.front().tags.size(), 1u);
+  EXPECT_EQ(rescanned.front().tags.front().name, "成功");
+
+  fs::remove_all(tmp);
+}
+
+TEST(AppControllerTags, RemoveSessionTagIgnoresOutOfRangeIndices)
+{
+  namespace fs = std::filesystem;
+  const fs::path tmp = fs::temp_directory_path() / "dr_appctrl_remove_tag_oob";
+  fs::remove_all(tmp);
+  const fs::path dir = tmp / "2026-06-30_12-00-00";
+  fs::create_directories(dir);
+
+  data_recorder::SessionManager mgr;
+  data_recorder::SessionRecord rec;
+  rec.session_id = "2026-06-30_12-00-00";
+  rec.directory = dir.string();
+  rec.tags = {{"成功", "#2f9e44"}};
+  mgr.write_session_yaml(rec);
+
+  data_recorder::ConfigData config;
+  config.output_dir = tmp.string();
+  config.tags = {{"成功", "#2f9e44"}};
+  data_recorder::AppController controller(config, nullptr, nullptr, &mgr);
+  ASSERT_GT(controller.recordingSessionModel()->rowCount(), 0);
+
+  controller.removeSessionTag(0, 5);    // tag_index 越界
+  controller.removeSessionTag(0, -1);   // 负 tag_index
+  controller.removeSessionTag(9, 0);    // session_row 越界
+
+  const auto tags_role = data_recorder::RecordingSessionModel::TagsRole;
+  const auto list = controller.recordingSessionModel()
+    ->data(controller.recordingSessionModel()->index(0, 0), tags_role).toList();
+  EXPECT_EQ(list.size(), 1);  // 不变
+
+  fs::remove_all(tmp);
+}
+
 TEST(AppControllerHistoryTest, MarkerShortcutIsNoOpInHistoryMode)
 {
   namespace fs = std::filesystem;

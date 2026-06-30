@@ -564,6 +564,29 @@ void AppController::toggleTag(int tag_row)
   recording_session_model_.updateSessionTags(selected_session_row_, tags);
 }
 
+void AppController::removeSessionTag(int session_row, int tag_index)
+{
+  // 录制中历史行禁用;越界守卫。
+  if (recording_) { return; }
+  if (session_row < 0 || session_row >= static_cast<int>(scanned_sessions_.size())) { return; }
+  auto & record = scanned_sessions_[static_cast<std::size_t>(session_row)];
+  if (tag_index < 0 || tag_index >= static_cast<int>(record.tags.size())) { return; }
+
+  const auto previous_tags = record.tags;
+  record.tags.erase(record.tags.begin() + tag_index);
+  // 先落盘,仅写成功才更新内存/模型行(写盘失败则回滚,保持与磁盘一致)。
+  const bool written = session_manager_ && session_manager_->write_session_yaml(record);
+  if (!written) {
+    record.tags = previous_tags;
+    return;
+  }
+  recording_session_model_.updateSessionTags(session_row, record.tags);
+  // 若删除的正是当前载入的历史会话,刷新左侧「记录标签」面板勾选高亮。
+  if (history_mode_ && session_row == selected_session_row_) {
+    tag_model_.setSelectedTags(record.tags);
+  }
+}
+
 bool AppController::eventFilter(QObject * watched, QEvent * event)
 {
   if (event->type() != QEvent::KeyPress) {
