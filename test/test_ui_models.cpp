@@ -1251,8 +1251,48 @@ TEST(RecordingSessionModel, ExposesFolderDurationSizeAndTagRoles)
   EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::ShortDurationRole).toString().isEmpty());
   EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::FullDurationRole).toString().isEmpty());
   EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::SizeTextRole).toString().isEmpty());
-  EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::TagNameRole).toString().isEmpty());
-  EXPECT_FALSE(model.data(row, data_recorder::RecordingSessionModel::TagColorRole).toString().isEmpty());
+  const auto tags = model.data(row, data_recorder::RecordingSessionModel::TagsRole).toList();
+  ASSERT_EQ(tags.size(), 1);
+  EXPECT_EQ(tags[0].toMap().value("name").toString().toStdString(), "成功");
+  EXPECT_EQ(tags[0].toMap().value("color").toString().toStdString(), "#2f9e44");
+}
+
+TEST(RecordingSessionModel, UntaggedSessionHasEmptyTagsList)
+{
+  data_recorder::RecordingSessionModel model;
+  data_recorder::SessionRecord r;
+  r.session_id = "2026-06-30_00-00-00";
+  r.directory = "/tmp/x/2026-06-30_00-00-00";
+  r.duration_seconds = 10.0;
+  r.size_bytes = 1024;
+  // 无 tags
+  model.setSessions({r});
+
+  const auto row = model.index(0, 0);
+  EXPECT_TRUE(model.data(row, data_recorder::RecordingSessionModel::TagsRole).toList().isEmpty());
+}
+
+TEST(RecordingSessionModel, UpdateSessionTagsReplacesRowTags)
+{
+  data_recorder::RecordingSessionModel model;
+  data_recorder::SessionRecord r;
+  r.session_id = "2026-06-30_00-00-01";
+  r.directory = "/tmp/x/2026-06-30_00-00-01";
+  r.duration_seconds = 10.0;
+  r.size_bytes = 1024;
+  r.tags = {{"失败", "#e03131"}};  // 初始一个标签
+  model.setSessions({r});
+
+  // 替换为完全不同的两个标签：旧标签必须消失。
+  model.updateSessionTags(0, {{"成功", "#2f9e44"}, {"力控", "#7c4dff"}});
+  const auto tags = model.data(model.index(0, 0),
+    data_recorder::RecordingSessionModel::TagsRole).toList();
+  ASSERT_EQ(tags.size(), 2);
+  EXPECT_EQ(tags[0].toMap().value("name").toString().toStdString(), "成功");
+  EXPECT_EQ(tags[1].toMap().value("name").toString().toStdString(), "力控");
+  for (const auto & t : tags) {
+    EXPECT_NE(t.toMap().value("name").toString().toStdString(), "失败");  // 旧标签已被替换
+  }
 }
 
 TEST(RecordingSessionModel, SetSessionsPopulatesRows)
@@ -1270,7 +1310,11 @@ TEST(RecordingSessionModel, SetSessionsPopulatesRows)
   const auto idx = model.index(0, 0);
   EXPECT_EQ(model.data(idx, data_recorder::RecordingSessionModel::FolderNameRole).toString().toStdString(),
     "2026-06-22_14-30-05");
-  EXPECT_EQ(model.data(idx, data_recorder::RecordingSessionModel::TagNameRole).toString().toStdString(), "成功");
+  {
+    const auto tags = model.data(idx, data_recorder::RecordingSessionModel::TagsRole).toList();
+    ASSERT_EQ(tags.size(), 1);
+    EXPECT_EQ(tags[0].toMap().value("name").toString().toStdString(), "成功");
+  }
   // 时长格式化为 mm:ss 含 1:05
   EXPECT_NE(model.data(idx, data_recorder::RecordingSessionModel::ShortDurationRole).toString().indexOf("1:05"), -1);
 }

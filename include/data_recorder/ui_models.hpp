@@ -209,8 +209,7 @@ public:
     ShortDurationRole,
     FullDurationRole,
     SizeTextRole,
-    TagNameRole,
-    TagColorRole,
+    TagsRole,
   };
 
   explicit RecordingSessionModel(QObject * parent = nullptr);
@@ -220,6 +219,8 @@ public:
   QHash<int, QByteArray> roleNames() const override;
 
   void setSessions(const std::vector<SessionRecord> & sessions);
+  // 替换某行的全部标签并发 dataChanged（历史会话即时改标签后刷新该行）。
+  void updateSessionTags(int row, const std::vector<TagRecord> & tags);
 
 private:
   struct RecordingSessionRow
@@ -231,8 +232,7 @@ private:
     QString short_duration;
     QString full_duration;
     QString size_text;
-    QString tag_name;
-    QString tag_color;
+    QVariantList tags;  // [{name, color}]；无标签则空
   };
 
   std::vector<RecordingSessionRow> sessions_;

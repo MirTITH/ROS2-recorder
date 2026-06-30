@@ -44,6 +44,19 @@ bool valid_row(int row, int size)
   return row >= 0 && row < size;
 }
 
+QVariantList tags_to_variant_list(const std::vector<TagRecord> & tags)
+{
+  QVariantList list;
+  list.reserve(static_cast<int>(tags.size()));
+  for (const auto & t : tags) {
+    QVariantMap m;
+    m.insert("name", QString::fromStdString(t.name));
+    m.insert("color", QString::fromStdString(t.color));
+    list.push_back(m);
+  }
+  return list;
+}
+
 double non_negative_seconds(double seconds)
 {
   return std::max(0.0, seconds);
@@ -902,13 +915,18 @@ void RecordingSessionModel::setSessions(const std::vector<SessionRecord> & sessi
     row.duration = row.short_duration;
     row.size_text = format_size(s.size_bytes);
     row.size = row.size_text;
-    if (!s.tags.empty()) {
-      row.tag_name = QString::fromStdString(s.tags.front().name);
-      row.tag_color = QString::fromStdString(s.tags.front().color);
-    }
+    row.tags = tags_to_variant_list(s.tags);
     sessions_.push_back(std::move(row));
   }
   endResetModel();
+}
+
+void RecordingSessionModel::updateSessionTags(int row, const std::vector<TagRecord> & tags)
+{
+  if (!valid_row(row, static_cast<int>(sessions_.size()))) { return; }
+  sessions_[static_cast<std::size_t>(row)].tags = tags_to_variant_list(tags);
+  const auto idx = index(row, 0);
+  emit dataChanged(idx, idx, {TagsRole});
 }
 
 int RecordingSessionModel::rowCount(const QModelIndex & parent) const
@@ -941,10 +959,8 @@ QVariant RecordingSessionModel::data(const QModelIndex & index, int role) const
       return session.full_duration;
     case SizeTextRole:
       return session.size_text;
-    case TagNameRole:
-      return session.tag_name;
-    case TagColorRole:
-      return session.tag_color;
+    case TagsRole:
+      return session.tags;
     default:
       return {};
   }
@@ -960,8 +976,7 @@ QHash<int, QByteArray> RecordingSessionModel::roleNames() const
     {ShortDurationRole, "shortDuration"},
     {FullDurationRole, "fullDuration"},
     {SizeTextRole, "sizeText"},
-    {TagNameRole, "tagName"},
-    {TagColorRole, "tagColor"},
+    {TagsRole, "tags"},
   };
 }
 
