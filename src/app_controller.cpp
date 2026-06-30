@@ -549,9 +549,10 @@ void AppController::toggleTag(int tag_row)
   {
     return;
   }
-  const auto tags = tag_model_.exportSelectedTags();
   auto & record = scanned_sessions_[static_cast<std::size_t>(selected_session_row_)];
   const auto previous_tags = record.tags;
+  // 词表勾选 + 保留不在词表里的孤儿标签(改名/删词条后遗留的历史标签不被覆盖抹掉)。
+  const auto tags = tag_model_.exportSelectedTagsMerged(previous_tags);
   record.tags = tags;
   // 先落盘，仅写成功才更新内存/模型行（写盘失败则回滚，保持内存与磁盘一致）。
   const bool written = session_manager_ && session_manager_->write_session_yaml(record);

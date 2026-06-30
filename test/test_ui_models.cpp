@@ -1935,6 +1935,52 @@ TEST(AppControllerTags, HistorySessionTagToggleWritesYamlAndUpdatesRow)
   fs::remove_all(tmp);
 }
 
+TEST(AppControllerTags, HistoryToggleKeepsOrphanTagNotInVocabulary)
+{
+  namespace fs = std::filesystem;
+  const fs::path tmp = fs::temp_directory_path() / "dr_appctrl_orphan_tag";
+  fs::remove_all(tmp);
+  const fs::path dir = tmp / "2026-06-30_10-00-00";
+  fs::create_directories(dir);
+
+  // 会话已存「左手」标签(将不在新词表里 → 孤儿)。
+  data_recorder::SessionManager mgr;
+  data_recorder::SessionRecord rec;
+  rec.session_id = "2026-06-30_10-00-00";
+  rec.directory = dir.string();
+  rec.duration_seconds = 5.0;
+  rec.tags = {{"左手", "#1763c9"}};
+  mgr.write_session_yaml(rec);
+
+  data_recorder::ConfigData config;
+  config.output_dir = tmp.string();
+  // 词表里没有「左手」,只有「合格零件」(同色)与「成功」。
+  config.tags = {{"合格零件", "#1763c9"}, {"成功", "#2f9e44"}};
+  data_recorder::AppController controller(config, nullptr, nullptr, &mgr);
+  ASSERT_GT(controller.recordingSessionModel()->rowCount(), 0);
+  controller.selectHistorySession(0);
+
+  // 点「合格零件」(行0)。修复前会把「左手」整体覆盖掉。
+  controller.toggleTag(0);
+
+  // 模型行:应是 [合格零件, 左手](孤儿被保留)。
+  const auto tags_role = data_recorder::RecordingSessionModel::TagsRole;
+  const auto list = controller.recordingSessionModel()
+    ->data(controller.recordingSessionModel()->index(0, 0), tags_role).toList();
+  ASSERT_EQ(list.size(), 2);
+  EXPECT_EQ(list[0].toMap().value("name").toString().toStdString(), "合格零件");
+  EXPECT_EQ(list[1].toMap().value("name").toString().toStdString(), "左手");
+
+  // 落盘验证:重扫磁盘,两个标签都在。
+  auto rescanned = mgr.scan(tmp.string());
+  ASSERT_EQ(rescanned.size(), 1u);
+  ASSERT_EQ(rescanned.front().tags.size(), 2u);
+  EXPECT_EQ(rescanned.front().tags[0].name, "合格零件");
+  EXPECT_EQ(rescanned.front().tags[1].name, "左手");
+
+  fs::remove_all(tmp);
+}
+
 TEST(AppControllerHistoryTest, MarkerShortcutIsNoOpInHistoryMode)
 {
   namespace fs = std::filesystem;
