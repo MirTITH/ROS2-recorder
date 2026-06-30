@@ -699,15 +699,50 @@ TEST(TagListModel, StartsWithNoSelection)
   EXPECT_FALSE(model.data(model.index(1, 0), data_recorder::TagListModel::IsSelectedRole).toBool());
 }
 
-TEST(TagListModel, SelectsOneTag)
+TEST(TagListModel, SelectTogglesAndSupportsMultiple)
 {
   data_recorder::TagListModel model;
-  model.set_tags({{"成功", "#2f9e44"}, {"失败", "#e03131"}});
+  model.set_tags({{"成功", "#2f9e44"}, {"失败", "#e03131"}, {"力控", "#7c4dff"}});
 
-  model.select(1);
+  model.select(0);
+  model.select(2);  // 多选：0 与 2 同时选中
+  EXPECT_TRUE(model.data(model.index(0, 0), data_recorder::TagListModel::IsSelectedRole).toBool());
+  EXPECT_FALSE(model.data(model.index(1, 0), data_recorder::TagListModel::IsSelectedRole).toBool());
+  EXPECT_TRUE(model.data(model.index(2, 0), data_recorder::TagListModel::IsSelectedRole).toBool());
+
+  model.select(0);  // 再点 0：取消
+  EXPECT_FALSE(model.data(model.index(0, 0), data_recorder::TagListModel::IsSelectedRole).toBool());
+  EXPECT_TRUE(model.data(model.index(2, 0), data_recorder::TagListModel::IsSelectedRole).toBool());
+}
+
+TEST(TagListModel, ExportsAllSelectedTags)
+{
+  data_recorder::TagListModel model;
+  model.set_tags({{"成功", "#2f9e44"}, {"失败", "#e03131"}, {"力控", "#7c4dff"}});
+  model.select(0);
+  model.select(2);
+
+  const auto tags = model.exportSelectedTags();
+  ASSERT_EQ(tags.size(), 2u);
+  // 按行序导出：成功(0) 在前，力控(2) 在后
+  EXPECT_EQ(tags[0].name, "成功");
+  EXPECT_EQ(tags[1].name, "力控");
+}
+
+TEST(TagListModel, SetSelectedTagsMarksByName)
+{
+  data_recorder::TagListModel model;
+  model.set_tags({{"成功", "#2f9e44"}, {"失败", "#e03131"}, {"力控", "#7c4dff"}});
+  model.setSelectedTags({{"失败", "#e03131"}, {"力控", "#7c4dff"}});
 
   EXPECT_FALSE(model.data(model.index(0, 0), data_recorder::TagListModel::IsSelectedRole).toBool());
   EXPECT_TRUE(model.data(model.index(1, 0), data_recorder::TagListModel::IsSelectedRole).toBool());
+  EXPECT_TRUE(model.data(model.index(2, 0), data_recorder::TagListModel::IsSelectedRole).toBool());
+  // 导出顺序按行序
+  const auto tags = model.exportSelectedTags();
+  ASSERT_EQ(tags.size(), 2u);
+  EXPECT_EQ(tags[0].name, "失败");
+  EXPECT_EQ(tags[1].name, "力控");
 }
 
 TEST(EventMarkerModel, ExposesTrackRoles)
@@ -1653,20 +1688,21 @@ TEST(TagListModel, SetSelectedTagsMarksMultipleSelected)
     data_recorder::TagListModel::IsSelectedRole).toBool());
 }
 
-TEST(TagListModel, SelectClearsSessionTags)
+TEST(TagListModel, SelectTogglesAdditivelyOnTopOfSetSelectedTags)
 {
+  // 统一多选后：select() 是纯切换，不清除 setSelectedTags 已选中的行。
   data_recorder::TagListModel model;
   model.set_tags({{"成功", "#2f9e44"}, {"失败", "#e03131"}, {"碰撞", "#e8a915"}});
 
   model.setSelectedTags({{"成功", "#2f9e44"}, {"碰撞", "#e8a915"}});
-  model.select(1);
+  model.select(1);  // 添加 失败(1)，不影响已选的 成功(0) 与 碰撞(2)
 
-  EXPECT_FALSE(model.data(model.index(0, 0),
-    data_recorder::TagListModel::IsSelectedRole).toBool());   // 成功 会话选择被清空
+  EXPECT_TRUE(model.data(model.index(0, 0),
+    data_recorder::TagListModel::IsSelectedRole).toBool());   // 成功 仍选中
   EXPECT_TRUE(model.data(model.index(1, 0),
-    data_recorder::TagListModel::IsSelectedRole).toBool());    // 失败 实时单选
-  EXPECT_FALSE(model.data(model.index(2, 0),
-    data_recorder::TagListModel::IsSelectedRole).toBool());   // 碰撞 会话选择被清空
+    data_recorder::TagListModel::IsSelectedRole).toBool());   // 失败 新增
+  EXPECT_TRUE(model.data(model.index(2, 0),
+    data_recorder::TagListModel::IsSelectedRole).toBool());   // 碰撞 仍选中
 }
 
 TEST(LiveBridgeTest, PlaybackModeGatesLiveButAllowsPlayback)

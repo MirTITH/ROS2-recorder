@@ -413,9 +413,7 @@ QVariant TagListModel::data(const QModelIndex & index, int role) const
     case ColorRole:
       return QString::fromStdString(tag.color);
     case IsSelectedRole:
-      return index.row() == selected_row_ ||
-        std::find(session_selected_names_.begin(), session_selected_names_.end(),
-          tag.name) != session_selected_names_.end();
+      return selected_rows_.count(index.row()) != 0;
     default:
       return {};
   }
@@ -432,71 +430,56 @@ QHash<int, QByteArray> TagListModel::roleNames() const
 
 void TagListModel::select(int row)
 {
-  if (!session_selected_names_.empty()) {
-    session_selected_names_.clear();
-    if (!tags_.empty()) {
-      emit dataChanged(index(0, 0), index(static_cast<int>(tags_.size()) - 1, 0),
-        {IsSelectedRole});
-    }
-  }
-  if (!valid_row(row, static_cast<int>(tags_.size())) || row == selected_row_) {
+  if (!valid_row(row, static_cast<int>(tags_.size()))) {
     return;
   }
-
-  const int previous = selected_row_;
-  selected_row_ = row;
-  if (valid_row(previous, static_cast<int>(tags_.size()))) {
-    const auto previous_index = index(previous, 0);
-    emit dataChanged(previous_index, previous_index, {IsSelectedRole});
+  if (selected_rows_.count(row) != 0) {
+    selected_rows_.erase(row);
+  } else {
+    selected_rows_.insert(row);
   }
-  const auto next_index = index(selected_row_, 0);
-  emit dataChanged(next_index, next_index, {IsSelectedRole});
+  const auto idx = index(row, 0);
+  emit dataChanged(idx, idx, {IsSelectedRole});
 }
 
 void TagListModel::set_tags(std::vector<TagEntry> tags)
 {
   beginResetModel();
   tags_ = std::move(tags);
-  selected_row_ = -1;
-  session_selected_names_.clear();
+  selected_rows_.clear();
   endResetModel();
 }
 
 std::vector<TagRecord> TagListModel::exportSelectedTags() const
 {
   std::vector<TagRecord> out;
-  if (selected_row_ >= 0 && selected_row_ < static_cast<int>(tags_.size())) {
-    out.push_back({tags_[static_cast<std::size_t>(selected_row_)].name,
-      tags_[static_cast<std::size_t>(selected_row_)].color});
+  for (int row : selected_rows_) {  // std::set<int> 升序迭代 = 行序
+    if (valid_row(row, static_cast<int>(tags_.size()))) {
+      out.push_back({tags_[static_cast<std::size_t>(row)].name,
+        tags_[static_cast<std::size_t>(row)].color});
+    }
   }
   return out;
 }
 
 void TagListModel::clearSelection()
 {
-  if (!session_selected_names_.empty()) {
-    session_selected_names_.clear();
-    if (!tags_.empty()) {
-      emit dataChanged(index(0, 0), index(static_cast<int>(tags_.size()) - 1, 0),
-        {IsSelectedRole});
-    }
-  }
-  if (selected_row_ < 0) { return; }
-  const int previous = selected_row_;
-  selected_row_ = -1;
-  if (valid_row(previous, static_cast<int>(tags_.size()))) {
-    const auto previous_index = index(previous, 0);
-    emit dataChanged(previous_index, previous_index, {IsSelectedRole});
+  if (selected_rows_.empty()) { return; }
+  selected_rows_.clear();
+  if (!tags_.empty()) {
+    emit dataChanged(index(0, 0), index(static_cast<int>(tags_.size()) - 1, 0),
+      {IsSelectedRole});
   }
 }
 
 void TagListModel::setSelectedTags(const std::vector<TagRecord> & tags)
 {
-  session_selected_names_.clear();
+  selected_rows_.clear();
   for (const auto & t : tags) {
-    session_selected_names_.push_back(t.name);
+    for (std::size_t i = 0; i < tags_.size(); ++i) {
+      if (tags_[i].name == t.name) { selected_rows_.insert(static_cast<int>(i)); break; }
+    }
   }
-  selected_row_ = -1;
   if (!tags_.empty()) {
     emit dataChanged(index(0, 0), index(static_cast<int>(tags_.size()) - 1, 0),
       {IsSelectedRole});

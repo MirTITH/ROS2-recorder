@@ -11,6 +11,7 @@
 #include <QVector>
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -122,14 +123,13 @@ public:
 
   std::vector<TagRecord> exportSelectedTags() const;
   void setSelectedTags(const std::vector<TagRecord> & tags);
-  void clearSelection();  // startSession 时清空（select(-1) 当前是 no-op，故需独立方法）
+  void clearSelection();  // 清空多选集合
 
   void set_tags(std::vector<TagEntry> tags);
 
 private:
   std::vector<TagEntry> tags_;
-  int selected_row_{-1};
-  std::vector<std::string> session_selected_names_;
+  std::set<int> selected_rows_;  // 多选：选中行下标集合（统一录制预选与历史回显）
 };
 
 class EventMarkerModel : public QAbstractListModel
