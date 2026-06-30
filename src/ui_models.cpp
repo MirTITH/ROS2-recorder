@@ -475,6 +475,21 @@ std::vector<TagRecord> TagListModel::exportSelectedTags() const
   return out;
 }
 
+std::vector<TagRecord> TagListModel::exportSelectedTagsMerged(
+  const std::vector<TagRecord> & existing) const
+{
+  std::vector<TagRecord> out = exportSelectedTags();
+  for (const auto & t : existing) {
+    // 词表内标签由勾选状态决定(已在 out 里);仅追加「不在词表」的孤儿标签。
+    bool in_vocabulary = false;
+    for (const auto & e : tags_) {
+      if (e.name == t.name) { in_vocabulary = true; break; }
+    }
+    if (!in_vocabulary) { out.push_back(t); }
+  }
+  return out;
+}
+
 void TagListModel::clearSelection()
 {
   if (selected_rows_.empty()) { return; }

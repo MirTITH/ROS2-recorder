@@ -745,6 +745,50 @@ TEST(TagListModel, SetSelectedTagsMarksByName)
   EXPECT_EQ(tags[1].name, "力控");
 }
 
+TEST(TagListModel, ExportSelectedTagsMergedPreservesOrphans)
+{
+  data_recorder::TagListModel model;
+  // 词表已把「左手」改名为「合格零件」(颜色不变);「左手」成了孤儿。
+  model.set_tags({{"合格零件", "#1763c9"}, {"成功", "#2f9e44"}});
+  model.select(0);  // 勾选「合格零件」
+
+  const std::vector<data_recorder::TagRecord> existing = {{"左手", "#1763c9"}};
+  const auto merged = model.exportSelectedTagsMerged(existing);
+
+  // 选中的词表标签在前,孤儿「左手」被保留在后。
+  ASSERT_EQ(merged.size(), 2u);
+  EXPECT_EQ(merged[0].name, "合格零件");
+  EXPECT_EQ(merged[1].name, "左手");
+  EXPECT_EQ(merged[1].color, "#1763c9");
+}
+
+TEST(TagListModel, ExportSelectedTagsMergedDoesNotDuplicateVocabularyTags)
+{
+  data_recorder::TagListModel model;
+  model.set_tags({{"成功", "#2f9e44"}, {"失败", "#e03131"}});
+  model.select(0);  // 「成功」选中
+
+  // existing 含一个词表内标签(成功)+一个孤儿(左手)。
+  const std::vector<data_recorder::TagRecord> existing = {
+    {"成功", "#2f9e44"}, {"左手", "#1763c9"}};
+  const auto merged = model.exportSelectedTagsMerged(existing);
+
+  // 「成功」只出现一次(由勾选给出),孤儿「左手」保留。
+  ASSERT_EQ(merged.size(), 2u);
+  EXPECT_EQ(merged[0].name, "成功");
+  EXPECT_EQ(merged[1].name, "左手");
+}
+
+TEST(TagListModel, ExportSelectedTagsMergedEmptyExistingEqualsSelected)
+{
+  data_recorder::TagListModel model;
+  model.set_tags({{"成功", "#2f9e44"}, {"失败", "#e03131"}});
+  model.select(1);
+  const auto merged = model.exportSelectedTagsMerged({});
+  ASSERT_EQ(merged.size(), 1u);
+  EXPECT_EQ(merged[0].name, "失败");
+}
+
 TEST(EventMarkerModel, ExposesTrackRoles)
 {
   data_recorder::EventMarkerModel model;

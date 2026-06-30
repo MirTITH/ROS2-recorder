@@ -122,6 +122,9 @@ public:
   Q_INVOKABLE void select(int row);
 
   std::vector<TagRecord> exportSelectedTags() const;
+  // 合并:当前选中的词表标签 + existing 中「名字不在词表」的孤儿标签
+  // (改名/删词条后遗留的历史标签不被覆盖抹掉)。
+  std::vector<TagRecord> exportSelectedTagsMerged(const std::vector<TagRecord> & existing) const;
   void setSelectedTags(const std::vector<TagRecord> & tags);
   void clearSelection();  // 清空多选集合
 
