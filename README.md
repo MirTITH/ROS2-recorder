@@ -10,7 +10,8 @@ Data Recorder 是一个带图形界面的 ROS 2 数据录制工具。它可以�
 
 ```bash
 sudo apt update
-sudo apt install git python3-rosdep python3-colcon-common-extensions
+sudo apt install git python3-rosdep python3-colcon-common-extensions libqt6charts6-dev qml6-module-qtcharts
+sudo apt install -y "qml6-module-*"
 ```
 
 1. 创建 ROS 2 工作空间，并将本仓库克隆到工作空间的 `src` 目录：
