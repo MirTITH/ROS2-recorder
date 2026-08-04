@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <deque>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -61,7 +62,7 @@ private:
   void try_subscribe_pending();
   void on_rosbag_message(
     const std::string & topic, const std::string & type,
-    std::shared_ptr<rclcpp::SerializedMessage> msg);
+    bool transient_local, std::shared_ptr<rclcpp::SerializedMessage> msg);
   void on_image_message(
     const std::string & topic, sensor_msgs::msg::Image::ConstSharedPtr msg);
   std::string offered_qos_for(const std::string & topic) const;
@@ -76,6 +77,19 @@ private:
   // pending_mutex_ 同时保护 pending_topics_ 与 subscriptions_ 的追加（构造线程 vs spin 线程）。
   std::set<std::string> pending_topics_;
   std::mutex pending_mutex_;
+
+  // TRANSIENT_LOCAL 话题最近收到的样本。引擎为了实时 UI 会在开录前就订阅话题，而 DDS
+  // 的历史样本只向同一个订阅回放一次；若不缓存，/tf_static 会在开录前被消费并丢弃。
+  // Humble 的 generic subscription 回调拿不到 publisher GID，故用有界队列保留多个发布者
+  // 的历史样本，同时避免非常规 TRANSIENT_LOCAL 话题让缓存无限增长。
+  struct CachedTransientMessage
+  {
+    std::string type;
+    std::shared_ptr<rclcpp::SerializedMessage> message;
+  };
+  std::map<std::string, std::deque<CachedTransientMessage>> transient_cache_;
+  std::mutex transient_cache_mutex_;
+
   std::map<std::string, TopicRateMonitor> rate_monitors_;
   std::mutex rate_mutex_;
   std::map<std::string, std::pair<int, int>> image_dims_;  // topic -> (w,h)

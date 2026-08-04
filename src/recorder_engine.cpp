@@ -173,16 +173,16 @@ bool RecorderEngine::subscribe_rosbag_topic(const std::string & topic_name)
   if (eps.empty()) { return false; }
   const std::string type = eps.front().topic_type();
   if (type.empty()) { return false; }
-  // 适配发布者 QoS，否则 BEST_EFFORT 话题订阅不上（RELIABLE 订阅匹配不到 BEST_EFFORT 发布者）。
-  // 与 offered_qos_for() 记录的 QoS 保持一致；保留较深的 KeepLast(100) 队列深度。
-  auto qos = rclcpp::QoS(rclcpp::KeepLast(100));
-  const auto pub_qos = eps.front().qos_profile();
-  qos.reliability(pub_qos.reliability());
-  qos.durability(pub_qos.durability());
+  // 使用 rosbag2 的适配规则兼容同一话题的全部发布者，而不是只取发现列表的第一个端点。
+  // 保留较深的 KeepLast(100) 队列；TRANSIENT_LOCAL 会让 /tf_static 的历史样本被回放。
+  auto qos = rosbag2_transport::Rosbag2QoS::adapt_request_to_offers(topic_name, eps);
+  qos.keep_last(100);
+  const bool transient_local =
+    qos.get_rmw_qos_profile().durability == RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
   auto sub = node_->create_generic_subscription(
     topic_name, type, qos,
-    [this, topic_name, type](std::shared_ptr<rclcpp::SerializedMessage> msg) {
-      on_rosbag_message(topic_name, type, msg);
+    [this, topic_name, type, transient_local](std::shared_ptr<rclcpp::SerializedMessage> msg) {
+      on_rosbag_message(topic_name, type, transient_local, msg);
     });
   {
     std::lock_guard<std::mutex> lock(pending_mutex_);
@@ -211,7 +211,7 @@ void RecorderEngine::try_subscribe_pending()
 
 void RecorderEngine::on_rosbag_message(
   const std::string & topic, const std::string & type,
-  std::shared_ptr<rclcpp::SerializedMessage> msg)
+  bool transient_local, std::shared_ptr<rclcpp::SerializedMessage> msg)
 {
   const int64_t now_ns = node_->now().nanoseconds();
   const int64_t now_steady_ns = steady_now_ns();
@@ -227,7 +227,23 @@ void RecorderEngine::on_rosbag_message(
     topic_types_.emplace(topic, type);
   }
 
-  if (!recording_.load()) { return; }
+  // /tf_static 等 TRANSIENT_LOCAL 话题通常只发布一次。长期订阅会在开录前就消费 DDS
+  // 回放的历史样本，因此缓存最近的消息，供每个新会话写入。
+  // should_record 必须在缓存锁内取值：它与 start_session 的“写缓存 + 开录”临界区配合，
+  // 避免边界上的消息既漏录又重复录制。
+  bool should_record = recording_.load();
+  if (transient_local) {
+    std::lock_guard<std::mutex> lock(transient_cache_mutex_);
+    auto & cached_messages = transient_cache_[topic];
+    constexpr std::size_t kTransientCacheDepth = 100;
+    if (cached_messages.size() == kTransientCacheDepth) {
+      cached_messages.pop_front();
+    }
+    cached_messages.push_back({type, std::make_shared<rclcpp::SerializedMessage>(*msg)});
+    should_record = recording_.load();
+  }
+
+  if (!should_record) { return; }
 
   // 数值曲线：录制中记折叠点；可绘制类型则反序列化提取标量。用每条消息到达时的
   // steady-clock 相对时间做 x 轴，避免高频 topic 共用 33ms live-edge timer 时间而画出竖线尖峰。
@@ -427,7 +443,21 @@ std::string RecorderEngine::start_session()
     announced_types_.clear();
   }
 
-  recording_.store(true);
+  // 同一个 DDS TRANSIENT_LOCAL 订阅不会在每次点击录制时重新回放历史样本。在锁内把
+  // 开录前缓存的有界历史样本写进 bag，再原子切换录制状态。回调也在此锁内
+  // 判断边界状态，因此并发到达的消息会恰好走缓存回放或正常写入中的一条路径。
+  {
+    std::lock_guard<std::mutex> cache_lock(transient_cache_mutex_);
+    for (const auto & [topic, cached_messages] : transient_cache_) {
+      for (const auto & cached : cached_messages) {
+        if (registered_topics_.insert(topic).second) {
+          rosbag_writer_->add_topic(topic, cached.type, offered_qos_for(topic));
+        }
+        rosbag_writer_->write(topic, *cached.message, record_start_ros_ns_);
+      }
+    }
+    recording_.store(true);
+  }
   return session_id_;
 }
 
