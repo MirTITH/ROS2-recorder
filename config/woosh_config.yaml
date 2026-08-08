@@ -5,7 +5,7 @@
 # You can paste the output of `ros2 topic list` straight into a group's topics.
 # 'backend' defaults to "rosbag" when omitted.
 
-output_dir: "./recordings" # a timestamped session/ subdir is created here
+output_dir: "./recordings/pick_place" # a timestamped session/ subdir is created here
 
 # 记录标签词表：左栏可点击的标签 chips，按采集会话保存到 annotations.yaml。
 # name 必须唯一；color 可省略（默认灰色）。
@@ -13,16 +13,18 @@ tags:
   - { name: "成功", color: "#2f9e44" }
   - { name: "失败", color: "#e03131" }
   - { name: "碰撞", color: "#e8590c" }
-  - { name: "合格零件", color: "#1763c9" }
-  - { name: "不合格零件", color: "#0ea5b7" }
+  - { name: "矿泉水", color: "#1763c9" }
+  - { name: "兔子", color: "#0ea5b7" }
+  - { name: "胶带", color: "#e8a915" }
+  - { name: "外部扰动", color: "#e462f0e5" }
 
 # 时间标注类型：快捷键 -> 定义。kind 为 point（时间点）或 range（区间）。
 # 快捷键是单个数字或字母：数字键主键区/小键盘均可触发，字母不区分大小写。
 # 区间标注按两次：第一次在播放头处定起点，移动播放头后再按同一键定终点。
 annotation_types:
-  "1": { name: "拿起零件", kind: "range", color: "#1763c9" } # 主键区 1 或 Numpad 1
-  "2": { name: "称重", kind: "range", color: "#2f9e44" } # 主键区 2 或 Numpad 2
-  "3": { name: "放置零件", kind: "range", color: "#e8a915" }
+  "1": { name: "拿起", kind: "range", color: "#1763c9" } # 主键区 1 或 Numpad 1
+  # "2": { name: "称重", kind: "range", color: "#2f9e44" } # 主键区 2 或 Numpad 2
+  "3": { name: "放置", kind: "range", color: "#e8a915" }
   "c": { name: "碰撞", kind: "point", color: "#e03131" } # 字母 c
 
 groups:
