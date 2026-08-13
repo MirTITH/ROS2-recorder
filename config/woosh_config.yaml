@@ -1,8 +1,7 @@
-# data_recorder example configuration.
-# Pass it at launch:  --ros-args -p config_file:=<this file>
+# data_recorder configuration.
+# Pass it at launch: --ros-args -p config_file:=<this file>
 #
 # Group-based: every group shares one backend + params and lists topics.
-# You can paste the output of `ros2 topic list` straight into a group's topics.
 # 'backend' defaults to "rosbag" when omitted.
 
 output_dir: "./recordings/pick_place" # a timestamped session/ subdir is created here
@@ -32,41 +31,82 @@ groups:
   # NOTE: subscriptions adapt to the publishers' offered QoS (like `ros2 bag
   # record`); BEST_EFFORT publishers may drop frames under load by design.
   - topics:
-      - /dynamic_joint_states
-      - /gimbal_controller/commands
-      - /gimbal_controller/transition_event
+      - /gimbal_joint_trajectory_controller/controller_state
+      - /gimbal_joint_trajectory_controller/joint_trajectory
+      # - /gimbal_joint_trajectory_controller/state
+      - /gimbal_joint_trajectory_controller/transition_event
+
       - /joint_state_broadcaster/transition_event
       - /joint_states
+
       - /left_arm_controller/controller_state
       - /left_arm_controller/joint_trajectory
       # - /left_arm_controller/state
       - /left_arm_controller/transition_event
+
       - /left_arm_servo_node/pose_target_cmds
+
+      - /left_force_torque_sensor_broadcaster/transition_event
       - /left_force_torque_sensor_broadcaster/wrench
+
       - /left_hand_controller/commands
       - /left_hand_controller/transition_event
+      - /left_hand_max_finger_force_controller/commands
+      - /left_hand_max_finger_force_controller/transition_event
+
       - /parameter_events
+
       - /right_arm_controller/controller_state
       - /right_arm_controller/joint_trajectory
       # - /right_arm_controller/state
       - /right_arm_controller/transition_event
+
       - /right_arm_servo_node/pose_target_cmds
+
+      - /right_force_torque_sensor_broadcaster/transition_event
       - /right_force_torque_sensor_broadcaster/wrench
+
       - /right_hand_controller/commands
       - /right_hand_controller/transition_event
-      - /right_pinocchio_servo/debug/admittance_result
+      - /right_hand_max_finger_force_controller/commands
+      - /right_hand_max_finger_force_controller/transition_event
+
       - /robot_description
       - /robot_description_semantic
+
       - /tf
       - /tf_static
-      - /trajectory_execution_event
+
+      # - /woosh/camera/woosh_head_rgbd/aligned_depth_to_color/camera_info
+      # - /woosh/camera/woosh_head_rgbd/aligned_depth_to_color/image_raw
+      - /woosh/camera/woosh_head_rgbd/color/camera_info
+      - /woosh/camera/woosh_head_rgbd/color/metadata
+      - /woosh/camera/woosh_head_rgbd/extrinsics/depth_to_color
+
+      # - /woosh/camera/woosh_left_hand_rgbd/aligned_depth_to_color/camera_info
+      # - /woosh/camera/woosh_left_hand_rgbd/aligned_depth_to_color/image_raw
+      - /woosh/camera/woosh_left_hand_rgbd/color/camera_info
+      - /woosh/camera/woosh_left_hand_rgbd/color/metadata
+      - /woosh/camera/woosh_left_hand_rgbd/extrinsics/depth_to_color
+
+      # - /woosh/camera/woosh_right_hand_rgbd/aligned_depth_to_color/camera_info
+      # - /woosh/camera/woosh_right_hand_rgbd/aligned_depth_to_color/image_raw
+      - /woosh/camera/woosh_right_hand_rgbd/color/camera_info
+      - /woosh/camera/woosh_right_hand_rgbd/color/metadata
+      - /woosh/camera/woosh_right_hand_rgbd/extrinsics/depth_to_color
+
+      - /xr_teleoperate/head_pose
+      - /xr_teleoperate/left/controller_state
+      - /xr_teleoperate/left/pose
+      - /xr_teleoperate/right/controller_state
+      - /xr_teleoperate/right/pose
     backend: rosbag
 
-  # Image topic -> encoded to video with libav (accurate per-frame PTS + sidecar CSV).
+  # Image topics -> encoded to video with libav (accurate per-frame PTS + sidecar CSV).
   - topics:
-      - /camera/image_raw
-      - /right_camera/image_raw
-      - /left_camera/image_raw
+      - /woosh/camera/woosh_head_rgbd/color/image_raw
+      - /woosh/camera/woosh_left_hand_rgbd/color/image_raw
+      - /woosh/camera/woosh_right_hand_rgbd/color/image_raw
     backend: video
     params:
       codec: "libx264" # any ffmpeg encoder name: libx264 / libx265 / ...
