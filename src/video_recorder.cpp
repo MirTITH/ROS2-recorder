@@ -2,9 +2,11 @@
 
 extern "C" {
 #include <libavcodec/avcodec.h>
+#include <libavcodec/version.h>
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
+#include <libavutil/pixdesc.h>
 #include <libswscale/swscale.h>
 }
 
@@ -30,6 +32,32 @@ int source_av_format(const std::string & enc)
   if (enc == "rgb8") { return AV_PIX_FMT_RGB24; }
   if (enc == "mono8") { return AV_PIX_FMT_GRAY8; }
   return AV_PIX_FMT_NONE;
+}
+
+bool codec_supports_pixel_format(const AVCodec * codec, AVPixelFormat requested)
+{
+#if LIBAVCODEC_VERSION_MAJOR >= 61
+  const void * configs = nullptr;
+  int count = 0;
+  const int ret = avcodec_get_supported_config(
+    nullptr, codec, AV_CODEC_CONFIG_PIX_FORMAT, 0, &configs, &count);
+  if (ret < 0) { return false; }
+  if (!configs) { return true; }
+
+  const auto * formats = static_cast<const AVPixelFormat *>(configs);
+  for (int i = 0; i < count; ++i) {
+    if (formats[i] == requested) { return true; }
+  }
+#else
+  // FFmpeg 4.4（Ubuntu 22.04）：pix_fmts 以 AV_PIX_FMT_NONE 结尾；nullptr 表示未声明限制。
+  if (!codec->pix_fmts) { return true; }
+  for (const AVPixelFormat * format = codec->pix_fmts;
+    *format != AV_PIX_FMT_NONE; ++format)
+  {
+    if (*format == requested) { return true; }
+  }
+#endif
+  return false;
 }
 }  // namespace
 
@@ -57,11 +85,37 @@ bool VideoRecorder::init(const VideoParams & params)
     std::cerr << "[VideoRecorder] 找不到编码器: " << params.codec << "\n";
     return false;
   }
+
+  const AVPixelFormat encode_pix_fmt = av_get_pix_fmt(params.pix_fmt.c_str());
+  if (encode_pix_fmt == AV_PIX_FMT_NONE) {
+    std::cerr << "[VideoRecorder] 未知像素格式: " << params.pix_fmt << "\n";
+    return false;
+  }
+  const AVPixFmtDescriptor * pix_fmt_desc = av_pix_fmt_desc_get(encode_pix_fmt);
+  if (!pix_fmt_desc) {
+    std::cerr << "[VideoRecorder] 无法读取像素格式描述: " << params.pix_fmt << "\n";
+    return false;
+  }
+  if ((pix_fmt_desc->flags & AV_PIX_FMT_FLAG_HWACCEL) != 0) {
+    std::cerr << "[VideoRecorder] 当前软件帧管线不支持硬件像素格式: "
+              << params.pix_fmt << "\n";
+    return false;
+  }
+  if (!sws_isSupportedOutput(encode_pix_fmt)) {
+    std::cerr << "[VideoRecorder] swscale 不支持输出像素格式: " << params.pix_fmt << "\n";
+    return false;
+  }
+  if (!codec_supports_pixel_format(codec, encode_pix_fmt)) {
+    std::cerr << "[VideoRecorder] 编码器 " << params.codec
+              << " 不支持像素格式 " << params.pix_fmt << "\n";
+    return false;
+  }
+
   codec_ctx_ = avcodec_alloc_context3(codec);
   if (!codec_ctx_) { return false; }
   codec_ctx_->width = width_;
   codec_ctx_->height = height_;
-  codec_ctx_->pix_fmt = AV_PIX_FMT_YUV420P;
+  codec_ctx_->pix_fmt = encode_pix_fmt;
   codec_ctx_->time_base = AVRational{1, kTimebaseDen};
   codec_ctx_->framerate = AVRational{30, 1};  // 提示
   codec_ctx_->gop_size = 60;
@@ -88,12 +142,12 @@ bool VideoRecorder::init(const VideoParams & params)
   if (avformat_write_header(fmt_ctx_, nullptr) < 0) { return false; }
   header_written_ = true;
 
-  // 编码用 YUV 帧
-  yuv_frame_ = av_frame_alloc();
-  yuv_frame_->format = AV_PIX_FMT_YUV420P;
-  yuv_frame_->width = width_;
-  yuv_frame_->height = height_;
-  if (av_frame_get_buffer(yuv_frame_, 0) < 0) { return false; }
+  encode_frame_ = av_frame_alloc();
+  if (!encode_frame_) { return false; }
+  encode_frame_->format = codec_ctx_->pix_fmt;
+  encode_frame_->width = width_;
+  encode_frame_->height = height_;
+  if (av_frame_get_buffer(encode_frame_, 0) < 0) { return false; }
 
   packet_ = av_packet_alloc();
   return packet_ != nullptr;
@@ -108,14 +162,15 @@ bool VideoRecorder::fill_source_frame(const ImageFrame & frame)
   // 懒建 swscale（首帧定源格式）
   if (!sws_) {
     sws_ = sws_getContext(width_, height_, static_cast<AVPixelFormat>(src_fmt),
-      width_, height_, AV_PIX_FMT_YUV420P, SWS_BILINEAR, nullptr, nullptr, nullptr);
+      width_, height_, codec_ctx_->pix_fmt, SWS_BILINEAR, nullptr, nullptr, nullptr);
     if (!sws_) { return false; }
   }
 
   const uint8_t * src_slices[4] = {frame.data.data(), nullptr, nullptr, nullptr};
   int src_stride[4] = {frame.step, 0, 0, 0};
-  if (av_frame_make_writable(yuv_frame_) < 0) { return false; }
-  sws_scale(sws_, src_slices, src_stride, 0, height_, yuv_frame_->data, yuv_frame_->linesize);
+  if (av_frame_make_writable(encode_frame_) < 0) { return false; }
+  sws_scale(
+    sws_, src_slices, src_stride, 0, height_, encode_frame_->data, encode_frame_->linesize);
   return true;
 }
 
@@ -144,9 +199,9 @@ bool VideoRecorder::encode(const ImageFrame & frame)
   if (!have_first_) { first_stamp_ns_ = frame.ros_stamp_ns; have_first_ = true; }
   const double rel_seconds = static_cast<double>(frame.ros_stamp_ns - first_stamp_ns_) / 1e9;
   const int64_t pts = std::llround(rel_seconds * kTimebaseDen);
-  yuv_frame_->pts = pts;
+  encode_frame_->pts = pts;
 
-  if (avcodec_send_frame(codec_ctx_, yuv_frame_) < 0) { return false; }
+  if (avcodec_send_frame(codec_ctx_, encode_frame_) < 0) { return false; }
   drain_packets();
 
   if (csv_) {
@@ -166,8 +221,7 @@ void VideoRecorder::close()
   if (csv_.is_open()) { csv_.close(); }
   if (sws_) { sws_freeContext(sws_); sws_ = nullptr; }
   if (packet_) { av_packet_free(&packet_); }
-  if (yuv_frame_) { av_frame_free(&yuv_frame_); }
-  if (bgr_frame_) { av_frame_free(&bgr_frame_); }
+  if (encode_frame_) { av_frame_free(&encode_frame_); }
   if (fmt_ctx_) {
     if (fmt_ctx_->pb) { avio_closep(&fmt_ctx_->pb); }
     avformat_free_context(fmt_ctx_);

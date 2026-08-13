@@ -1,5 +1,10 @@
 #include <gtest/gtest.h>
 
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavutil/pixfmt.h>
+}
+
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -21,6 +26,25 @@ data_recorder::ImageFrame make_bgr8_frame(int w, int h, int64_t stamp_ns, uint8_
   f.ros_stamp_ns = stamp_ns;
   f.data.assign(static_cast<size_t>(w) * h * 3, fill);
   return f;
+}
+
+AVPixelFormat video_pixel_format(const std::string & path)
+{
+  AVFormatContext * format = nullptr;
+  if (avformat_open_input(&format, path.c_str(), nullptr, nullptr) < 0) {
+    return AV_PIX_FMT_NONE;
+  }
+  if (avformat_find_stream_info(format, nullptr) < 0) {
+    avformat_close_input(&format);
+    return AV_PIX_FMT_NONE;
+  }
+  const int stream_index = av_find_best_stream(
+    format, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+  const AVPixelFormat pixel_format = stream_index >= 0 ?
+    static_cast<AVPixelFormat>(format->streams[stream_index]->codecpar->format) :
+    AV_PIX_FMT_NONE;
+  avformat_close_input(&format);
+  return pixel_format;
 }
 }  // namespace
 
@@ -92,6 +116,62 @@ TEST(VideoRecorder, UnsupportedEncodingFailsToOpenGracefully)
   const bool encoded = rec.encode(f);
   EXPECT_FALSE(encoded);  // 跳过，不崩溃
   rec.close();
+
+  fs::remove_all(tmp);
+}
+
+TEST(VideoRecorder, AppliesConfiguredPixelFormat)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_pix_fmt";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  const std::string mp4 = (tmp / "x.mp4").string();
+
+  data_recorder::VideoParams params;
+  params.pix_fmt = "yuv444p";
+  {
+    data_recorder::VideoRecorder rec(mp4, (tmp / "x.csv").string(), 64, 48, params);
+    ASSERT_TRUE(rec.is_open());
+    for (int i = 0; i < 3; ++i) {
+      EXPECT_TRUE(rec.encode(make_bgr8_frame(64, 48, i * 33'333'333LL, i * 30)));
+    }
+    rec.close();
+  }
+
+  EXPECT_EQ(video_pixel_format(mp4), AV_PIX_FMT_YUV444P);
+  fs::remove_all(tmp);
+}
+
+TEST(VideoRecorder, BogusPixelFormatFailsToOpenAndDestructsCleanly)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_bogus_pix_fmt";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+
+  data_recorder::VideoParams params;
+  params.pix_fmt = "no_such_pixel_format";
+  {
+    data_recorder::VideoRecorder rec(
+      (tmp / "x.mp4").string(), (tmp / "x.csv").string(), 64, 48, params);
+    EXPECT_FALSE(rec.is_open());
+  }
+
+  fs::remove_all(tmp);
+}
+
+TEST(VideoRecorder, EncoderUnsupportedPixelFormatFailsToOpen)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_unsupported_pix_fmt";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+
+  data_recorder::VideoParams params;
+  params.pix_fmt = "rgba";  // swscale 可输出，但 libx264 不接受。
+  {
+    data_recorder::VideoRecorder rec(
+      (tmp / "x.mp4").string(), (tmp / "x.csv").string(), 64, 48, params);
+    EXPECT_FALSE(rec.is_open());
+  }
 
   fs::remove_all(tmp);
 }

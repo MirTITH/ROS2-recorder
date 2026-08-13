@@ -63,8 +63,7 @@ private:
   AVCodecContext * codec_ctx_{nullptr};
   AVFormatContext * fmt_ctx_{nullptr};
   AVStream * stream_{nullptr};
-  AVFrame * bgr_frame_{nullptr};   // 源 BGR24
-  AVFrame * yuv_frame_{nullptr};   // 编码 YUV420P
+  AVFrame * encode_frame_{nullptr};  // pix_fmt 配置指定的编码器输入帧
   AVPacket * packet_{nullptr};
   SwsContext * sws_{nullptr};
 
