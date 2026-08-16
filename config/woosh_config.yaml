@@ -53,6 +53,8 @@ groups:
       - /left_hand_controller/transition_event
       - /left_hand_max_finger_force_controller/commands
       - /left_hand_max_finger_force_controller/transition_event
+      - /left_gripper_controller/commands
+      - /left_gripper_controller/transition_event
 
       - /parameter_events
 
@@ -70,6 +72,8 @@ groups:
       - /right_hand_controller/transition_event
       - /right_hand_max_finger_force_controller/commands
       - /right_hand_max_finger_force_controller/transition_event
+      - /right_gripper_controller/commands
+      - /right_gripper_controller/transition_event
 
       - /robot_description
       - /robot_description_semantic
