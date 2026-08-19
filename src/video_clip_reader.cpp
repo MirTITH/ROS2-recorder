@@ -58,6 +58,7 @@ bool VideoClipReader::open(const std::string & mp4_path, const std::string & csv
     try { stamp = std::stoll(stamp_str); } catch (...) { continue; }
     if (first) { first_stamp = stamp; first = false; }
     FrameIndexEntry e;
+    e.ros_stamp_ns = stamp;
     e.rel_seconds = static_cast<double>(stamp - first_stamp) / 1e9;
     entries_.push_back(e);
   }
@@ -82,6 +83,17 @@ bool VideoClipReader::open(const std::string & mp4_path, const std::string & csv
 
   valid_ = true;
   return true;
+}
+
+std::size_t VideoClipReader::frame_count() const
+{
+  return entries_.size();
+}
+
+int64_t VideoClipReader::frame_stamp_ns(std::size_t index) const
+{
+  if (index >= entries_.size()) { return 0; }
+  return entries_[index].ros_stamp_ns;
 }
 
 double VideoClipReader::duration_seconds() const
@@ -176,11 +188,11 @@ QImage VideoClipReader::decodeForwardTo(int target_index)
   }
 }
 
-QImage VideoClipReader::frameAtSeconds(double t)
+QImage VideoClipReader::frameAtIndex(std::size_t index)
 {
   if (!valid_) { return QImage(); }
-  int target = indexForSeconds(t);
-  if (target < 0) { return QImage(); }
+  if (index >= entries_.size()) { return QImage(); }
+  const int target = static_cast<int>(index);
   if (target == cur_index_ && !cached_.isNull()) { return cached_; }
 
   constexpr int kSeqWindow = 30;
@@ -195,6 +207,14 @@ QImage VideoClipReader::frameAtSeconds(double t)
     cur_index_ = -1;
   }
   return decodeForwardTo(target);
+}
+
+QImage VideoClipReader::frameAtSeconds(double t)
+{
+  if (!valid_) { return QImage(); }
+  const int target = indexForSeconds(t);
+  if (target < 0) { return QImage(); }
+  return frameAtIndex(static_cast<std::size_t>(target));
 }
 
 }  // namespace data_recorder

@@ -2,6 +2,7 @@
 
 #include <QImage>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -29,14 +30,19 @@ public:
   bool open(const std::string & mp4_path, const std::string & csv_path);
   bool is_valid() const { return valid_; }
 
+  std::size_t frame_count() const;
+  int64_t frame_stamp_ns(std::size_t index) const;
+
   double duration_seconds() const;
 
   QImage frameAtSeconds(double t);
+  QImage frameAtIndex(std::size_t index);
 
 private:
   struct FrameIndexEntry
   {
     double rel_seconds{0.0};
+    int64_t ros_stamp_ns{0};
   };
 
   void close();

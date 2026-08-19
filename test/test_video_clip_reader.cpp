@@ -50,7 +50,17 @@ TEST(VideoClipReaderTest, RoundTripDecodesFrames)
 
   data_recorder::VideoClipReader reader;
   ASSERT_TRUE(reader.open(mp4, csv));
+  EXPECT_EQ(reader.frame_count(), static_cast<std::size_t>(N));
+  EXPECT_EQ(reader.frame_stamp_ns(0), base);
+  EXPECT_EQ(reader.frame_stamp_ns(static_cast<std::size_t>(N - 1)),
+    base + static_cast<int64_t>(N - 1) * 40000000LL);
+  EXPECT_EQ(reader.frame_stamp_ns(static_cast<std::size_t>(N)), 0);
   EXPECT_GT(reader.duration_seconds(), 1.0);
+
+  QImage f0_by_index = reader.frameAtIndex(0);
+  ASSERT_FALSE(f0_by_index.isNull());
+  EXPECT_EQ(f0_by_index.width(), W);
+  EXPECT_EQ(f0_by_index.height(), H);
 
   QImage f0 = reader.frameAtSeconds(0.0);
   ASSERT_FALSE(f0.isNull());
@@ -67,6 +77,11 @@ TEST(VideoClipReaderTest, RoundTripDecodesFrames)
 
   QImage fend = reader.frameAtSeconds(999.0);
   ASSERT_FALSE(fend.isNull());
+
+  QImage fend_by_index = reader.frameAtIndex(static_cast<std::size_t>(N - 1));
+  ASSERT_FALSE(fend_by_index.isNull());
+  EXPECT_EQ(fend_by_index.width(), W);
+  EXPECT_TRUE(reader.frameAtIndex(static_cast<std::size_t>(N)).isNull());
 
   fs::remove_all(dir);
 }

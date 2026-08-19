@@ -13,10 +13,13 @@ find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_gtest REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rmw REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
+find_package(rosbag2_interfaces REQUIRED)
 find_package(rosbag2_storage REQUIRED)
 find_package(rosbag2_transport REQUIRED)
+find_package(rosgraph_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -36,6 +39,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/live_bridge.hpp
   include/data_recorder/path_utils.hpp
   include/data_recorder/recording_time.hpp
+  include/data_recorder/player.hpp
   include/data_recorder/recorder_engine.hpp
   include/data_recorder/recorder_types.hpp
   include/data_recorder/rosbag_writer.hpp
@@ -95,7 +99,23 @@ target_link_libraries(data_recorder data_recorder_core)
 target_link_libraries(data_recorder Qt6::Widgets)
 ament_target_dependencies(data_recorder rclcpp ament_index_cpp)
 
-install(TARGETS data_recorder data_recorder_core
+add_executable(player
+  src/player.cpp
+  src/player_main.cpp
+)
+target_link_libraries(player data_recorder_core yaml-cpp)
+ament_target_dependencies(player
+  rclcpp
+  rmw
+  rosbag2_cpp
+  rosbag2_interfaces
+  rosbag2_storage
+  rosbag2_transport
+  rosgraph_msgs
+  sensor_msgs
+)
+
+install(TARGETS data_recorder player data_recorder_core
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
