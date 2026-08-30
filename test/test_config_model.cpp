@@ -79,6 +79,101 @@ groups:
   EXPECT_EQ(config.topics[0].backend_name, "rosbag");
 }
 
+TEST(ConfigModel, DefaultsToRosDefaultQos)
+{
+  const auto path = write_temp_config(R"yaml(
+groups:
+  - topics:
+      - /camera/image_raw
+    backend: video
+)yaml");
+
+  const data_recorder::ConfigModel model;
+  const auto config = model.load_from_file(path);
+
+  ASSERT_EQ(config.topics.size(), 1u);
+  const auto & qos = config.topics[0].qos;
+  EXPECT_EQ(qos.history, data_recorder::QosHistory::KeepLast);
+  EXPECT_EQ(qos.depth, 10u);
+  EXPECT_EQ(qos.reliability, data_recorder::QosReliability::Reliable);
+  EXPECT_EQ(qos.durability, data_recorder::QosDurability::Volatile);
+}
+
+TEST(ConfigModel, TopicQosOverridesGroupQos)
+{
+  const auto path = write_temp_config(R"yaml(
+groups:
+  - topics:
+      - /camera/image_raw
+      - /left_camera/image_raw:
+          qos:
+            reliability: reliable
+            durability: transient_local
+            depth: 3
+    backend: video
+    qos:
+      history: keep_last
+      depth: 20
+      reliability: best_effort
+      durability: system_default
+)yaml");
+
+  const data_recorder::ConfigModel model;
+  const auto config = model.load_from_file(path);
+
+  ASSERT_EQ(config.topics.size(), 2u);
+  EXPECT_EQ(config.topics[0].qos.depth, 20u);
+  EXPECT_EQ(config.topics[0].qos.reliability, data_recorder::QosReliability::BestEffort);
+  EXPECT_EQ(config.topics[0].qos.durability, data_recorder::QosDurability::SystemDefault);
+  EXPECT_EQ(config.topics[1].qos.depth, 3u);
+  EXPECT_EQ(config.topics[1].qos.reliability, data_recorder::QosReliability::Reliable);
+  EXPECT_EQ(config.topics[1].qos.durability, data_recorder::QosDurability::TransientLocal);
+}
+
+TEST(ConfigModel, ReadsKeepAllQos)
+{
+  const auto path = write_temp_config(R"yaml(
+groups:
+  - topics:
+      - /camera/image_raw
+    backend: video
+    qos:
+      history: keep_all
+)yaml");
+
+  const data_recorder::ConfigModel model;
+  const auto config = model.load_from_file(path);
+
+  ASSERT_EQ(config.topics.size(), 1u);
+  EXPECT_EQ(config.topics[0].qos.history, data_recorder::QosHistory::KeepAll);
+}
+
+TEST(ConfigModel, RejectsInvalidQos)
+{
+  const data_recorder::ConfigModel model;
+
+  const auto invalid_reliability = write_temp_config(R"yaml(
+groups:
+  - topics: [/camera/image_raw]
+    qos: { reliability: sometimes }
+)yaml");
+  EXPECT_THROW(model.load_from_file(invalid_reliability), data_recorder::ConfigError);
+
+  const auto invalid_depth = write_temp_config(R"yaml(
+groups:
+  - topics: [/camera/image_raw]
+    qos: { depth: 0 }
+)yaml");
+  EXPECT_THROW(model.load_from_file(invalid_depth), data_recorder::ConfigError);
+
+  const auto keep_all_with_depth = write_temp_config(R"yaml(
+groups:
+  - topics: [/camera/image_raw]
+    qos: { history: keep_all, depth: 10 }
+)yaml");
+  EXPECT_THROW(model.load_from_file(keep_all_with_depth), data_recorder::ConfigError);
+}
+
 TEST(ConfigModel, ThrowsWhenGroupsMissing)
 {
   const auto path = write_temp_config(R"yaml(

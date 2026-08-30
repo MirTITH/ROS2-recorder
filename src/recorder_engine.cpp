@@ -48,6 +48,38 @@ std::string timestamp_now()
   os << std::put_time(&tm, "%Y-%m-%d_%H-%M-%S");
   return os.str();
 }
+
+rclcpp::QoS subscription_qos(const QosConfig & config)
+{
+  rclcpp::QoS qos = config.history == QosHistory::KeepAll ?
+    rclcpp::QoS(rclcpp::KeepAll()) :
+    rclcpp::QoS(rclcpp::KeepLast(config.depth));
+
+  switch (config.reliability) {
+    case QosReliability::Reliable:
+      qos.reliable();
+      break;
+    case QosReliability::BestEffort:
+      qos.best_effort();
+      break;
+    case QosReliability::SystemDefault:
+      qos.reliability(RMW_QOS_POLICY_RELIABILITY_SYSTEM_DEFAULT);
+      break;
+  }
+
+  switch (config.durability) {
+    case QosDurability::Volatile:
+      qos.durability_volatile();
+      break;
+    case QosDurability::TransientLocal:
+      qos.transient_local();
+      break;
+    case QosDurability::SystemDefault:
+      qos.durability(RMW_QOS_POLICY_DURABILITY_SYSTEM_DEFAULT);
+      break;
+  }
+  return qos;
+}
 }  // namespace
 
 RecorderEngine::RecorderEngine(
@@ -151,7 +183,7 @@ void RecorderEngine::setup_subscriptions()
     {
       const std::string topic_name = topic.topic_name;
       auto sub = node_->create_subscription<sensor_msgs::msg::Image>(
-        topic_name, rclcpp::SensorDataQoS(),
+        topic_name, subscription_qos(topic.qos),
         [this, topic_name](sensor_msgs::msg::Image::ConstSharedPtr msg) {
           on_image_message(topic_name, msg);
         });

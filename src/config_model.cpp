@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <limits>
 #include <sstream>
 
 namespace data_recorder
@@ -20,6 +21,77 @@ std::string optional_scalar(
     return fallback;
   }
   return node[key].as<std::string>();
+}
+
+QosConfig parse_qos(
+  const YAML::Node & node, QosConfig qos, const std::string & context)
+{
+  if (!node.IsMap()) {
+    throw ConfigError(context + " must be a map");
+  }
+
+  for (const auto & entry : node) {
+    const auto key = entry.first.as<std::string>();
+    if (key != "history" && key != "depth" && key != "reliability" && key != "durability") {
+      throw ConfigError(context + " contains unknown option '" + key + "'");
+    }
+  }
+
+  if (node["history"]) {
+    const auto value = node["history"].as<std::string>();
+    if (value == "keep_last") {
+      qos.history = QosHistory::KeepLast;
+    } else if (value == "keep_all") {
+      qos.history = QosHistory::KeepAll;
+    } else {
+      throw ConfigError(context + ".history must be 'keep_last' or 'keep_all'");
+    }
+  }
+
+  if (node["depth"]) {
+    const auto depth = node["depth"].as<long long>();
+    if (depth <= 0 || static_cast<unsigned long long>(depth) >
+      std::numeric_limits<std::size_t>::max())
+    {
+      throw ConfigError(context + ".depth must be a positive integer");
+    }
+    if (qos.history == QosHistory::KeepAll) {
+      throw ConfigError(context + ".depth cannot be used with history 'keep_all'");
+    }
+    qos.depth = static_cast<std::size_t>(depth);
+  }
+
+  if (node["reliability"]) {
+    const auto value = node["reliability"].as<std::string>();
+    if (value == "reliable") {
+      qos.reliability = QosReliability::Reliable;
+    } else if (value == "best_effort") {
+      qos.reliability = QosReliability::BestEffort;
+    } else if (value == "system_default") {
+      qos.reliability = QosReliability::SystemDefault;
+    } else {
+      throw ConfigError(
+              context +
+              ".reliability must be 'reliable', 'best_effort', or 'system_default'");
+    }
+  }
+
+  if (node["durability"]) {
+    const auto value = node["durability"].as<std::string>();
+    if (value == "volatile") {
+      qos.durability = QosDurability::Volatile;
+    } else if (value == "transient_local") {
+      qos.durability = QosDurability::TransientLocal;
+    } else if (value == "system_default") {
+      qos.durability = QosDurability::SystemDefault;
+    } else {
+      throw ConfigError(
+              context +
+              ".durability must be 'volatile', 'transient_local', or 'system_default'");
+    }
+  }
+
+  return qos;
 }
 
 }  // namespace
@@ -94,11 +166,17 @@ ConfigData ConfigModel::load_from_file(const std::string & path) const
         }
       }
 
+      QosConfig group_qos;
+      if (group_node["qos"]) {
+        group_qos = parse_qos(group_node["qos"], group_qos, "group qos");
+      }
+
       for (const auto & topic_node : group_node["topics"]) {
         TopicEntry topic;
         topic.backend_name = backend_name;
         topic.group_index = group_index;
         topic.params = params;
+        topic.qos = group_qos;
 
         if (topic_node.IsScalar()) {
           topic.topic_name = topic_node.as<std::string>();
@@ -114,6 +192,10 @@ ConfigData ConfigModel::load_from_file(const std::string & path) const
             topic.default_expanded = options["ui_expanded"].as<bool>();
           } else {
             topic.default_expanded = false;
+          }
+          if (options && options.IsMap() && options["qos"]) {
+            topic.qos = parse_qos(
+              options["qos"], topic.qos, "qos for topic '" + topic.topic_name + "'");
           }
         } else {
           throw ConfigError("each topic must be a string or a single-key map");

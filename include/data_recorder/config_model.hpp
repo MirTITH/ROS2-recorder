@@ -2,6 +2,7 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <cstddef>
 #include <map>
 #include <stdexcept>
 #include <string>
@@ -16,6 +17,34 @@ enum class TopicUiCategory
   NumericTrack,
 };
 
+enum class QosHistory
+{
+  KeepLast,
+  KeepAll,
+};
+
+enum class QosReliability
+{
+  Reliable,
+  BestEffort,
+  SystemDefault,
+};
+
+enum class QosDurability
+{
+  Volatile,
+  TransientLocal,
+  SystemDefault,
+};
+
+struct QosConfig
+{
+  QosHistory history{QosHistory::KeepLast};
+  std::size_t depth{10};
+  QosReliability reliability{QosReliability::Reliable};
+  QosDurability durability{QosDurability::Volatile};
+};
+
 struct TopicEntry
 {
   std::string topic_name;
@@ -24,6 +53,7 @@ struct TopicEntry
   TopicUiCategory ui_category{TopicUiCategory::NumericTrack};
   bool default_expanded{false};
   std::map<std::string, std::string> params;
+  QosConfig qos;
 };
 
 struct TagEntry

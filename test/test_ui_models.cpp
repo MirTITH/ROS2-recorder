@@ -1860,7 +1860,7 @@ TEST(AppControllerHistoryTest, SelectHistoryEntersPlaybackMode)
   data_recorder::ConfigData config;
   config.output_dir = out.string();
   config.topics.push_back({"/cam", "video", 0,
-    data_recorder::TopicUiCategory::CameraPreview, {}});
+    data_recorder::TopicUiCategory::CameraPreview, {}, {}, {}});
 
   data_recorder::LiveBridge bridge;
   data_recorder::SessionManager sm;
@@ -2089,7 +2089,7 @@ TEST(AppControllerHistoryTest, MarkerShortcutIsNoOpInHistoryMode)
   data_recorder::ConfigData config;
   config.output_dir = out.string();
   config.topics.push_back({"/cam", "video", 0,
-    data_recorder::TopicUiCategory::CameraPreview, {}});
+    data_recorder::TopicUiCategory::CameraPreview, {}, {}, {}});
 
   data_recorder::LiveBridge bridge;
   data_recorder::SessionManager sm;

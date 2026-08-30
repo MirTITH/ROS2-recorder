@@ -16,6 +16,47 @@
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
 
+TEST(RecorderEngineSubscription, AppliesCameraReliabilityAndDurability)
+{
+  rclcpp::init(0, nullptr);
+
+  data_recorder::ConfigData config;
+  config.output_dir = (fs::temp_directory_path() / "dr_camera_qos_test").string();
+
+  data_recorder::TopicEntry default_entry;
+  default_entry.topic_name = "/dr_test_camera_default_qos";
+  default_entry.backend_name = "video";
+  default_entry.ui_category = data_recorder::TopicUiCategory::CameraPreview;
+  config.topics.push_back(default_entry);
+
+  data_recorder::TopicEntry custom_entry = default_entry;
+  custom_entry.topic_name = "/dr_test_camera_custom_qos";
+  custom_entry.qos.history = data_recorder::QosHistory::KeepAll;
+  custom_entry.qos.reliability = data_recorder::QosReliability::BestEffort;
+  custom_entry.qos.durability = data_recorder::QosDurability::TransientLocal;
+  config.topics.push_back(custom_entry);
+
+  auto node = std::make_shared<rclcpp::Node>("dr_test_camera_qos_node");
+  data_recorder::SessionManager session_manager;
+  data_recorder::RecorderEngine engine(node, config, /*bridge=*/nullptr, &session_manager);
+
+  const auto default_endpoints =
+    node->get_subscriptions_info_by_topic(default_entry.topic_name);
+  ASSERT_EQ(default_endpoints.size(), 1u);
+  const auto & default_qos = default_endpoints.front().qos_profile();
+  EXPECT_EQ(default_qos.reliability(), rclcpp::ReliabilityPolicy::Reliable);
+  EXPECT_EQ(default_qos.durability(), rclcpp::DurabilityPolicy::Volatile);
+
+  const auto custom_endpoints =
+    node->get_subscriptions_info_by_topic(custom_entry.topic_name);
+  ASSERT_EQ(custom_endpoints.size(), 1u);
+  const auto & custom_qos = custom_endpoints.front().qos_profile();
+  EXPECT_EQ(custom_qos.reliability(), rclcpp::ReliabilityPolicy::BestEffort);
+  EXPECT_EQ(custom_qos.durability(), rclcpp::DurabilityPolicy::TransientLocal);
+
+  rclcpp::shutdown();
+}
+
 // 回归测试：发布者在 RecorderEngine 构造“之后”才出现，也应被补订。
 // 复现启动发现竞态——旧代码在构造时查不到发布者就 continue 永久跳过，发布者永远订不上。
 TEST(RecorderEngineSubscription, SubscribesToPublisherThatAppearsAfterConstruction)

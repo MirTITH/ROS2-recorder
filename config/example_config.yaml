@@ -1,13 +1,9 @@
-# data_recorder example configuration.
-# Pass it at launch:  --ros-args -p config_file:=<this file>
-#
-# Group-based: every group shares one backend + params and lists topics.
-# You can paste the output of `ros2 topic list` straight into a group's topics.
-# 'backend' defaults to "rosbag" when omitted.
+# data_recorder 配置示例
+# 使用方法：ros2 run data_recorder data_recorder --ros-args -p config_file:="<this file>"
 
-output_dir: "./recordings" # a timestamped session/ subdir is created here
+output_dir: "./recordings"
 
-# 记录标签词表：左栏可点击的标签 chips，按采集会话保存到 annotations.yaml。
+# 标签，用于标注单条数据
 # name 必须唯一；color 可省略（默认灰色）。
 tags:
   - { name: "成功", color: "#2f9e44" }
@@ -16,35 +12,43 @@ tags:
   - { name: "合格零件", color: "#1763c9" }
   - { name: "不合格零件", color: "#0ea5b7" }
 
-# 时间标注类型：快捷键 -> 定义。kind 为 point（时间点）或 range（区间）。
-# 快捷键是单个数字或字母：数字键主键区/小键盘均可触发，字母不区分大小写。
-# 区间标注按两次：第一次在播放头处定起点，移动播放头后再按同一键定终点。
+# 时间标注，用于标注一条数据的某个时间点或时间区间。
+# 格式如下：
+# "<快捷键>": { name: "名称", kind: "range", color: "#1763c9" }
+# 其中：
+# kind 为 point（时间点）或 range（区间）。
+# 快捷键是数字或字母：数字主键区/小键盘均可触发，字母不区分大小写。
+# 区间标注按两次：第一次定起点，第二次定终点。
 annotation_types:
-  "1": { name: "拿起零件", kind: "range", color: "#1763c9" } # 主键区 1 或 Numpad 1
-  "2": { name: "称重", kind: "range", color: "#2f9e44" } # 主键区 2 或 Numpad 2
+  "1": { name: "拿起零件", kind: "range", color: "#1763c9" }
+  "2": { name: "称重", kind: "range", color: "#2f9e44" }
   "3": { name: "放置零件", kind: "range", color: "#e8a915" }
-  "c": { name: "碰撞", kind: "point", color: "#e03131" } # 字母 c
+  "c": { name: "碰撞", kind: "point", color: "#e03131" }
 
 groups:
-  # Plain topics -> recorded into a single ros2 bag.
-  # NOTE: subscriptions adapt to the publishers' offered QoS (like `ros2 bag
-  # record`); BEST_EFFORT publishers may drop frames under load by design.
+  # Plain topics
   - topics:
       - /tf
       - /tf_static
       - /joint_states
       - /left_arm_controller/joint_trajectory
       - /right_arm_controller/joint_trajectory
-    backend: rosbag
+    backend: rosbag # 记录到 rosbag
 
-  # Image topic -> encoded to video with libav (accurate per-frame PTS + sidecar CSV).
+  # Image topics
   - topics:
+      # 这些 topic 也可以指定 QoS 配置（不指定则使用 ROS 2 默认值），示例如下：
+      # - /special_camera/image_raw: { qos: { history: keep_last, depth: 10, reliability: reliable, durability: volatile } }
+      # 参数的可选值为：
+      # history: keep_last | keep_all
+      # reliability: reliable | best_effort | system_default
+      # durability: volatile | transient_local | system_default
       - /camera/image_raw
       - /right_camera/image_raw
       - /left_camera/image_raw
     backend: video
     params:
-      codec: "libx264" # any ffmpeg encoder name: libx264 / libx265 / ...
+      codec: "libx264" # ffmpeg 编码器名称: libx264 / libx265 / ...
       crf: 23
       preset: "medium"
       pix_fmt: "yuv420p"
