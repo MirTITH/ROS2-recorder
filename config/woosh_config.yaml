@@ -4,7 +4,7 @@
 # Group-based: every group shares one backend + params and lists topics.
 # 'backend' defaults to "rosbag" when omitted.
 
-output_dir: "./recordings/pick_place" # a timestamped session/ subdir is created here
+output_dir: "./recordings/gripper_pick_2" # a timestamped session/ subdir is created here
 
 # 记录标签词表：左栏可点击的标签 chips，按采集会话保存到 annotations.yaml。
 # name 必须唯一；color 可省略（默认灰色）。
@@ -21,8 +21,8 @@ tags:
 # 快捷键是单个数字或字母：数字键主键区/小键盘均可触发，字母不区分大小写。
 # 区间标注按两次：第一次在播放头处定起点，移动播放头后再按同一键定终点。
 annotation_types:
-  "1": { name: "拿起", kind: "range", color: "#1763c9" } # 主键区 1 或 Numpad 1
-  # "2": { name: "称重", kind: "range", color: "#2f9e44" } # 主键区 2 或 Numpad 2
+  "1": { name: "收纳", kind: "range", color: "#1763c9" } # 主键区 1 或 Numpad 1
+  "2": { name: "取出", kind: "range", color: "#2f9e44" } # 主键区 2 或 Numpad 2
   "3": { name: "放置", kind: "range", color: "#e8a915" }
   "c": { name: "碰撞", kind: "point", color: "#e03131" } # 字母 c
 
