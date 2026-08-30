@@ -82,8 +82,7 @@ sudo apt install ros-humble-rosbag2-storage-mcap
 ```bash
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-ros2 run data_recorder player --ros-args \
-  -p session_dir:=/path/to/recording/session
+ros2 run data_recorder player --ros-args -p session_dir:=/path/to/recording/session
 ```
 
 可用参数：
