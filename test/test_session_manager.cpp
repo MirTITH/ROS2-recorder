@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
@@ -13,10 +14,14 @@ data_recorder::SessionRecord make_record(const std::string & id)
 {
   data_recorder::SessionRecord r;
   r.session_id = id;
+  r.recorder_version = "1.1.0";
   r.unix_time = 1782059150.228855;
   r.ros_time_ns = 1782059150228855043LL;
   r.duration_seconds = 42.512;
-  r.topics = {{"/joint_states", "rosbag"}, {"/camera/image_raw", "video"}};
+  r.topics = {
+    {"/joint_states", "rosbag", ""},
+    {"/camera/image_raw", "video", "- history: 3\n  depth: 10\n  reliability: 1\n  durability: 2\n"},
+  };
   r.tags = {{"成功", "#2f9e44"}};
   // 同名多条 + range
   r.annotations = {
@@ -46,6 +51,7 @@ TEST(SessionManager, WritesAndReadsBackSessionYaml)
   ASSERT_EQ(sessions.size(), 1u);
   const auto & s = sessions.front();
   EXPECT_EQ(s.session_id, "2026-06-22_14-30-05");
+  EXPECT_EQ(s.recorder_version, "1.1.0");
   EXPECT_NEAR(s.duration_seconds, 42.512, 1e-6);
   ASSERT_EQ(s.annotations.size(), 4u);
   // 同名两条都在
@@ -56,6 +62,51 @@ TEST(SessionManager, WritesAndReadsBackSessionYaml)
   EXPECT_EQ(collision_count, 2);
   ASSERT_EQ(s.tags.size(), 1u);
   EXPECT_EQ(s.tags.front().name, "成功");
+
+  ASSERT_EQ(s.topics.size(), 2u);
+  const auto rosbag_it = std::find_if(
+    s.topics.begin(), s.topics.end(),
+    [](const auto & t) { return t.name == "/joint_states"; });
+  ASSERT_NE(rosbag_it, s.topics.end());
+  EXPECT_TRUE(rosbag_it->offered_qos_profiles.empty());
+  const auto video_it = std::find_if(
+    s.topics.begin(), s.topics.end(),
+    [](const auto & t) { return t.name == "/camera/image_raw"; });
+  ASSERT_NE(video_it, s.topics.end());
+  EXPECT_FALSE(video_it->offered_qos_profiles.empty());
+
+  fs::remove_all(tmp);
+}
+
+TEST(SessionManager, ScanDefaultsMissingVersionAndQosForOldFormatYaml)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_session_test_old_format";
+  fs::remove_all(tmp);
+  const fs::path dir = tmp / "2026-01-01_00-00-00";
+  fs::create_directories(dir);
+
+  // 旧格式 session.yaml：没有 version、没有 offered_qos_profiles 字段。
+  std::ofstream(dir / "session.yaml") <<
+    "session: \"2026-01-01_00-00-00\"\n"
+    "recorded_at:\n"
+    "  unix: 1782059150.228855\n"
+    "  ros_time_ns: 1782059150228855043\n"
+    "duration_seconds: 10.0\n"
+    "topics:\n"
+    "  - name: /joint_states\n"
+    "    backend: rosbag\n"
+    "  - name: /camera/image_raw\n"
+    "    backend: video\n";
+
+  data_recorder::SessionManager mgr;
+  auto sessions = mgr.scan(tmp.string());
+  ASSERT_EQ(sessions.size(), 1u);
+  const auto & s = sessions.front();
+  EXPECT_TRUE(s.recorder_version.empty());
+  ASSERT_EQ(s.topics.size(), 2u);
+  for (const auto & t : s.topics) {
+    EXPECT_TRUE(t.offered_qos_profiles.empty());
+  }
 
   fs::remove_all(tmp);
 }

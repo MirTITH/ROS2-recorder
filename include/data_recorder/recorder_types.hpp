@@ -47,7 +47,8 @@ struct TagRecord
 struct TopicRef
 {
   std::string name;
-  std::string backend;          // "rosbag" / "video"
+  std::string backend;              // "rosbag" / "video"
+  std::string offered_qos_profiles; // 仅 video 话题填充；rosbag 话题的 QoS 记在 bag 自己的 metadata 里
 };
 
 // 一次录制会话的描述符（写/读 session.yaml；驱动会话面板）。
@@ -59,6 +60,7 @@ struct SessionRecord
   int64_t ros_time_ns{0};
   double duration_seconds{0.0};
   uint64_t size_bytes{0};       // 扫描时现算，不持久化
+  std::string recorder_version; // 录制本次会话时的 data_recorder 版本（package.xml），老 session 为空
   std::vector<TopicRef> topics;
   std::vector<TagRecord> tags;
   std::vector<AnnotationRecord> annotations;

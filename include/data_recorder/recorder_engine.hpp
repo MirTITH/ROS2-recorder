@@ -58,7 +58,10 @@ private:
   void setup_subscriptions();
   // 订阅一个 rosbag 话题；发布者尚未被发现则返回 false（留待 try_subscribe_pending 补订）。
   bool subscribe_rosbag_topic(const std::string & topic_name);
-  // 周期性尝试补订 pending_topics_ 里还没订上的话题（spin 线程上的定时器调用）。
+  // 订阅一个 video 话题：qos_explicit 时直接用配置 QoS；否则匹配发布者 QoS，
+  // 发布者尚未被发现则返回 false（留待 try_subscribe_pending 补订）。
+  bool subscribe_video_topic(const TopicEntry & topic);
+  // 周期性尝试补订 pending_topics_/pending_video_topics_ 里还没订上的话题（spin 线程上的定时器调用）。
   void try_subscribe_pending();
   void on_rosbag_message(
     const std::string & topic, const std::string & type,
@@ -76,6 +79,8 @@ private:
   // 构造时发布者未被发现而未订上的 rosbag 话题；resubscribe_timer_ 持续补订。
   // pending_mutex_ 同时保护 pending_topics_ 与 subscriptions_ 的追加（构造线程 vs spin 线程）。
   std::set<std::string> pending_topics_;
+  // 同理，构造时未匹配到发布者的 video 话题（非 qos_explicit）；resubscribe_timer_ 补订。
+  std::set<std::string> pending_video_topics_;
   std::mutex pending_mutex_;
 
   // TRANSIENT_LOCAL 话题最近收到的样本。引擎为了实时 UI 会在开录前就订阅话题，而 DDS

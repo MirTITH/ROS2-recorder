@@ -16,36 +16,27 @@
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
 
-TEST(RecorderEngineSubscription, AppliesCameraReliabilityAndDurability)
+TEST(RecorderEngineSubscription, ExplicitQosAppliesRegardlessOfPublisher)
 {
   rclcpp::init(0, nullptr);
 
   data_recorder::ConfigData config;
   config.output_dir = (fs::temp_directory_path() / "dr_camera_qos_test").string();
 
-  data_recorder::TopicEntry default_entry;
-  default_entry.topic_name = "/dr_test_camera_default_qos";
-  default_entry.backend_name = "video";
-  default_entry.ui_category = data_recorder::TopicUiCategory::CameraPreview;
-  config.topics.push_back(default_entry);
-
-  data_recorder::TopicEntry custom_entry = default_entry;
+  // qos_explicit=true：即使订阅时还没有发布者，也应立即按配置 QoS 建立订阅（不进 pending）。
+  data_recorder::TopicEntry custom_entry;
   custom_entry.topic_name = "/dr_test_camera_custom_qos";
+  custom_entry.backend_name = "video";
+  custom_entry.ui_category = data_recorder::TopicUiCategory::CameraPreview;
   custom_entry.qos.history = data_recorder::QosHistory::KeepAll;
   custom_entry.qos.reliability = data_recorder::QosReliability::BestEffort;
   custom_entry.qos.durability = data_recorder::QosDurability::TransientLocal;
+  custom_entry.qos_explicit = true;
   config.topics.push_back(custom_entry);
 
   auto node = std::make_shared<rclcpp::Node>("dr_test_camera_qos_node");
   data_recorder::SessionManager session_manager;
   data_recorder::RecorderEngine engine(node, config, /*bridge=*/nullptr, &session_manager);
-
-  const auto default_endpoints =
-    node->get_subscriptions_info_by_topic(default_entry.topic_name);
-  ASSERT_EQ(default_endpoints.size(), 1u);
-  const auto & default_qos = default_endpoints.front().qos_profile();
-  EXPECT_EQ(default_qos.reliability(), rclcpp::ReliabilityPolicy::Reliable);
-  EXPECT_EQ(default_qos.durability(), rclcpp::DurabilityPolicy::Volatile);
 
   const auto custom_endpoints =
     node->get_subscriptions_info_by_topic(custom_entry.topic_name);
@@ -54,6 +45,59 @@ TEST(RecorderEngineSubscription, AppliesCameraReliabilityAndDurability)
   EXPECT_EQ(custom_qos.reliability(), rclcpp::ReliabilityPolicy::BestEffort);
   EXPECT_EQ(custom_qos.durability(), rclcpp::DurabilityPolicy::TransientLocal);
 
+  rclcpp::shutdown();
+}
+
+// 回归测试：video 话题默认（非 qos_explicit）应像 rosbag 话题一样跟随真实发布者的 QoS，
+// 而不是套用固定的 config 默认值。构造时发布者还不存在 → 走 pending，由 resubscribe_timer_ 补订。
+TEST(RecorderEngineSubscription, DefaultVideoQosMatchesPublisherAfterDiscovery)
+{
+  rclcpp::init(0, nullptr);
+
+  const std::string topic = "/dr_test_camera_default_qos";
+
+  data_recorder::ConfigData config;
+  config.output_dir = (fs::temp_directory_path() / "dr_camera_qos_default_test").string();
+  data_recorder::TopicEntry default_entry;
+  default_entry.topic_name = topic;
+  default_entry.backend_name = "video";
+  default_entry.ui_category = data_recorder::TopicUiCategory::CameraPreview;
+  config.topics.push_back(default_entry);
+
+  auto node = std::make_shared<rclcpp::Node>("dr_test_camera_default_qos_node");
+  data_recorder::SessionManager session_manager;
+  data_recorder::RecorderEngine engine(node, config, /*bridge=*/nullptr, &session_manager);
+
+  // 构造之后才创建发布者（确定性复现竞态），QoS 为 BestEffort/TransientLocal。
+  auto pub_node = std::make_shared<rclcpp::Node>("dr_test_camera_pub_node");
+  auto pub = pub_node->create_publisher<sensor_msgs::msg::Image>(
+    topic, rclcpp::QoS(1).best_effort().transient_local());
+
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(node);
+  executor.add_node(pub_node);
+
+  // 自旋至多 ~5s，等 resubscribe_timer_（500ms 周期）补订。
+  bool subscribed = false;
+  const auto deadline = std::chrono::steady_clock::now() + 5s;
+  while (std::chrono::steady_clock::now() < deadline) {
+    executor.spin_some(50ms);
+    if (pub->get_subscription_count() > 0) {
+      subscribed = true;
+      break;
+    }
+    std::this_thread::sleep_for(50ms);
+  }
+  ASSERT_TRUE(subscribed) << "RecorderEngine 未补订默认 QoS 的 video 话题";
+
+  const auto endpoints = node->get_subscriptions_info_by_topic(topic);
+  ASSERT_EQ(endpoints.size(), 1u);
+  const auto & qos = endpoints.front().qos_profile();
+  EXPECT_EQ(qos.reliability(), rclcpp::ReliabilityPolicy::BestEffort);
+  EXPECT_EQ(qos.durability(), rclcpp::DurabilityPolicy::TransientLocal);
+
+  executor.remove_node(node);
+  executor.remove_node(pub_node);
   rclcpp::shutdown();
 }
 

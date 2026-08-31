@@ -37,18 +37,24 @@ std::string normalized_topic(std::string topic)
   return topic;
 }
 
-rclcpp::QoS publisher_qos_for_topic(const rosbag2_storage::TopicMetadata & topic)
+// offered_qos_profiles 为空 → ROS 2 默认 QoS；否则按记录的发布者 QoS 还原（rosbag2 同款格式）。
+rclcpp::QoS qos_from_offered_profiles(
+  const std::string & topic_name, const std::string & offered_qos_profiles)
 {
   using rosbag2_transport::Rosbag2QoS;
-  if (topic.offered_qos_profiles.empty()) { return Rosbag2QoS{}; }
+  if (offered_qos_profiles.empty()) { return Rosbag2QoS{}; }
 
   try {
-    const auto profiles = YAML::Load(topic.offered_qos_profiles)
-      .as<std::vector<Rosbag2QoS>>();
-    return Rosbag2QoS::adapt_offer_to_recorded_offers(topic.name, profiles);
+    const auto profiles = YAML::Load(offered_qos_profiles).as<std::vector<Rosbag2QoS>>();
+    return Rosbag2QoS::adapt_offer_to_recorded_offers(topic_name, profiles);
   } catch (const std::exception &) {
     return Rosbag2QoS{};
   }
+}
+
+rclcpp::QoS publisher_qos_for_topic(const rosbag2_storage::TopicMetadata & topic)
+{
+  return qos_from_offered_profiles(topic.name, topic.offered_qos_profiles);
 }
 
 }  // namespace
@@ -207,8 +213,9 @@ void PlayerNode::load_videos(const std::string & session_directory)
       VideoClip clip;
       clip.topic = topic;
       clip.reader = std::move(reader);
+      const std::string offered_qos_profiles = item["offered_qos_profiles"].as<std::string>("");
       clip.publisher = create_publisher<sensor_msgs::msg::Image>(
-        output_topic(topic), rclcpp::SensorDataQoS());
+        output_topic(topic), qos_from_offered_profiles(topic, offered_qos_profiles));
       video_clips_.push_back(std::move(clip));
     } catch (const std::exception & error) {
       RCLCPP_WARN(get_logger(), "Skipping video topic '%s': %s", topic.c_str(), error.what());

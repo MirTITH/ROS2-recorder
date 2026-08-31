@@ -26,6 +26,7 @@ bool SessionManager::write_session_yaml(const SessionRecord & record) const
   try {
     YAML::Node root;
     root["session"] = record.session_id;
+    if (!record.recorder_version.empty()) { root["version"] = record.recorder_version; }
     YAML::Node recorded_at;
     recorded_at["unix"] = record.unix_time;
     recorded_at["ros_time_ns"] = record.ros_time_ns;
@@ -36,6 +37,9 @@ bool SessionManager::write_session_yaml(const SessionRecord & record) const
       YAML::Node t;
       t["name"] = topic.name;
       t["backend"] = topic.backend;
+      if (!topic.offered_qos_profiles.empty()) {
+        t["offered_qos_profiles"] = topic.offered_qos_profiles;
+      }
       root["topics"].push_back(t);
     }
     for (const auto & tag : record.tags) {
@@ -119,6 +123,7 @@ std::vector<SessionRecord> SessionManager::scan(const std::string & output_dir) 
 
     SessionRecord r;
     r.session_id = root["session"] ? root["session"].as<std::string>() : entry.path().filename().string();
+    r.recorder_version = root["version"].as<std::string>("");
     ec.clear();
     const fs::path abs_dir = fs::absolute(entry.path(), ec);
     r.directory = ec ? entry.path().string() : abs_dir.string();
@@ -131,7 +136,10 @@ std::vector<SessionRecord> SessionManager::scan(const std::string & output_dir) 
 
     if (root["topics"]) {
       for (const auto & t : root["topics"]) {
-        r.topics.push_back({t["name"].as<std::string>(""), t["backend"].as<std::string>("rosbag")});
+        r.topics.push_back({
+          t["name"].as<std::string>(""),
+          t["backend"].as<std::string>("rosbag"),
+          t["offered_qos_profiles"].as<std::string>("")});
       }
     }
     if (root["tags"]) {

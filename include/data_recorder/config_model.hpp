@@ -54,6 +54,7 @@ struct TopicEntry
   bool default_expanded{false};
   std::map<std::string, std::string> params;
   QosConfig qos;
+  bool qos_explicit{false};  // config 是否显式指定了 QoS（组级或话题级）；false 时 video 话题按发布者自动匹配
 };
 
 struct TagEntry

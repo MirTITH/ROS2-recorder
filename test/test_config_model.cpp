@@ -97,6 +97,7 @@ groups:
   EXPECT_EQ(qos.depth, 10u);
   EXPECT_EQ(qos.reliability, data_recorder::QosReliability::Reliable);
   EXPECT_EQ(qos.durability, data_recorder::QosDurability::Volatile);
+  EXPECT_FALSE(config.topics[0].qos_explicit);
 }
 
 TEST(ConfigModel, TopicQosOverridesGroupQos)
@@ -125,9 +126,46 @@ groups:
   EXPECT_EQ(config.topics[0].qos.depth, 20u);
   EXPECT_EQ(config.topics[0].qos.reliability, data_recorder::QosReliability::BestEffort);
   EXPECT_EQ(config.topics[0].qos.durability, data_recorder::QosDurability::SystemDefault);
+  EXPECT_TRUE(config.topics[0].qos_explicit);
   EXPECT_EQ(config.topics[1].qos.depth, 3u);
   EXPECT_EQ(config.topics[1].qos.reliability, data_recorder::QosReliability::Reliable);
   EXPECT_EQ(config.topics[1].qos.durability, data_recorder::QosDurability::TransientLocal);
+  EXPECT_TRUE(config.topics[1].qos_explicit);
+}
+
+TEST(ConfigModel, QosExplicitFalseWithoutAnyQosBlock)
+{
+  const auto path = write_temp_config(R"yaml(
+groups:
+  - topics:
+      - /camera/image_raw
+      - /left_camera/image_raw: { ui_expanded: true }
+    backend: video
+)yaml");
+
+  const data_recorder::ConfigModel model;
+  const auto config = model.load_from_file(path);
+
+  ASSERT_EQ(config.topics.size(), 2u);
+  EXPECT_FALSE(config.topics[0].qos_explicit);
+  EXPECT_FALSE(config.topics[1].qos_explicit);
+}
+
+TEST(ConfigModel, QosExplicitTrueForGroupLevelQosOnly)
+{
+  const auto path = write_temp_config(R"yaml(
+groups:
+  - topics:
+      - /camera/image_raw
+    backend: video
+    qos: { reliability: best_effort }
+)yaml");
+
+  const data_recorder::ConfigModel model;
+  const auto config = model.load_from_file(path);
+
+  ASSERT_EQ(config.topics.size(), 1u);
+  EXPECT_TRUE(config.topics[0].qos_explicit);
 }
 
 TEST(ConfigModel, ReadsKeepAllQos)

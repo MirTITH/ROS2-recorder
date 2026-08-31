@@ -5,6 +5,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <filesystem>
@@ -181,13 +182,11 @@ void RecorderEngine::setup_subscriptions()
     if (topic.backend_name == "video" ||
       topic.ui_category == TopicUiCategory::CameraPreview)
     {
-      const std::string topic_name = topic.topic_name;
-      auto sub = node_->create_subscription<sensor_msgs::msg::Image>(
-        topic_name, subscription_qos(topic.qos),
-        [this, topic_name](sensor_msgs::msg::Image::ConstSharedPtr msg) {
-          on_image_message(topic_name, msg);
-        });
-      subscriptions_.push_back(sub);
+      // qos_explicit 的话题不依赖发布者是否已被发现，可立即订阅；否则可能要等 try_subscribe_pending 补订。
+      if (!subscribe_video_topic(topic)) {
+        std::lock_guard<std::mutex> lock(pending_mutex_);
+        pending_video_topics_.insert(topic.topic_name);
+      }
     } else {
       // 此刻（spin 前）发布者多半还没被发现而订不上；放入 pending，由 resubscribe_timer_ 补订。
       if (!subscribe_rosbag_topic(topic.topic_name)) {
@@ -196,6 +195,28 @@ void RecorderEngine::setup_subscriptions()
       }
     }
   }
+}
+
+bool RecorderEngine::subscribe_video_topic(const TopicEntry & topic)
+{
+  rclcpp::QoS qos = subscription_qos(topic.qos);
+  if (!topic.qos_explicit) {
+    // 未显式配置 QoS：和 rosbag2 一致,跟随真实发布者。没发布者就订不上，留给补订。
+    const auto eps = node_->get_publishers_info_by_topic(topic.topic_name);
+    if (eps.empty()) { return false; }
+    qos = rosbag2_transport::Rosbag2QoS::adapt_request_to_offers(topic.topic_name, eps);
+  }
+  const std::string topic_name = topic.topic_name;
+  auto sub = node_->create_subscription<sensor_msgs::msg::Image>(
+    topic_name, qos,
+    [this, topic_name](sensor_msgs::msg::Image::ConstSharedPtr msg) {
+      on_image_message(topic_name, msg);
+    });
+  {
+    std::lock_guard<std::mutex> lock(pending_mutex_);
+    subscriptions_.push_back(sub);
+  }
+  return true;
 }
 
 bool RecorderEngine::subscribe_rosbag_topic(const std::string & topic_name)
@@ -226,15 +247,29 @@ bool RecorderEngine::subscribe_rosbag_topic(const std::string & topic_name)
 void RecorderEngine::try_subscribe_pending()
 {
   std::vector<std::string> todo;
+  std::vector<std::string> video_todo;
   {
     std::lock_guard<std::mutex> lock(pending_mutex_);
     todo.assign(pending_topics_.begin(), pending_topics_.end());
+    video_todo.assign(pending_video_topics_.begin(), pending_video_topics_.end());
   }
   for (const auto & topic_name : todo) {
     if (subscribe_rosbag_topic(topic_name)) {
       {
         std::lock_guard<std::mutex> lock(pending_mutex_);
         pending_topics_.erase(topic_name);
+      }
+      std::cerr << "[RecorderEngine] 补订成功: " << topic_name << "\n";
+    }
+  }
+  for (const auto & topic_name : video_todo) {
+    const auto entry = std::find_if(
+      config_.topics.begin(), config_.topics.end(),
+      [&topic_name](const TopicEntry & t) { return t.topic_name == topic_name; });
+    if (entry != config_.topics.end() && subscribe_video_topic(*entry)) {
+      {
+        std::lock_guard<std::mutex> lock(pending_mutex_);
+        pending_video_topics_.erase(topic_name);
       }
       std::cerr << "[RecorderEngine] 补订成功: " << topic_name << "\n";
     }
@@ -517,9 +552,15 @@ SessionRecord RecorderEngine::stop_session(
   record.unix_time = record_start_unix_;
   record.ros_time_ns = record_start_ros_ns_;
   record.duration_seconds = live_edge_seconds_.load();
+  record.recorder_version = DATA_RECORDER_VERSION;
   for (const auto & t : config_.topics) {
-    record.topics.push_back({t.topic_name,
-      (t.backend_name == "video" || t.ui_category == TopicUiCategory::CameraPreview) ? "video" : "rosbag"});
+    const bool is_video = t.backend_name == "video" || t.ui_category == TopicUiCategory::CameraPreview;
+    TopicRef ref;
+    ref.name = t.topic_name;
+    ref.backend = is_video ? "video" : "rosbag";
+    // rosbag 话题的 offered_qos_profiles 记在 bag 自己的 metadata 里；video 话题没有独立的 bag，记在此处。
+    if (is_video) { ref.offered_qos_profiles = offered_qos_for(t.topic_name); }
+    record.topics.push_back(std::move(ref));
   }
   record.tags = tags;
   record.annotations = annotations;

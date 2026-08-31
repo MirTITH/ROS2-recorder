@@ -167,7 +167,8 @@ ConfigData ConfigModel::load_from_file(const std::string & path) const
       }
 
       QosConfig group_qos;
-      if (group_node["qos"]) {
+      const bool group_qos_explicit = static_cast<bool>(group_node["qos"]);
+      if (group_qos_explicit) {
         group_qos = parse_qos(group_node["qos"], group_qos, "group qos");
       }
 
@@ -177,6 +178,7 @@ ConfigData ConfigModel::load_from_file(const std::string & path) const
         topic.group_index = group_index;
         topic.params = params;
         topic.qos = group_qos;
+        topic.qos_explicit = group_qos_explicit;
 
         if (topic_node.IsScalar()) {
           topic.topic_name = topic_node.as<std::string>();
@@ -196,6 +198,7 @@ ConfigData ConfigModel::load_from_file(const std::string & path) const
           if (options && options.IsMap() && options["qos"]) {
             topic.qos = parse_qos(
               options["qos"], topic.qos, "qos for topic '" + topic.topic_name + "'");
+            topic.qos_explicit = true;
           }
         } else {
           throw ConfigError("each topic must be a string or a single-key map");

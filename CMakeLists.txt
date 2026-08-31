@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
 find_package(ament_cmake REQUIRED)
+ament_package_xml()
 find_package(ament_cmake_gtest REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -93,6 +94,9 @@ target_link_libraries(data_recorder_core
   Qt6::QuickControls2
 )
 ament_target_dependencies(data_recorder_core rclcpp ament_index_cpp rosbag2_cpp rosbag2_storage pluginlib rosbag2_transport sensor_msgs geometry_msgs trajectory_msgs)
+target_compile_definitions(data_recorder_core PRIVATE
+  DATA_RECORDER_VERSION="${data_recorder_VERSION}"
+)
 
 add_executable(data_recorder src/data_recorder.cpp)
 target_link_libraries(data_recorder data_recorder_core)
