@@ -112,4 +112,3 @@ ros2 service call /player/pause rosbag2_interfaces/srv/Pause "{}"
 ros2 service call /player/set_rate rosbag2_interfaces/srv/SetRate "{rate: 2.0}"
 ```
 
-当前版本暂不支持 `start_offset` 和 `seek`（跳转到指定播放位置）。
