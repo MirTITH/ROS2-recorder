@@ -1,7 +1,7 @@
 #include "data_recorder/video_clip_reader.hpp"
 
 #include <cmath>
-#include <iostream>
+#include <stdexcept>
 
 #include <rapidcsv.h>
 
@@ -17,11 +17,11 @@ namespace data_recorder
 namespace
 {
 // 目标 sws/QImage 格式跟着录制时记录的 encoding 走；缺失（老文件无 encoding 列）回退到
-// RGB24，维持既有行为。非空但不认识的编码（如手改/损坏的 CSV）也回退到 RGB24，但会打印警告，
-// 避免解出的画面颜色错乱却无任何提示。
+// RGB24，维持既有行为。只要 CSV 包含 encoding 列，空值或未知值都表示索引无效，
+// 禁止在图像字节与 encoding 标签不一致时继续回放。
 bool encoding_recognized(const std::string & encoding)
 {
-  return encoding.empty() || encoding == "bgr8" || encoding == "mono8" || encoding == "rgb8";
+  return encoding == "bgr8" || encoding == "mono8" || encoding == "rgb8";
 }
 
 AVPixelFormat target_av_format(const std::string & encoding)
@@ -96,7 +96,6 @@ bool VideoClipReader::open(const std::string & mp4_path, const std::string & csv
 
   const int64_t first_stamp = stamps.front();
   entries_.reserve(stamps.size());
-  std::string unrecognized_encoding;
   for (std::size_t i = 0; i < stamps.size(); ++i) {
     FrameIndexEntry e;
     e.recv_stamp_ns = stamps[i];
@@ -106,16 +105,18 @@ bool VideoClipReader::open(const std::string & mp4_path, const std::string & csv
     e.frame_id = (i < frame_ids.size()) ? frame_ids[i] : std::string();
     e.encoding = (i < encodings.size()) ? encodings[i] : std::string();
     e.is_bigendian = (i < is_bigendians.size()) && is_bigendians[i] != 0;
-    if (unrecognized_encoding.empty() && !encoding_recognized(e.encoding)) {
-      unrecognized_encoding = e.encoding;
+    if (has_encoding && e.encoding.empty()) {
+      throw std::runtime_error(
+        "empty encoding at data row " + std::to_string(i + 1) + " in CSV: " + csv_path);
+    }
+    if (has_encoding && !encoding_recognized(e.encoding)) {
+      throw std::runtime_error(
+        "unsupported encoding '" + e.encoding + "' at data row " +
+        std::to_string(i + 1) + " in CSV: " + csv_path);
     }
     entries_.push_back(std::move(e));
   }
   if (entries_.empty()) { return false; }
-  if (!unrecognized_encoding.empty()) {
-    std::cerr << "[VideoClipReader] " << csv_path << " 出现未知编码: " << unrecognized_encoding
-              << "，相关帧将按 RGB24 解码，颜色可能错乱\n";
-  }
 
   if (avformat_open_input(&fmt_, mp4_path.c_str(), nullptr, nullptr) < 0) { close(); return false; }
   if (avformat_find_stream_info(fmt_, nullptr) < 0) { close(); return false; }

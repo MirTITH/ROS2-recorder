@@ -201,6 +201,36 @@ TEST(VideoClipReaderTest, LegacyThreeColumnCsvFallsBackToDefaults)
   fs::remove_all(dir);
 }
 
+TEST(VideoClipReaderTest, EncodingColumnRequiresKnownNonEmptyValues)
+{
+  fs::path dir = fs::temp_directory_path() / "drc_clip_test_invalid_encoding";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  const std::string mp4 = (dir / "clip.mp4").string();
+  const std::string csv = (dir / "clip.csv").string();
+
+  {
+    data_recorder::VideoParams params;
+    data_recorder::VideoRecorder rec(mp4, csv, 16, 16, params);
+    data_recorder::ImageFrame frame = makeFrame(16, 16, 0, 10);
+    ASSERT_TRUE(rec.encode(frame));
+    rec.close();
+  }
+
+  rapidcsv::Document doc(csv, rapidcsv::LabelParams(0, -1));
+  data_recorder::VideoClipReader reader;
+
+  doc.SetCell<std::string>("encoding", 0, "");
+  doc.Save(csv);
+  EXPECT_THROW(reader.open(mp4, csv), std::runtime_error);
+
+  doc.SetCell<std::string>("encoding", 0, "rgba8");
+  doc.Save(csv);
+  EXPECT_THROW(reader.open(mp4, csv), std::runtime_error);
+
+  fs::remove_all(dir);
+}
+
 TEST(VideoClipReaderTest, OpenMissingReturnsFalse)
 {
   data_recorder::VideoClipReader reader;

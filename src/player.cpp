@@ -200,11 +200,21 @@ void PlayerNode::load_videos(const std::string & session_directory)
 
     const std::string base = file_base_for_topic(topic);
     auto reader = std::make_unique<VideoClipReader>();
-    if (!reader->open(
-        (video_directory / (base + ".mp4")).string(),
-        (video_directory / (base + ".csv")).string()))
-    {
-      RCLCPP_WARN(get_logger(), "Skipping video topic '%s': MP4 or CSV could not be opened", topic.c_str());
+    const std::string mp4_path = (video_directory / (base + ".mp4")).string();
+    const std::string csv_path = (video_directory / (base + ".csv")).string();
+    bool opened = false;
+    try {
+      opened = reader->open(mp4_path, csv_path);
+    } catch (const std::exception & error) {
+      throw std::runtime_error(
+        "video topic '" + topic + "' has an invalid or truncated CSV index '" +
+        csv_path + "': " + error.what());
+    }
+    if (!opened) {
+      RCLCPP_WARN(
+        get_logger(),
+        "Skipping video topic '%s': MP4/CSV file is missing, unavailable, or contains no frames",
+        topic.c_str());
       continue;
     }
 

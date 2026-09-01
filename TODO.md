@@ -2,3 +2,5 @@
 - [x] 重构前端代码
 - [x] 前端界面确定后，优化 `AppController::toggleRecording()` 的信号发射，只在属性值实际变化时发出对应的 `*Changed()` 信号
 - [x] 实现后端（rosbag + video + 预览 + 会话；数值曲线内省/历史回放数据加载留后续）
+- [ ] 安装/导出 vendored `rapidcsv.h`，确保安装后的 `video_recorder.hpp` 和 `recorder_engine.hpp` 可被下游包正常包含
+- [ ] 处理 `VideoRecorder::close()` 的 CSV 保存失败结果，避免 `RecorderEngine::stop_session()` 在 sidecar CSV 写入失败后仍生成宣称视频可回放的 `session.yaml`
