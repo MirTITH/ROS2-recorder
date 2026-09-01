@@ -12,6 +12,7 @@ extern "C" {
 
 #include <cmath>
 #include <cstring>
+#include <exception>
 #include <iostream>
 
 namespace data_recorder
@@ -59,17 +60,22 @@ bool codec_supports_pixel_format(const AVCodec * codec, AVPixelFormat requested)
 #endif
   return false;
 }
+
+constexpr const char * kCsvColumns[] = {
+  "frame_index", "recv_stamp_ns", "header_stamp_ns", "pts_ns", "frame_id", "encoding",
+  "is_bigendian"};
 }  // namespace
 
 VideoRecorder::VideoRecorder(
   const std::string & video_path, const std::string & csv_path,
   int width, int height, const VideoParams & params)
-: video_path_(video_path), width_(width), height_(height)
+: video_path_(video_path), csv_path_(csv_path), width_(width), height_(height),
+  csv_doc_(std::string(), rapidcsv::LabelParams(0, -1))
 {
-  csv_.open(csv_path);
-  if (csv_) {
-    csv_ << "frame_index,ros_stamp_ns,pts_ns\n";
+  for (size_t i = 0; i < sizeof(kCsvColumns) / sizeof(kCsvColumns[0]); ++i) {
+    csv_doc_.InsertColumn<std::string>(i, {}, kCsvColumns[i]);
   }
+  csv_ready_ = true;
   open_ = init(params);
 }
 
@@ -155,12 +161,10 @@ bool VideoRecorder::init(const VideoParams & params)
 
 bool VideoRecorder::fill_source_frame(const ImageFrame & frame)
 {
-  const int src_fmt = source_av_format(frame.encoding);
-  if (src_fmt == AV_PIX_FMT_NONE) { return false; }
-  if (frame.width != width_ || frame.height != height_) { return false; }
-
-  // 懒建 swscale（首帧定源格式）
+  // 编码在 encode() 中已锁定并校验不变，这里只按首帧编码懒建 swscale。
   if (!sws_) {
+    const int src_fmt = source_av_format(frame.encoding);
+    if (src_fmt == AV_PIX_FMT_NONE) { return false; }
     sws_ = sws_getContext(width_, height_, static_cast<AVPixelFormat>(src_fmt),
       width_, height_, codec_ctx_->pix_fmt, SWS_BILINEAR, nullptr, nullptr, nullptr);
     if (!sws_) { return false; }
@@ -191,34 +195,63 @@ bool VideoRecorder::encode(const ImageFrame & frame)
 {
   if (!open_) { return false; }
   if (!encoding_supported(frame.encoding)) {
-    return false;  // 跳过不支持编码
+    std::cerr << "[VideoRecorder] 不支持的编码，丢弃该帧: " << frame.encoding << "\n";
+    return false;
+  }
+  if (frame.width != width_ || frame.height != height_) {
+    std::cerr << "[VideoRecorder] 分辨率变化，丢弃该帧: 期望 " << width_ << "x" << height_
+              << "，实际 " << frame.width << "x" << frame.height << "\n";
+    return false;
+  }
+  if (!have_source_encoding_) {
+    source_encoding_ = frame.encoding;
+    have_source_encoding_ = true;
+  } else if (frame.encoding != source_encoding_) {
+    std::cerr << "[VideoRecorder] 编码变化，丢弃该帧: 期望 " << source_encoding_
+              << "，实际 " << frame.encoding << "\n";
+    return false;
   }
   if (!fill_source_frame(frame)) { return false; }
 
-  // PTS：用每帧 ROS 时间戳（相对首帧），换算到 1/90000 timebase。
-  if (!have_first_) { first_stamp_ns_ = frame.ros_stamp_ns; have_first_ = true; }
-  const double rel_seconds = static_cast<double>(frame.ros_stamp_ns - first_stamp_ns_) / 1e9;
+  // PTS：用每帧接收时刻（相对首帧），换算到 1/90000 timebase。
+  if (!have_first_) { first_stamp_ns_ = frame.recv_stamp_ns; have_first_ = true; }
+  const double rel_seconds = static_cast<double>(frame.recv_stamp_ns - first_stamp_ns_) / 1e9;
   const int64_t pts = std::llround(rel_seconds * kTimebaseDen);
   encode_frame_->pts = pts;
 
   if (avcodec_send_frame(codec_ctx_, encode_frame_) < 0) { return false; }
   drain_packets();
 
-  if (csv_) {
-    csv_ << frame_index_ << ',' << frame.ros_stamp_ns << ',' << pts << '\n';
+  if (csv_ready_) {
+    const std::vector<std::string> row = {
+      std::to_string(frame_index_), std::to_string(frame.recv_stamp_ns),
+      std::to_string(frame.header_stamp_ns), std::to_string(pts), frame.frame_id,
+      frame.encoding, frame.is_bigendian ? "1" : "0"};
+    csv_doc_.InsertRow<std::string>(static_cast<size_t>(frame_index_), row);
   }
   ++frame_index_;
   return true;
 }
 
-void VideoRecorder::close()
+bool VideoRecorder::close()
 {
   if (header_written_ && codec_ctx_ && fmt_ctx_) {
     avcodec_send_frame(codec_ctx_, nullptr);  // flush
     drain_packets();
     av_write_trailer(fmt_ctx_);
   }
-  if (csv_.is_open()) { csv_.close(); }
+  bool csv_saved = true;
+  if (csv_ready_) {
+    // rapidcsv 内部以 exceptions 模式打开输出流，磁盘满/目录不可写会抛异常；
+    // close() 可能从析构（noexcept）调用，必须兜住，否则 FFmpeg 资源清理会被跳过并 terminate。
+    try {
+      csv_doc_.Save(csv_path_);
+    } catch (const std::exception & error) {
+      std::cerr << "[VideoRecorder] 保存 CSV 失败: " << csv_path_ << ": " << error.what() << "\n";
+      csv_saved = false;
+    }
+    csv_ready_ = false;
+  }
   if (sws_) { sws_freeContext(sws_); sws_ = nullptr; }
   if (packet_) { av_packet_free(&packet_); }
   if (encode_frame_) { av_frame_free(&encode_frame_); }
@@ -229,6 +262,7 @@ void VideoRecorder::close()
   }
   if (codec_ctx_) { avcodec_free_context(&codec_ctx_); }
   open_ = false;
+  return csv_saved;
 }
 
 }  // namespace data_recorder

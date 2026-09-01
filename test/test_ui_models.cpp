@@ -1843,7 +1843,7 @@ TEST(AppControllerHistoryTest, SelectHistoryEntersPlaybackMode)
     for (int i = 0; i < 20; ++i) {
       data_recorder::ImageFrame f;
       f.width = 32; f.height = 24; f.step = 96; f.encoding = "bgr8";
-      f.ros_stamp_ns = 1000000000LL + i * 40000000LL;
+      f.recv_stamp_ns = 1000000000LL + i * 40000000LL;
       f.data.assign(32 * 24 * 3, static_cast<uint8_t>(i * 6));
       rec.encode(f);
     }
@@ -2072,7 +2072,7 @@ TEST(AppControllerHistoryTest, MarkerShortcutIsNoOpInHistoryMode)
     for (int i = 0; i < 20; ++i) {
       data_recorder::ImageFrame f;
       f.width = 32; f.height = 24; f.step = 96; f.encoding = "bgr8";
-      f.ros_stamp_ns = 1000000000LL + i * 40000000LL;
+      f.recv_stamp_ns = 1000000000LL + i * 40000000LL;
       f.data.assign(32 * 24 * 3, static_cast<uint8_t>(i * 6));
       rec.encode(f);
     }

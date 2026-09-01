@@ -18,7 +18,7 @@ data_recorder::ImageFrame makeFrame(int w, int h, int64_t stamp_ns, uint8_t v)
 {
   data_recorder::ImageFrame f;
   f.width = w; f.height = h; f.step = w * 3;
-  f.encoding = "bgr8"; f.ros_stamp_ns = stamp_ns;
+  f.encoding = "bgr8"; f.recv_stamp_ns = stamp_ns;
   f.data.assign(static_cast<std::size_t>(w) * h * 3, v);
   return f;
 }

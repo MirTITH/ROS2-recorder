@@ -94,7 +94,6 @@ ros2 run data_recorder player --ros-args -p session_dir:=/path/to/recording/sess
 - `topic_prefix`：发布话题的前缀，默认空字符串（使用原话题名）。例如设为 `/replay` 时，`/joint_states` 会发布到 `/replay/joint_states`。
 - `topics`：需要播放的原始话题名列表，默认为空（播放全部话题）；筛选在添加 `topic_prefix` 前进行。
 - `publish_clock`：是否发布 `/clock`，默认 `false`。
-- `image_frame_id`：视频帧发布为 `sensor_msgs/msg/Image` 时使用的 `frame_id`，默认空字符串。
 
 播放器提供以下控制服务（默认节点名为 `player`）：
 

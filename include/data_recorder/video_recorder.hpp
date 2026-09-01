@@ -1,8 +1,9 @@
 #pragma once
 
 #include <cstdint>
-#include <fstream>
 #include <string>
+
+#include <rapidcsv.h>
 
 #include "data_recorder/recorder_types.hpp"
 
@@ -40,11 +41,13 @@ public:
 
   bool is_open() const { return open_; }
 
-  // 编码一帧。不支持的编码或尺寸不符返回 false（跳过，不抛）。
+  // 编码一帧。不支持的编码、尺寸不符、或编码相对首帧变化，都会丢弃该帧并打印警告，
+  // 返回 false（不抛）。
   bool encode(const ImageFrame & frame);
 
-  // flush 编码器、写 trailer、关 CSV。可安全重复调用。
-  void close();
+  // flush 编码器、写 trailer、关 CSV。可安全重复调用。CSV 保存失败时返回 false
+  // （已打印警告），但 FFmpeg 资源仍保证清理完毕。
+  bool close();
 
 private:
   bool init(const VideoParams & params);
@@ -52,8 +55,11 @@ private:
   void drain_packets();
 
   std::string video_path_;
+  std::string csv_path_;
   int width_{0};
   int height_{0};
+  std::string source_encoding_;  // 首帧锁定的源编码；后续帧编码变化则丢弃+警告
+  bool have_source_encoding_{false};
   bool open_{false};
   bool header_written_{false};
   int64_t frame_index_{0};
@@ -67,7 +73,8 @@ private:
   AVPacket * packet_{nullptr};
   SwsContext * sws_{nullptr};
 
-  std::ofstream csv_;
+  rapidcsv::Document csv_doc_;
+  bool csv_ready_{false};
 };
 
 }  // namespace data_recorder

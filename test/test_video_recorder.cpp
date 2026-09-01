@@ -5,9 +5,10 @@ extern "C" {
 #include <libavutil/pixfmt.h>
 }
 
+#include <rapidcsv.h>
+
 #include <filesystem>
-#include <fstream>
-#include <sstream>
+#include <string>
 #include <vector>
 
 #include "data_recorder/video_recorder.hpp"
@@ -16,15 +17,35 @@ namespace fs = std::filesystem;
 
 namespace
 {
-data_recorder::ImageFrame make_bgr8_frame(int w, int h, int64_t stamp_ns, uint8_t fill)
+data_recorder::ImageFrame make_bgr8_frame(
+  int w, int h, int64_t stamp_ns, uint8_t fill,
+  const std::string & frame_id = "cam", int64_t header_stamp_ns = 0)
 {
   data_recorder::ImageFrame f;
   f.width = w;
   f.height = h;
   f.step = w * 3;
   f.encoding = "bgr8";
-  f.ros_stamp_ns = stamp_ns;
+  f.is_bigendian = false;
+  f.recv_stamp_ns = stamp_ns;
+  f.header_stamp_ns = header_stamp_ns;
+  f.frame_id = frame_id;
   f.data.assign(static_cast<size_t>(w) * h * 3, fill);
+  return f;
+}
+
+data_recorder::ImageFrame make_mono8_frame(int w, int h, int64_t stamp_ns, uint8_t fill)
+{
+  data_recorder::ImageFrame f;
+  f.width = w;
+  f.height = h;
+  f.step = w;
+  f.encoding = "mono8";
+  f.is_bigendian = true;
+  f.recv_stamp_ns = stamp_ns;
+  f.header_stamp_ns = stamp_ns;
+  f.frame_id = "cam";
+  f.data.assign(static_cast<size_t>(w) * h, fill);
   return f;
 }
 
@@ -73,26 +94,69 @@ TEST(VideoRecorder, EncodesFramesToDecodableMp4WithCsv)
   ASSERT_TRUE(fs::exists(mp4));
   EXPECT_GT(fs::file_size(mp4), 0u);
 
-  // CSV 行数 = 帧头 + 30
-  std::ifstream in(csv);
-  std::string line;
-  std::vector<std::string> lines;
-  while (std::getline(in, line)) { lines.push_back(line); }
-  ASSERT_EQ(lines.size(), 31u);  // header + 30
-  EXPECT_EQ(lines[0], "frame_index,ros_stamp_ns,pts_ns");
+  // CSV 行数 = 30，7 列表头
+  rapidcsv::Document doc(csv, rapidcsv::LabelParams(0, -1));
+  EXPECT_EQ(doc.GetRowCount(), 30u);
+  const std::vector<std::string> expected_columns = {
+    "frame_index", "recv_stamp_ns", "header_stamp_ns", "pts_ns", "frame_id", "encoding",
+    "is_bigendian"};
+  EXPECT_EQ(doc.GetColumnNames(), expected_columns);
 
-  // PTS 单调递增
-  auto pts_of = [](const std::string & l) {
-    std::stringstream ss(l); std::string a, b, c;
-    std::getline(ss, a, ','); std::getline(ss, b, ','); std::getline(ss, c, ',');
-    return std::stoll(c);
-  };
+  // PTS 单调递增（按列名取值，不依赖列位置）
+  const std::vector<int64_t> pts = doc.GetColumn<int64_t>("pts_ns");
   int64_t prev = -1;
-  for (size_t i = 1; i < lines.size(); ++i) {
-    int64_t pts = pts_of(lines[i]);
-    EXPECT_GT(pts, prev);
-    prev = pts;
+  for (const int64_t p : pts) {
+    EXPECT_GT(p, prev);
+    prev = p;
   }
+
+  fs::remove_all(tmp);
+}
+
+TEST(VideoRecorder, EscapesCommaInFrameIdAndPersistsEncodingFields)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_escaping";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  const std::string bgr_mp4 = (tmp / "cam_bgr.mp4").string();
+  const std::string bgr_csv = (tmp / "cam_bgr.csv").string();
+  const std::string mono_mp4 = (tmp / "cam_mono.mp4").string();
+  const std::string mono_csv = (tmp / "cam_mono.csv").string();
+
+  data_recorder::VideoParams params;
+  {
+    // 编码在一个会话内锁定，这里用两个独立会话分别验证 bgr8/mono8 各自的字段持久化。
+    data_recorder::VideoRecorder bgr_rec(bgr_mp4, bgr_csv, 64, 48, params);
+    ASSERT_TRUE(bgr_rec.is_open());
+    ASSERT_TRUE(bgr_rec.encode(
+      make_bgr8_frame(64, 48, 0, 10, "cam,1", 1'000'000LL)));
+    bgr_rec.close();
+
+    data_recorder::VideoRecorder mono_rec(mono_mp4, mono_csv, 64, 48, params);
+    ASSERT_TRUE(mono_rec.is_open());
+    ASSERT_TRUE(mono_rec.encode(make_mono8_frame(64, 48, 33'333'333LL, 20)));
+    mono_rec.close();
+  }
+
+  rapidcsv::Document bgr_doc(bgr_csv, rapidcsv::LabelParams(0, -1));
+  ASSERT_EQ(bgr_doc.GetRowCount(), 1u);
+
+  // rapidcsv 的 pAutoQuote 往返：写入的逗号被自动加引号，读回时自动还原原始字符串。
+  const std::vector<std::string> frame_ids = bgr_doc.GetColumn<std::string>("frame_id");
+  EXPECT_EQ(frame_ids[0], "cam,1");
+  const std::vector<int64_t> header_stamps = bgr_doc.GetColumn<int64_t>("header_stamp_ns");
+  EXPECT_EQ(header_stamps[0], 1'000'000LL);
+  const std::vector<std::string> bgr_encodings = bgr_doc.GetColumn<std::string>("encoding");
+  EXPECT_EQ(bgr_encodings[0], "bgr8");
+  const std::vector<int> bgr_is_bigendians = bgr_doc.GetColumn<int>("is_bigendian");
+  EXPECT_EQ(bgr_is_bigendians[0], 0);
+
+  rapidcsv::Document mono_doc(mono_csv, rapidcsv::LabelParams(0, -1));
+  ASSERT_EQ(mono_doc.GetRowCount(), 1u);
+  const std::vector<std::string> mono_encodings = mono_doc.GetColumn<std::string>("encoding");
+  EXPECT_EQ(mono_encodings[0], "mono8");
+  const std::vector<int> mono_is_bigendians = mono_doc.GetColumn<int>("is_bigendian");
+  EXPECT_EQ(mono_is_bigendians[0], 1);
 
   fs::remove_all(tmp);
 }
@@ -111,11 +175,60 @@ TEST(VideoRecorder, UnsupportedEncodingFailsToOpenGracefully)
   data_recorder::ImageFrame f;
   f.width = 64; f.height = 48; f.step = 64 * 3;
   f.encoding = "bayer_rggb8";  // 不支持
-  f.ros_stamp_ns = 0;
+  f.recv_stamp_ns = 0;
   f.data.assign(64 * 48 * 3, 0);
   const bool encoded = rec.encode(f);
   EXPECT_FALSE(encoded);  // 跳过，不崩溃
   rec.close();
+
+  fs::remove_all(tmp);
+}
+
+TEST(VideoRecorder, ResolutionChangeMidStreamDropsFrame)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_res_change";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  const std::string mp4 = (tmp / "cam.mp4").string();
+  const std::string csv = (tmp / "cam.csv").string();
+
+  data_recorder::VideoParams params;
+  data_recorder::VideoRecorder rec(mp4, csv, 64, 48, params);
+  ASSERT_TRUE(rec.is_open());
+  ASSERT_TRUE(rec.encode(make_bgr8_frame(64, 48, 0, 10)));
+  // 分辨率与首帧（构造时锁定的 64x48）不符，应丢弃且不崩溃。
+  EXPECT_FALSE(rec.encode(make_bgr8_frame(32, 24, 33'333'333LL, 20)));
+  ASSERT_TRUE(rec.encode(make_bgr8_frame(64, 48, 66'666'666LL, 30)));
+  rec.close();
+
+  rapidcsv::Document doc(csv, rapidcsv::LabelParams(0, -1));
+  EXPECT_EQ(doc.GetRowCount(), 2u);  // 只有两帧分辨率匹配的帧被写入
+
+  fs::remove_all(tmp);
+}
+
+TEST(VideoRecorder, EncodingChangeMidStreamDropsFrameInsteadOfCorrupting)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_enc_change";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  const std::string mp4 = (tmp / "cam.mp4").string();
+  const std::string csv = (tmp / "cam.csv").string();
+
+  data_recorder::VideoParams params;
+  data_recorder::VideoRecorder rec(mp4, csv, 64, 48, params);
+  ASSERT_TRUE(rec.is_open());
+  ASSERT_TRUE(rec.encode(make_bgr8_frame(64, 48, 0, 10)));
+  // mono8 本身是受支持的编码，但与首帧锁定的 bgr8 不同，必须丢弃而不是复用旧 swscale。
+  EXPECT_FALSE(rec.encode(make_mono8_frame(64, 48, 33'333'333LL, 20)));
+  ASSERT_TRUE(rec.encode(make_bgr8_frame(64, 48, 66'666'666LL, 30)));
+  rec.close();
+
+  rapidcsv::Document doc(csv, rapidcsv::LabelParams(0, -1));
+  EXPECT_EQ(doc.GetRowCount(), 2u);
+  const std::vector<std::string> encodings = doc.GetColumn<std::string>("encoding");
+  EXPECT_EQ(encodings[0], "bgr8");
+  EXPECT_EQ(encodings[1], "bgr8");
 
   fs::remove_all(tmp);
 }

@@ -84,6 +84,9 @@ target_include_directories(data_recorder_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
+target_include_directories(data_recorder_core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party/rapidcsv>
+)
 target_link_libraries(data_recorder_core
   yaml-cpp
   PkgConfig::LIBAV
@@ -128,9 +131,6 @@ install(DIRECTORY include/
   DESTINATION include
 )
 install(DIRECTORY qml
-  DESTINATION share/${PROJECT_NAME}
-)
-install(DIRECTORY docs
   DESTINATION share/${PROJECT_NAME}
 )
 install(DIRECTORY config

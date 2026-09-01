@@ -373,7 +373,6 @@ void RecorderEngine::on_image_message(
   const int64_t header_ns =
     static_cast<int64_t>(msg->header.stamp.sec) * 1'000'000'000LL + msg->header.stamp.nanosec;
   const int64_t now_ns = node_->now().nanoseconds();
-  const int64_t stamp_ns = header_ns != 0 ? header_ns : now_ns;
 
   {
     std::lock_guard<std::mutex> lock(rate_mutex_);
@@ -405,7 +404,10 @@ void RecorderEngine::on_image_message(
     frame.height = static_cast<int>(msg->height);
     frame.step = static_cast<int>(msg->step);
     frame.encoding = msg->encoding;
-    frame.ros_stamp_ns = stamp_ns;
+    frame.is_bigendian = msg->is_bigendian;
+    frame.recv_stamp_ns = now_ns;
+    frame.header_stamp_ns = header_ns;
+    frame.frame_id = msg->header.frame_id;
     frame.data = msg->data;  // 拷贝
     sit->second->queue->push(std::move(frame));
   }

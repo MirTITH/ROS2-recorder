@@ -23,7 +23,10 @@ struct ImageFrame
   int height{0};
   int step{0};                  // 每行字节数（源 stride）
   std::string encoding;         // "bgr8" / "rgb8" / "mono8" / ...
-  int64_t ros_stamp_ns{0};      // header.stamp 优先；为 0 由调用方回退收到时间
+  bool is_bigendian{false};     // msg->is_bigendian 原始值
+  int64_t recv_stamp_ns{0};     // 收到消息时刻（node_->now()），始终有效，驱动 PTS/播放定序
+  int64_t header_stamp_ns{0};   // msg->header.stamp 原始值；未设置时为 0
+  std::string frame_id;         // msg->header.frame_id 原始值
   std::vector<uint8_t> data;    // 原始像素
 };
 

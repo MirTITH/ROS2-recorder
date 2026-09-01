@@ -32,6 +32,10 @@ public:
 
   std::size_t frame_count() const;
   int64_t frame_stamp_ns(std::size_t index) const;
+  int64_t header_stamp_ns(std::size_t index) const;
+  const std::string & frame_id(std::size_t index) const;
+  const std::string & encoding(std::size_t index) const;
+  bool is_bigendian(std::size_t index) const;
 
   double duration_seconds() const;
 
@@ -42,7 +46,11 @@ private:
   struct FrameIndexEntry
   {
     double rel_seconds{0.0};
-    int64_t ros_stamp_ns{0};
+    int64_t recv_stamp_ns{0};
+    int64_t header_stamp_ns{0};
+    std::string frame_id;
+    std::string encoding;
+    bool is_bigendian{false};
   };
 
   void close();

@@ -67,10 +67,14 @@ private:
   {
     enum class Kind { Bag, Video };
     Kind kind{Kind::Bag};
-    int64_t stamp_ns{0};
+    int64_t stamp_ns{0};          // 排序/触发基准：接收时刻
     std::size_t source_index{0};
     std::size_t frame_index{0};
     std::uint64_t order{0};
+    int64_t header_stamp_ns{0};   // 仅 Video 事件使用：republish 时还原的 header.stamp
+    std::string frame_id;         // 仅 Video 事件使用：republish 时还原的 header.frame_id
+    std::string encoding;         // 仅 Video 事件使用：republish 时还原的 encoding
+    bool is_bigendian{false};     // 仅 Video 事件使用：republish 时还原的 is_bigendian
   };
 
   void load_recording();
@@ -94,7 +98,6 @@ private:
   std::string session_directory_;
   std::string topic_prefix_;
   std::vector<std::string> topic_filter_;
-  std::string image_frame_id_;
   bool loop_{false};
   bool publish_clock_enabled_{false};
 

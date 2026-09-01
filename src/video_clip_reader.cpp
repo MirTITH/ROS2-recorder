@@ -1,8 +1,9 @@
 #include "data_recorder/video_clip_reader.hpp"
 
 #include <cmath>
-#include <fstream>
-#include <sstream>
+#include <iostream>
+
+#include <rapidcsv.h>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -12,6 +13,31 @@ extern "C" {
 
 namespace data_recorder
 {
+
+namespace
+{
+// 目标 sws/QImage 格式跟着录制时记录的 encoding 走；缺失（老文件无 encoding 列）回退到
+// RGB24，维持既有行为。非空但不认识的编码（如手改/损坏的 CSV）也回退到 RGB24，但会打印警告，
+// 避免解出的画面颜色错乱却无任何提示。
+bool encoding_recognized(const std::string & encoding)
+{
+  return encoding.empty() || encoding == "bgr8" || encoding == "mono8" || encoding == "rgb8";
+}
+
+AVPixelFormat target_av_format(const std::string & encoding)
+{
+  if (encoding == "bgr8") { return AV_PIX_FMT_BGR24; }
+  if (encoding == "mono8") { return AV_PIX_FMT_GRAY8; }
+  return AV_PIX_FMT_RGB24;
+}
+
+QImage::Format target_qimage_format(const std::string & encoding)
+{
+  if (encoding == "bgr8") { return QImage::Format_BGR888; }
+  if (encoding == "mono8") { return QImage::Format_Grayscale8; }
+  return QImage::Format_RGB888;
+}
+}  // namespace
 
 VideoClipReader::VideoClipReader() = default;
 
@@ -40,29 +66,56 @@ bool VideoClipReader::open(const std::string & mp4_path, const std::string & csv
   valid_ = false;
   entries_.clear();
 
-  std::ifstream csv(csv_path);
-  if (!csv.is_open()) { return false; }
-  std::string line;
-  std::getline(csv, line);  // 表头
-  int64_t first_stamp = 0;
-  bool first = true;
-  while (std::getline(csv, line)) {
-    if (line.empty()) { continue; }
-    std::stringstream ss(line);
-    std::string col;
-    std::getline(ss, col, ',');                       // frame_index
-    std::string stamp_str;
-    std::getline(ss, stamp_str, ',');                 // ros_stamp_ns
-    if (stamp_str.empty()) { continue; }
-    int64_t stamp = 0;
-    try { stamp = std::stoll(stamp_str); } catch (...) { continue; }
-    if (first) { first_stamp = stamp; first = false; }
+  rapidcsv::Document csv_doc;
+  try {
+    csv_doc = rapidcsv::Document(csv_path, rapidcsv::LabelParams(0, -1));
+  } catch (...) {
+    return false;
+  }
+
+  // 新格式有 recv_stamp_ns 列；老 3 列格式退而取 ros_stamp_ns（旧折叠值，语义与该文件自己
+  // 编码时用的 PTS 基准一致，indexNearestPts 的定位逻辑不受影响）。
+  const bool has_recv_col = csv_doc.GetColumnIdx("recv_stamp_ns") >= 0;
+  const std::string stamp_col = has_recv_col ? "recv_stamp_ns" : "ros_stamp_ns";
+  if (csv_doc.GetColumnIdx(stamp_col) < 0) { return false; }
+  const std::vector<int64_t> stamps = csv_doc.GetColumn<int64_t>(stamp_col);
+  if (stamps.empty()) { return false; }
+
+  const bool has_header_stamp = csv_doc.GetColumnIdx("header_stamp_ns") >= 0;
+  const bool has_frame_id = csv_doc.GetColumnIdx("frame_id") >= 0;
+  const bool has_encoding = csv_doc.GetColumnIdx("encoding") >= 0;
+  const bool has_is_bigendian = csv_doc.GetColumnIdx("is_bigendian") >= 0;
+  const std::vector<int64_t> header_stamps =
+    has_header_stamp ? csv_doc.GetColumn<int64_t>("header_stamp_ns") : std::vector<int64_t>();
+  const std::vector<std::string> frame_ids =
+    has_frame_id ? csv_doc.GetColumn<std::string>("frame_id") : std::vector<std::string>();
+  const std::vector<std::string> encodings =
+    has_encoding ? csv_doc.GetColumn<std::string>("encoding") : std::vector<std::string>();
+  const std::vector<int> is_bigendians =
+    has_is_bigendian ? csv_doc.GetColumn<int>("is_bigendian") : std::vector<int>();
+
+  const int64_t first_stamp = stamps.front();
+  entries_.reserve(stamps.size());
+  std::string unrecognized_encoding;
+  for (std::size_t i = 0; i < stamps.size(); ++i) {
     FrameIndexEntry e;
-    e.ros_stamp_ns = stamp;
-    e.rel_seconds = static_cast<double>(stamp - first_stamp) / 1e9;
-    entries_.push_back(e);
+    e.recv_stamp_ns = stamps[i];
+    e.rel_seconds = static_cast<double>(stamps[i] - first_stamp) / 1e9;
+    // 老 3 列格式没有单独的 header_stamp_ns 列，该列数据本身就是 header 时间戳，直接复用。
+    e.header_stamp_ns = (i < header_stamps.size()) ? header_stamps[i] : stamps[i];
+    e.frame_id = (i < frame_ids.size()) ? frame_ids[i] : std::string();
+    e.encoding = (i < encodings.size()) ? encodings[i] : std::string();
+    e.is_bigendian = (i < is_bigendians.size()) && is_bigendians[i] != 0;
+    if (unrecognized_encoding.empty() && !encoding_recognized(e.encoding)) {
+      unrecognized_encoding = e.encoding;
+    }
+    entries_.push_back(std::move(e));
   }
   if (entries_.empty()) { return false; }
+  if (!unrecognized_encoding.empty()) {
+    std::cerr << "[VideoClipReader] " << csv_path << " 出现未知编码: " << unrecognized_encoding
+              << "，相关帧将按 RGB24 解码，颜色可能错乱\n";
+  }
 
   if (avformat_open_input(&fmt_, mp4_path.c_str(), nullptr, nullptr) < 0) { close(); return false; }
   if (avformat_find_stream_info(fmt_, nullptr) < 0) { close(); return false; }
@@ -93,7 +146,33 @@ std::size_t VideoClipReader::frame_count() const
 int64_t VideoClipReader::frame_stamp_ns(std::size_t index) const
 {
   if (index >= entries_.size()) { return 0; }
-  return entries_[index].ros_stamp_ns;
+  return entries_[index].recv_stamp_ns;
+}
+
+int64_t VideoClipReader::header_stamp_ns(std::size_t index) const
+{
+  if (index >= entries_.size()) { return 0; }
+  return entries_[index].header_stamp_ns;
+}
+
+const std::string & VideoClipReader::frame_id(std::size_t index) const
+{
+  static const std::string kEmpty;
+  if (index >= entries_.size()) { return kEmpty; }
+  return entries_[index].frame_id;
+}
+
+const std::string & VideoClipReader::encoding(std::size_t index) const
+{
+  static const std::string kEmpty;
+  if (index >= entries_.size()) { return kEmpty; }
+  return entries_[index].encoding;
+}
+
+bool VideoClipReader::is_bigendian(std::size_t index) const
+{
+  if (index >= entries_.size()) { return false; }
+  return entries_[index].is_bigendian;
 }
 
 double VideoClipReader::duration_seconds() const
@@ -157,14 +236,16 @@ QImage VideoClipReader::decodeForwardTo(int target_index)
         cur_index_ = indexNearestPts(rel);
 
         if (cur_index_ >= target_index) {
+          const std::string & enc = entries_[static_cast<std::size_t>(cur_index_)].encoding;
+          const AVPixelFormat dst_fmt = target_av_format(enc);
           sws_ = sws_getCachedContext(sws_, frame_->width, frame_->height,
             static_cast<AVPixelFormat>(frame_->format), frame_->width, frame_->height,
-            AV_PIX_FMT_RGB24, SWS_BILINEAR, nullptr, nullptr, nullptr);
+            dst_fmt, SWS_BILINEAR, nullptr, nullptr, nullptr);
           if (!sws_) {
             if (!at_eof) { av_packet_unref(pkt_); }
             return cached_;
           }
-          QImage img(frame_->width, frame_->height, QImage::Format_RGB888);
+          QImage img(frame_->width, frame_->height, target_qimage_format(enc));
           if (img.isNull()) {
             if (!at_eof) { av_packet_unref(pkt_); }
             return cached_;

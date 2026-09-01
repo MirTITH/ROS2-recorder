@@ -68,7 +68,7 @@ bool SessionManager::write_session_yaml(const SessionRecord & record) const
     {
       std::ofstream out(tmp_path);
       if (!out.is_open()) { return false; }
-      out << "# 由 data_recorder 在停止录制时自动生成\n" << root;
+      out << root;
       out.flush();
       if (out.fail()) { return false; }
     }  // close before rename

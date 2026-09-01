@@ -70,7 +70,6 @@ PlayerNode::PlayerNode(const rclcpp::NodeOptions & options)
   topic_filter_ = declare_parameter<std::vector<std::string>>(
     "topics", std::vector<std::string>{});
   publish_clock_enabled_ = declare_parameter<bool>("publish_clock", false);
-  image_frame_id_ = declare_parameter<std::string>("image_frame_id", "");
 
   if (session_directory_.empty()) {
     throw std::invalid_argument("parameter 'session_dir' must name a recording session directory");
@@ -228,17 +227,29 @@ void PlayerNode::build_event_queue()
   std::uint64_t order = 0;
   events_.reserve(bag_messages_.size());
   for (std::size_t i = 0; i < bag_messages_.size(); ++i) {
-    events_.push_back({
-      Event::Kind::Bag, static_cast<int64_t>(bag_messages_[i].message->time_stamp), i, 0, order++});
+    Event event;
+    event.kind = Event::Kind::Bag;
+    event.stamp_ns = static_cast<int64_t>(bag_messages_[i].message->time_stamp);
+    event.source_index = i;
+    event.order = order++;
+    events_.push_back(std::move(event));
   }
   for (std::size_t clip_index = 0; clip_index < video_clips_.size(); ++clip_index) {
-    const auto frame_count = video_clips_[clip_index].reader->frame_count();
+    const auto & reader = *video_clips_[clip_index].reader;
+    const auto frame_count = reader.frame_count();
     events_.reserve(events_.size() + frame_count);
     for (std::size_t frame_index = 0; frame_index < frame_count; ++frame_index) {
-      events_.push_back({
-        Event::Kind::Video,
-        video_clips_[clip_index].reader->frame_stamp_ns(frame_index),
-        clip_index, frame_index, order++});
+      Event event;
+      event.kind = Event::Kind::Video;
+      event.stamp_ns = reader.frame_stamp_ns(frame_index);
+      event.source_index = clip_index;
+      event.frame_index = frame_index;
+      event.order = order++;
+      event.header_stamp_ns = reader.header_stamp_ns(frame_index);
+      event.frame_id = reader.frame_id(frame_index);
+      event.encoding = reader.encoding(frame_index);
+      event.is_bigendian = reader.is_bigendian(frame_index);
+      events_.push_back(std::move(event));
     }
   }
 
@@ -385,17 +396,22 @@ void PlayerNode::publish_event(const Event & event)
       auto & clip = video_clips_[event.source_index];
       QImage image = clip.reader->frameAtIndex(event.frame_index);
       if (!image.isNull()) {
-        if (image.format() != QImage::Format_RGB888) {
-          image = image.convertToFormat(QImage::Format_RGB888);
-        }
         sensor_msgs::msg::Image message;
-        message.header.stamp = rclcpp::Time(event.stamp_ns);
-        message.header.frame_id = image_frame_id_;
+        message.header.stamp = rclcpp::Time(event.header_stamp_ns);
+        message.header.frame_id = event.frame_id;
         message.height = static_cast<std::uint32_t>(image.height());
         message.width = static_cast<std::uint32_t>(image.width());
-        message.encoding = "rgb8";
-        message.is_bigendian = false;
-        message.step = message.width * 3U;
+        message.encoding = event.encoding.empty() ? "rgb8" : event.encoding;
+        message.is_bigendian = event.is_bigendian;
+        message.step = message.width * (message.encoding == "mono8" ? 1U : 3U);
+
+        const QImage::Format target_format =
+          message.encoding == "bgr8" ? QImage::Format_BGR888 :
+          message.encoding == "mono8" ? QImage::Format_Grayscale8 :
+          QImage::Format_RGB888;
+        if (image.format() != target_format) {
+          image = image.convertToFormat(target_format);
+        }
         message.data.resize(static_cast<std::size_t>(message.step) * message.height);
         for (std::uint32_t row = 0; row < message.height; ++row) {
           std::memcpy(
