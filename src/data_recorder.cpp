@@ -5,18 +5,16 @@
 #include <QQmlContext>
 #include <QTimer>
 #include <QUrl>
-
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <rclcpp/rclcpp.hpp>
 #include <string>
 #include <thread>
 #include <vector>
-
-#include <ament_index_cpp/get_package_share_directory.hpp>
-#include <rclcpp/rclcpp.hpp>
 
 #include "data_recorder/app_controller.hpp"
 #include "data_recorder/camera_image_provider.hpp"
@@ -28,15 +26,12 @@
 namespace
 {
 
-void print_usage(const char * program_name)
+void print_usage()
 {
   std::cerr
     << "Usage:\n"
-    << "  source ~/.local/ros2_rc && rs && ros2 run data_recorder data_recorder \\\n"
-    << "    --ros-args -p config_file:=/home/nros/Documents/Woosh/ros2_recorder_ws/src/data_recorder/config/example_config.yaml\n\n"
-    << "Required ROS parameter:\n"
-    << "  config_file: path to the YAML recorder configuration\n\n"
-    << "Program: " << program_name << std::endl;
+    << "  ros2 run data_recorder data_recorder --ros-args -p config_file:=<config_file_path>"
+    << std::endl;
 }
 
 }  // namespace
@@ -49,7 +44,7 @@ int main(int argc, char ** argv)
   const auto config_path = node->get_parameter("config_file").as_string();
 
   if (config_path.empty()) {
-    print_usage(argv[0]);
+    print_usage();
     rclcpp::shutdown();
     return EXIT_FAILURE;
   }
@@ -59,7 +54,7 @@ int main(int argc, char ** argv)
     config = data_recorder::ConfigModel().load_from_file(config_path);
   } catch (const data_recorder::ConfigError & error) {
     std::cerr << "Failed to load config: " << error.what() << "\n\n";
-    print_usage(argv[0]);
+    print_usage();
     rclcpp::shutdown();
     return EXIT_FAILURE;
   }
@@ -82,7 +77,8 @@ int main(int argc, char ** argv)
   app.installEventFilter(&controller);
 
   QQmlApplicationEngine qml_engine;
-  qml_engine.addImageProvider(QStringLiteral("camera"),
+  qml_engine.addImageProvider(
+    QStringLiteral("camera"),
     new data_recorder::CameraImageProvider(&bridge));  // 引擎接管所有权
   qml_engine.rootContext()->setContextProperty("appController", &controller);
 
@@ -104,16 +100,14 @@ int main(int argc, char ** argv)
   });
   ros_shutdown_timer.start(100);
 
-  const auto package_share = QString::fromStdString(
-    ament_index_cpp::get_package_share_directory("data_recorder"));
+  const auto package_share =
+    QString::fromStdString(ament_index_cpp::get_package_share_directory("data_recorder"));
   const auto qml_dir = package_share + QStringLiteral("/qml");
   qml_engine.addImportPath(qml_dir);
 
   const QUrl main_qml = QUrl::fromLocalFile(qml_dir + QStringLiteral("/Main.qml"));
   QObject::connect(
-    &qml_engine,
-    &QQmlApplicationEngine::objectCreated,
-    &app,
+    &qml_engine, &QQmlApplicationEngine::objectCreated, &app,
     [main_qml](QObject * object, const QUrl & object_url) {
       if (object == nullptr && object_url == main_qml) {
         QCoreApplication::exit(EXIT_FAILURE);

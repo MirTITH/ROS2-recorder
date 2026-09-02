@@ -82,8 +82,10 @@ ColumnLayout {
 
         MouseArea {
             anchors.fill: parent
-            onPressed: seekFromLaneX(mouse.x)
-            onPositionChanged: {
+            onPressed: function(mouse) {
+                seekFromLaneX(mouse.x)
+            }
+            onPositionChanged: function(mouse) {
                 if (pressed) {
                     seekFromLaneX(mouse.x)
                 }
@@ -113,8 +115,10 @@ ColumnLayout {
             anchors.fill: parent
             z: 0
             acceptedButtons: Qt.LeftButton
-            onPressed: seekFromLaneX(mouse.x)
-            onPositionChanged: {
+            onPressed: function(mouse) {
+                seekFromLaneX(mouse.x)
+            }
+            onPositionChanged: function(mouse) {
                 if (pressed) {
                     seekFromLaneX(mouse.x)
                 }

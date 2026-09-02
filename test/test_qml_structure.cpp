@@ -410,6 +410,16 @@ TEST(QmlStructure, TimelineLegendUsesStableHitArea)
   expect_not_contains(info, "id: legendChipMouseArea");
 }
 
+TEST(QmlStructure, TimelineLaneMouseHandlersDeclareSignalParameters)
+{
+  const std::string lane_text = read_text(qml_dir() / "components" / "TrackLaneColumn.qml");
+
+  expect_contains(lane_text, "onPressed: function(mouse)");
+  expect_contains(lane_text, "onPositionChanged: function(mouse)");
+  expect_not_contains(lane_text, "onPressed: seekFromLaneX(mouse.x)");
+  expect_not_contains(lane_text, "onPositionChanged: {");
+}
+
 TEST(RecorderEngineStructure, LiveCurveBufferKeepsFullRecordingSpan)
 {
   const std::string engine = read_text(source_dir() / "src" / "recorder_engine.cpp");
