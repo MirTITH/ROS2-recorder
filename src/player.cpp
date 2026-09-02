@@ -7,7 +7,6 @@
 #include <rosbag2_cpp/reader.hpp>
 #include <rosbag2_storage/serialized_bag_message.hpp>
 #include <rosbag2_storage/storage_options.hpp>
-#include <rosbag2_transport/qos.hpp>
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
@@ -20,6 +19,7 @@
 #include <utility>
 
 #include "data_recorder/path_utils.hpp"
+#include "data_recorder/rosbag2_compat.hpp"
 #include "data_recorder/video_clip_reader.hpp"
 
 namespace fs = std::filesystem;
@@ -41,11 +41,11 @@ std::string normalized_topic(std::string topic)
 rclcpp::QoS qos_from_offered_profiles(
   const std::string & topic_name, const std::string & offered_qos_profiles)
 {
-  using rosbag2_transport::Rosbag2QoS;
+  using rosbag2_compat::Rosbag2QoS;
   if (offered_qos_profiles.empty()) { return Rosbag2QoS{}; }
 
   try {
-    const auto profiles = YAML::Load(offered_qos_profiles).as<std::vector<Rosbag2QoS>>();
+    const auto profiles = rosbag2_compat::deserialize_qos_profiles(offered_qos_profiles);
     return Rosbag2QoS::adapt_offer_to_recorded_offers(topic_name, profiles);
   } catch (const std::exception &) {
     return Rosbag2QoS{};
@@ -54,7 +54,12 @@ rclcpp::QoS qos_from_offered_profiles(
 
 rclcpp::QoS publisher_qos_for_topic(const rosbag2_storage::TopicMetadata & topic)
 {
-  return qos_from_offered_profiles(topic.name, topic.offered_qos_profiles);
+  try {
+    const auto profiles = rosbag2_compat::topic_qos_profiles(topic);
+    return rosbag2_compat::Rosbag2QoS::adapt_offer_to_recorded_offers(topic.name, profiles);
+  } catch (const std::exception &) {
+    return rosbag2_compat::Rosbag2QoS{};
+  }
 }
 
 }  // namespace
@@ -239,7 +244,7 @@ void PlayerNode::build_event_queue()
   for (std::size_t i = 0; i < bag_messages_.size(); ++i) {
     Event event;
     event.kind = Event::Kind::Bag;
-    event.stamp_ns = static_cast<int64_t>(bag_messages_[i].message->time_stamp);
+    event.stamp_ns = rosbag2_compat::message_timestamp(*bag_messages_[i].message);
     event.source_index = i;
     event.order = order++;
     events_.push_back(std::move(event));

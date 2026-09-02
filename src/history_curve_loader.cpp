@@ -12,6 +12,7 @@
 #include <rosbag2_cpp/reader.hpp>
 
 #include "data_recorder/curve_payload.hpp"
+#include "data_recorder/rosbag2_compat.hpp"
 #include "data_recorder/topic_series.hpp"
 
 namespace data_recorder
@@ -69,8 +70,9 @@ void HistoryCurveLoader::scanTimestamps(
   int64_t base_ns = 0;
   while (reader.has_next()) {
     auto bag_msg = reader.read_next();
-    if (first) { base_ns = bag_msg->time_stamp; first = false; }
-    const double t = static_cast<double>(bag_msg->time_stamp - base_ns) / 1e9;
+    const int64_t timestamp_ns = rosbag2_compat::message_timestamp(*bag_msg);
+    if (first) { base_ns = timestamp_ns; first = false; }
+    const double t = static_cast<double>(timestamp_ns - base_ns) / 1e9;
     dots_by_topic[bag_msg->topic_name].push_back(t);
   }
 
@@ -132,9 +134,10 @@ void HistoryCurveLoader::extractTopic(
   int64_t base_ns = 0;
   while (reader.has_next()) {
     auto bag_msg = reader.read_next();
-    if (first) { base_ns = bag_msg->time_stamp; first = false; }
+    const int64_t timestamp_ns = rosbag2_compat::message_timestamp(*bag_msg);
+    if (first) { base_ns = timestamp_ns; first = false; }
     if (bag_msg->topic_name != want) { continue; }
-    const double t = static_cast<double>(bag_msg->time_stamp - base_ns) / 1e9;
+    const double t = static_cast<double>(timestamp_ns - base_ns) / 1e9;
     buffer.add_message_time(t);
     if (extractor != nullptr && bag_msg->serialized_data) {
       const auto serialized = to_serialized(*bag_msg->serialized_data);

@@ -13,7 +13,10 @@
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <stdexcept>
 #include <vector>
+
+#include "data_recorder/rosbag2_compat.hpp"
 
 namespace data_recorder
 {
@@ -73,7 +76,7 @@ void RosbagWriter::add_topic(
   metadata.name = name;
   metadata.type = type;
   metadata.serialization_format = "cdr";
-  metadata.offered_qos_profiles = offered_qos_profiles;
+  rosbag2_compat::set_topic_qos_profiles(metadata, offered_qos_profiles);
   writer_->create_topic(metadata);
 }
 
@@ -83,18 +86,25 @@ void RosbagWriter::write(
   if (!open_) { return; }
   auto bag_msg = std::make_shared<rosbag2_storage::SerializedBagMessage>();
   bag_msg->topic_name = topic;
-  bag_msg->time_stamp = time_stamp_ns;
+  rosbag2_compat::set_message_timestamp(*bag_msg, time_stamp_ns);
 
   const auto & rcl_msg = msg.get_rcl_serialized_message();
   bag_msg->serialized_data = std::shared_ptr<rcutils_uint8_array_t>(
     new rcutils_uint8_array_t,
     [](rcutils_uint8_array_t * arr) {
-      rcutils_uint8_array_fini(arr);
+      const rcutils_ret_t ret = rcutils_uint8_array_fini(arr);
+      (void)ret;
       delete arr;
     });
   *bag_msg->serialized_data = rcutils_get_zero_initialized_uint8_array();
   rcutils_allocator_t allocator = rcutils_get_default_allocator();
-  rcutils_uint8_array_init(bag_msg->serialized_data.get(), rcl_msg.buffer_length, &allocator);
+  const rcutils_ret_t init_ret =
+    rcutils_uint8_array_init(bag_msg->serialized_data.get(), rcl_msg.buffer_length, &allocator);
+  if (init_ret != RCUTILS_RET_OK) {
+    throw std::runtime_error(
+            "failed to allocate rosbag message buffer: rcutils error " +
+            std::to_string(init_ret));
+  }
   std::memcpy(bag_msg->serialized_data->buffer, rcl_msg.buffer, rcl_msg.buffer_length);
   bag_msg->serialized_data->buffer_length = rcl_msg.buffer_length;
 

@@ -1902,7 +1902,7 @@ TEST(AppControllerTags, HistorySessionTagToggleWritesYamlAndUpdatesRow)
   rec.session_id = "2026-06-30_09-00-00";
   rec.directory = dir.string();
   rec.duration_seconds = 12.0;
-  rec.topics = {{"/joint_states", "rosbag"}};
+  rec.topics = {{"/joint_states", "rosbag", ""}};
   rec.annotations = {{"碰撞", "c", "point", "#e03131", 3.0, 0.0}};
   mgr.write_session_yaml(rec);
 

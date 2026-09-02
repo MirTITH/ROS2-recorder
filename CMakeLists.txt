@@ -40,6 +40,7 @@ set(DATA_RECORDER_HEADERS
   include/data_recorder/live_bridge.hpp
   include/data_recorder/path_utils.hpp
   include/data_recorder/recording_time.hpp
+  include/data_recorder/rosbag2_compat.hpp
   include/data_recorder/player.hpp
   include/data_recorder/recorder_engine.hpp
   include/data_recorder/recorder_types.hpp
@@ -193,6 +194,9 @@ if(BUILD_TESTING)
   ament_add_gtest(test_rosbag_writer test/test_rosbag_writer.cpp)
   target_link_libraries(test_rosbag_writer data_recorder_core)
   ament_target_dependencies(test_rosbag_writer rclcpp rosbag2_cpp std_msgs)
+
+  ament_add_gtest(test_rosbag2_compat test/test_rosbag2_compat.cpp)
+  target_link_libraries(test_rosbag2_compat data_recorder_core)
 
   ament_add_gtest(test_history_curve_loader test/test_history_curve_loader.cpp)
   target_link_libraries(test_history_curve_loader data_recorder_core Qt6::Test)

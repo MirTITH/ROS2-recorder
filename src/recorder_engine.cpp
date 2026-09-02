@@ -16,12 +16,11 @@
 #include <sstream>
 
 #include <rclcpp/serialization.hpp>
-#include <rosbag2_transport/qos.hpp>
-#include <yaml-cpp/yaml.h>
 
 #include "data_recorder/live_bridge.hpp"
 #include "data_recorder/path_utils.hpp"
 #include "data_recorder/recording_time.hpp"
+#include "data_recorder/rosbag2_compat.hpp"
 #include "data_recorder/session_manager.hpp"
 
 namespace fs = std::filesystem;
@@ -163,13 +162,11 @@ std::string RecorderEngine::offered_qos_for(const std::string & topic) const
 {
   const auto endpoints = node_->get_publishers_info_by_topic(topic);
   if (endpoints.empty()) { return ""; }
-  std::vector<rosbag2_transport::Rosbag2QoS> profiles;
+  std::vector<rclcpp::QoS> profiles;
   for (const auto & ep : endpoints) {
     profiles.emplace_back(ep.qos_profile());
   }
-  YAML::Node node;
-  node = profiles;
-  return YAML::Dump(node);
+  return rosbag2_compat::serialize_qos_profiles(profiles);
 }
 
 void RecorderEngine::setup_subscriptions()
@@ -204,7 +201,7 @@ bool RecorderEngine::subscribe_video_topic(const TopicEntry & topic)
     // 未显式配置 QoS：和 rosbag2 一致,跟随真实发布者。没发布者就订不上，留给补订。
     const auto eps = node_->get_publishers_info_by_topic(topic.topic_name);
     if (eps.empty()) { return false; }
-    qos = rosbag2_transport::Rosbag2QoS::adapt_request_to_offers(topic.topic_name, eps);
+    qos = rosbag2_compat::Rosbag2QoS::adapt_request_to_offers(topic.topic_name, eps);
   }
   const std::string topic_name = topic.topic_name;
   auto sub = node_->create_subscription<sensor_msgs::msg::Image>(
@@ -228,7 +225,7 @@ bool RecorderEngine::subscribe_rosbag_topic(const std::string & topic_name)
   if (type.empty()) { return false; }
   // 使用 rosbag2 的适配规则兼容同一话题的全部发布者，而不是只取发现列表的第一个端点。
   // 保留较深的 KeepLast(100) 队列；TRANSIENT_LOCAL 会让 /tf_static 的历史样本被回放。
-  auto qos = rosbag2_transport::Rosbag2QoS::adapt_request_to_offers(topic_name, eps);
+  auto qos = rosbag2_compat::Rosbag2QoS::adapt_request_to_offers(topic_name, eps);
   qos.keep_last(100);
   const bool transient_local =
     qos.get_rmw_qos_profile().durability == RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;

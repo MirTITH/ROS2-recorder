@@ -12,15 +12,18 @@ Data Recorder 是一个带图形界面的 ROS 2 数据录制工具。它可以�
 sudo apt update
 sudo apt install git python3-rosdep python3-colcon-common-extensions
 
-# 本软件支持 db3 和 MCAP（推荐） 两种后端。如需使用 MCAP 后端，请执行：
+# 下面的命令仅 humble 版本执行，Jazzy 及以上版本无需执行
+# 本软件支持 db3 和 MCAP（推荐） 两种后端。ros2 humble 默认只装了 db3 后端，如需使用 MCAP 后端，请执行：
 sudo apt install ros-humble-rosbag2-storage-mcap
 ```
 
-1. 创建 ROS 2 工作空间，并将本仓库克隆到工作空间的 `src` 目录：
+1. 创建新工作空间或使用已有工作空间，将本仓库克隆到工作空间的 `src` 目录：
 
    ```bash
+   # 以创建新工作空间为例
    mkdir -p ~/ros2_recorder_ws/src
    cd ~/ros2_recorder_ws
+
    git clone https://github.com/MirTITH/ROS2-recorder.git src/data_recorder
    ```
 
@@ -62,8 +65,7 @@ sudo apt install ros-humble-rosbag2-storage-mcap
    cd ~/ros2_recorder_ws
    source /opt/ros/humble/setup.bash
    source install/setup.bash
-   ros2 run data_recorder data_recorder \
-     --ros-args -p config_file:="$HOME/ros2_recorder_ws/src/data_recorder/config/example_config.yaml"
+   ros2 run data_recorder data_recorder --ros-args -p config_file:="src/data_recorder/config/example_config.yaml"
    ```
 
 6. 在界面中使用：

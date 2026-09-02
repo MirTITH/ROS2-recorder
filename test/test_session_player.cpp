@@ -42,7 +42,7 @@ data_recorder::SessionRecord makeSession(const fs::path & dir)
   s.session_id = "tmp";
   s.directory = dir.string();
   s.duration_seconds = 1.2;
-  s.topics.push_back({"/cam", "video"});
+  s.topics.push_back({"/cam", "video", ""});
   return s;
 }
 }  // namespace
