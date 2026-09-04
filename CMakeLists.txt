@@ -107,6 +107,10 @@ target_link_libraries(data_recorder data_recorder_core)
 target_link_libraries(data_recorder Qt6::Widgets)
 ament_target_dependencies(data_recorder rclcpp ament_index_cpp)
 
+add_executable(image_latency_monitor src/image_latency_monitor.cpp)
+target_link_libraries(image_latency_monitor data_recorder_core)
+ament_target_dependencies(image_latency_monitor rclcpp sensor_msgs)
+
 add_executable(player
   src/player.cpp
   src/player_main.cpp
@@ -123,7 +127,7 @@ ament_target_dependencies(player
   sensor_msgs
 )
 
-install(TARGETS data_recorder player data_recorder_core
+install(TARGETS data_recorder image_latency_monitor player data_recorder_core
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
