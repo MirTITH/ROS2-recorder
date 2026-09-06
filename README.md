@@ -77,6 +77,28 @@ sudo apt install ros-humble-rosbag2-storage-mcap
 
 每次录制都会在 `output_dir` 下生成一个独立的会话目录，其中包含 rosbag、视频及会话标注信息。
 
+## 迁移旧版数据集
+
+`scripts/migrate_dataset_to_v1_2_0.py` 可将不含 `version` 字段的旧版会话转换为
+1.2.0 格式。脚本针对 Woosh 相机话题补齐视频 CSV 字段，将 rosbag 和视频文件
+原样复制到输出目录，并在 `session.yaml` 的注释中说明估算方法和固定值。
+默认跳过已有 `version` 字段的会话。添加 `--copy-skipped` 后，这些会话及
+会话目录之外的附属文件会原样复制到输出目录，不修改其版本号或内容。
+使用该选项时，输出目录必须尚不存在，以免覆盖已有数据。
+
+在 Woosh 工作空间根目录执行（其他目录布局请相应调整脚本路径）：
+
+```bash
+source ~/.local/ros2_rc && rs
+python3 src/ROS2-recorder/scripts/migrate_dataset_to_v1_2_0.py \
+    --input recordings_old \
+    --output recordings \
+    --copy-skipped
+```
+
+运行环境需提供 `rosbag2_py`、`rclpy`、PyYAML 及 rosbag 中相机消息的类型定义。
+请使用与输入目录分离的新输出目录，以保留原始数据。
+
 ## 播放录制数据
 
 `player` 可以按照录制时间轴重新发布会话中的 rosbag 消息和视频帧，使用方式接近 `ros2 bag play`。启动时通过 `session_dir` 指定包含 `session.yaml`、`rosbag/` 和 `video/` 的会话目录：
@@ -112,4 +134,3 @@ ros2 run data_recorder player --ros-args -p session_dir:=/path/to/recording/sess
 ros2 service call /player/pause rosbag2_interfaces/srv/Pause "{}"
 ros2 service call /player/set_rate rosbag2_interfaces/srv/SetRate "{rate: 2.0}"
 ```
-
