@@ -8,15 +8,12 @@
 # output_dir: "./recordings/gripper_wipe"
 # output_dir: "./recordings/gripper_screw_1"
 
-
-
 # output_dir: "./recordings/experiment_pick"
 # output_dir: "./recordings/experiment_pick_1"
 # output_dir: "./recordings/experiment"
-output_dir: "./recordings/experiment_wipe"
+# output_dir: "./recordings/experiment_wipe"
 # output_dir: "./recordings/experiment_screw"
-
-
+output_dir: "./recordings/apex-force"
 
 # 标签，用于标注单条数据
 # name 必须唯一；color 可省略（默认灰色）。
@@ -45,74 +42,90 @@ annotation_types:
 groups:
   # Plain topics
   - topics:
+      # - /attached_collision_object
+      # - /collision_object
+      # - /display_contacts
+      # - /display_planned_path
+      # - /dynamic_joint_states
       - /gimbal_joint_trajectory_controller/controller_state
       - /gimbal_joint_trajectory_controller/joint_trajectory
       # - /gimbal_joint_trajectory_controller/state
       - /gimbal_joint_trajectory_controller/transition_event
-
+      # - /grounding_dino/debug_pointcloud
       - /joint_state_broadcaster/transition_event
       - /joint_states
-
       - /left_arm_controller/controller_state
       - /left_arm_controller/joint_trajectory
       # - /left_arm_controller/state
       - /left_arm_controller/transition_event
-
       - /left_arm_servo_node/pose_target_cmds
-
       - /left_force_torque_sensor_broadcaster/transition_event
       - /left_force_torque_sensor_broadcaster/wrench
-
-      - /left_hand_controller/commands
-      - /left_hand_controller/transition_event
-      - /left_hand_max_finger_force_controller/commands
-      - /left_hand_max_finger_force_controller/transition_event
+      - /left_gravity_compensation/wrench
       - /left_gripper_controller/commands
       - /left_gripper_controller/transition_event
-
+      # - /left_pinocchio_servo/debug/admittance_result
+      - /left_raw_force_torque_sensor_broadcaster/transition_event
+      - /left_raw_force_torque_sensor_broadcaster/wrench
+      # - /monitored_planning_scene
       - /parameter_events
-
+      # - /pipeline_state
+      # - /planning_scene
+      # - /planning_scene_world
+      # - /recognized_object_array
       - /right_arm_controller/controller_state
       - /right_arm_controller/joint_trajectory
       # - /right_arm_controller/state
       - /right_arm_controller/transition_event
-
       - /right_arm_servo_node/pose_target_cmds
-
       - /right_force_torque_sensor_broadcaster/transition_event
       - /right_force_torque_sensor_broadcaster/wrench
-
+      - /right_gravity_compensation/wrench
       - /right_hand_controller/commands
       - /right_hand_controller/transition_event
       - /right_hand_max_finger_force_controller/commands
       - /right_hand_max_finger_force_controller/transition_event
-      - /right_gripper_controller/commands
-      - /right_gripper_controller/transition_event
-
+      # - /right_pinocchio_servo/debug/admittance_result
+      - /right_raw_force_torque_sensor_broadcaster/transition_event
+      - /right_raw_force_torque_sensor_broadcaster/wrench
       - /robot_description
       - /robot_description_semantic
-
+      - /rosout
+      # - /rviz_moveit_motion_planning_display/robot_interaction_interactive_marker_topic/feedback
+      # - /rviz_moveit_motion_planning_display/robot_interaction_interactive_marker_topic/update
       - /tf
       - /tf_static
-
+      # - /trajectory_execution_event
       # - /woosh/camera/woosh_head_rgbd/aligned_depth_to_color/camera_info
       # - /woosh/camera/woosh_head_rgbd/aligned_depth_to_color/image_raw
       - /woosh/camera/woosh_head_rgbd/color/camera_info
+      # - /woosh/camera/woosh_head_rgbd/color/image_raw
       - /woosh/camera/woosh_head_rgbd/color/metadata
+      # - /woosh/camera/woosh_head_rgbd/depth/camera_info
+      # - /woosh/camera/woosh_head_rgbd/depth/color/points
+      # - /woosh/camera/woosh_head_rgbd/depth/image_rect_raw
+      # - /woosh/camera/woosh_head_rgbd/depth/metadata
       - /woosh/camera/woosh_head_rgbd/extrinsics/depth_to_color
-
       # - /woosh/camera/woosh_left_hand_rgbd/aligned_depth_to_color/camera_info
       # - /woosh/camera/woosh_left_hand_rgbd/aligned_depth_to_color/image_raw
       - /woosh/camera/woosh_left_hand_rgbd/color/camera_info
+      # - /woosh/camera/woosh_left_hand_rgbd/color/image_raw
       - /woosh/camera/woosh_left_hand_rgbd/color/metadata
+      # - /woosh/camera/woosh_left_hand_rgbd/depth/camera_info
+      # - /woosh/camera/woosh_left_hand_rgbd/depth/color/points
+      # - /woosh/camera/woosh_left_hand_rgbd/depth/image_rect_raw
+      # - /woosh/camera/woosh_left_hand_rgbd/depth/metadata
       - /woosh/camera/woosh_left_hand_rgbd/extrinsics/depth_to_color
-
       # - /woosh/camera/woosh_right_hand_rgbd/aligned_depth_to_color/camera_info
       # - /woosh/camera/woosh_right_hand_rgbd/aligned_depth_to_color/image_raw
       - /woosh/camera/woosh_right_hand_rgbd/color/camera_info
+      # - /woosh/camera/woosh_right_hand_rgbd/color/image_raw
       - /woosh/camera/woosh_right_hand_rgbd/color/metadata
+      # - /woosh/camera/woosh_right_hand_rgbd/depth/camera_info
+      # - /woosh/camera/woosh_right_hand_rgbd/depth/color/points
+      # - /woosh/camera/woosh_right_hand_rgbd/depth/image_rect_raw
+      # - /woosh/camera/woosh_right_hand_rgbd/depth/metadata
       - /woosh/camera/woosh_right_hand_rgbd/extrinsics/depth_to_color
-
       - /xr_teleoperate/head_pose
       - /xr_teleoperate/left/controller_state
       - /xr_teleoperate/left/pose
