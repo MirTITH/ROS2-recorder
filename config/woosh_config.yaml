@@ -1,7 +1,22 @@
 # data_recorder 配置
 # 使用方法：ros2 run data_recorder data_recorder --ros-args -p config_file:="<this file>"
 
-output_dir: "./recordings/gripper_pick_1"
+# output_dir: "./recordings/gripper_pick_4"
+# output_dir: "./recordings/gripper_plug_1"
+# output_dir: "./recordings/gripper_wipe"
+# output_dir: "./recordings_old/gripper_screw"
+# output_dir: "./recordings/gripper_wipe"
+# output_dir: "./recordings/gripper_screw_1"
+
+
+
+# output_dir: "./recordings/experiment_pick"
+# output_dir: "./recordings/experiment_pick_1"
+# output_dir: "./recordings/experiment"
+output_dir: "./recordings/experiment_wipe"
+# output_dir: "./recordings/experiment_screw"
+
+
 
 # 标签，用于标注单条数据
 # name 必须唯一；color 可省略（默认灰色）。
