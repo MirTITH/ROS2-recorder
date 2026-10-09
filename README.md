@@ -59,6 +59,8 @@ sudo apt install ros-humble-rosbag2-storage-mcap
    - `annotation_types`：时间标注及其快捷键；`point` 表示时间点，`range` 表示时间区间。
    - `groups`：需要录制的话题。使用 `rosbag` 后端录制普通话题，使用 `video` 后端将图像话题编码为视频。
 
+   图像话题也可配置为 `backend: rosbag`，以原始 ROS 消息保存，不进行视频编码；实时相机预览仍可用。
+
 5. 启动程序：
 
    ```bash

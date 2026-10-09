@@ -2,6 +2,6 @@
 - [x] 重构前端代码
 - [x] 前端界面确定后，优化 `AppController::toggleRecording()` 的信号发射，只在属性值实际变化时发出对应的 `*Changed()` 信号
 - [x] 实现后端（rosbag + video + 预览 + 会话；数值曲线内省/历史回放数据加载留后续）
-- [ ] 修复bug：把视频话题放到 backend: rosbag 部分，似乎仍然会走视频压缩
+- [x] 修复bug：把视频话题放到 backend: rosbag 部分，似乎仍然会走视频压缩
 - [ ] 支持深度视频编码
 - [ ] 优化 UI 性能

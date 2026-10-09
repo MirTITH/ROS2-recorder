@@ -176,9 +176,7 @@ void RecorderEngine::setup_subscriptions()
       std::lock_guard<std::mutex> lock(rate_mutex_);
       rate_monitors_.emplace(topic.topic_name, TopicRateMonitor(1.0));
     }
-    if (topic.backend_name == "video" ||
-      topic.ui_category == TopicUiCategory::CameraPreview)
-    {
+    if (topic.backend_name == "video") {
       // qos_explicit 的话题不依赖发布者是否已被发现，可立即订阅；否则可能要等 try_subscribe_pending 补订。
       if (!subscribe_video_topic(topic)) {
         std::lock_guard<std::mutex> lock(pending_mutex_);
@@ -291,6 +289,14 @@ void RecorderEngine::on_rosbag_message(
     topic_types_.emplace(topic, type);
   }
 
+  // 相机预览独立于存储后端。反序列化仅用于预览/尺寸统计，写 bag 仍使用原始序列化消息。
+  if (type == "sensor_msgs/msg/Image") {
+    sensor_msgs::msg::Image image;
+    rclcpp::Serialization<sensor_msgs::msg::Image> serializer;
+    serializer.deserialize_message(msg.get(), &image);
+    update_image_preview(topic, image);
+  }
+
   // /tf_static 等 TRANSIENT_LOCAL 话题通常只发布一次。长期订阅会在开录前就消费 DDS
   // 回放的历史样本，因此缓存最近的消息，供每个新会话写入。
   // should_record 必须在缓存锁内取值：它与 start_session 的“写缓存 + 开录”临界区配合，
@@ -376,21 +382,7 @@ void RecorderEngine::on_image_message(
     auto it = rate_monitors_.find(topic);
     if (it != rate_monitors_.end()) { it->second.record(now_ns); }
   }
-  {
-    std::lock_guard<std::mutex> lock(dims_mutex_);
-    image_dims_[topic] = {static_cast<int>(msg->width), static_cast<int>(msg->height)};
-  }
-
-  // 预览：转 QImage（bgr8 用 Format_BGR888；其余转 RGB888）
-  if (bridge_ && (msg->encoding == "bgr8" || msg->encoding == "rgb8" || msg->encoding == "mono8")) {
-    QImage::Format fmt = msg->encoding == "bgr8" ? QImage::Format_BGR888
-      : msg->encoding == "mono8" ? QImage::Format_Grayscale8
-      : QImage::Format_RGB888;
-    QImage img(msg->data.data(), msg->width, msg->height, msg->step, fmt);
-    // 深拷贝，脱离 msg 生命周期。
-    bridge_->push_frame(QString::fromStdString(topic),
-      std::make_shared<QImage>(img.copy()));
-  }
+  update_image_preview(topic, *msg);
 
   if (!recording_.load()) { return; }
   std::lock_guard<std::mutex> lock(session_mutex_);
@@ -407,6 +399,26 @@ void RecorderEngine::on_image_message(
     frame.frame_id = msg->header.frame_id;
     frame.data = msg->data;  // 拷贝
     sit->second->queue->push(std::move(frame));
+  }
+}
+
+void RecorderEngine::update_image_preview(
+  const std::string & topic, const sensor_msgs::msg::Image & image)
+{
+  {
+    std::lock_guard<std::mutex> lock(dims_mutex_);
+    image_dims_[topic] = {static_cast<int>(image.width), static_cast<int>(image.height)};
+  }
+
+  // 预览：转 QImage（bgr8 用 Format_BGR888；其余转 RGB888），不选择录制后端。
+  if (bridge_ && (image.encoding == "bgr8" || image.encoding == "rgb8" || image.encoding == "mono8")) {
+    QImage::Format fmt = image.encoding == "bgr8" ? QImage::Format_BGR888
+      : image.encoding == "mono8" ? QImage::Format_Grayscale8
+      : QImage::Format_RGB888;
+    QImage img(image.data.data(), image.width, image.height, image.step, fmt);
+    // 深拷贝，脱离消息生命周期。
+    bridge_->push_frame(QString::fromStdString(topic),
+      std::make_shared<QImage>(img.copy()));
   }
 }
 
@@ -434,7 +446,7 @@ std::string RecorderEngine::start_session()
   // 录制中才补订的话题不在此列，由 on_rosbag_message 首帧懒登记；registered_topics_ 两边共用、防重复。
   registered_topics_.clear();
   for (const auto & topic : config_.topics) {
-    if (topic.backend_name != "video" && topic.ui_category != TopicUiCategory::CameraPreview) {
+    if (topic.backend_name != "video") {
       const auto eps = node_->get_publishers_info_by_topic(topic.topic_name);
       std::string type = eps.empty() ? "" : eps.front().topic_type();
       if (!type.empty()) {
@@ -450,7 +462,7 @@ std::string RecorderEngine::start_session()
   const fs::path video_dir = fs::path(session_dir_) / "video";
   fs::create_directories(video_dir, ec);
   for (const auto & topic : config_.topics) {
-    if (topic.backend_name == "video" || topic.ui_category == TopicUiCategory::CameraPreview) {
+    if (topic.backend_name == "video") {
       const std::string key = topic.topic_name;
       const std::string base = file_name_for_topic(topic.topic_name);
       VideoParams params;
@@ -553,7 +565,7 @@ SessionRecord RecorderEngine::stop_session(
   record.duration_seconds = live_edge_seconds_.load();
   record.recorder_version = DATA_RECORDER_VERSION;
   for (const auto & t : config_.topics) {
-    const bool is_video = t.backend_name == "video" || t.ui_category == TopicUiCategory::CameraPreview;
+    const bool is_video = t.backend_name == "video";
     TopicRef ref;
     ref.name = t.topic_name;
     ref.backend = is_video ? "video" : "rosbag";

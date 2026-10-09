@@ -68,6 +68,8 @@ private:
     bool transient_local, std::shared_ptr<rclcpp::SerializedMessage> msg);
   void on_image_message(
     const std::string & topic, sensor_msgs::msg::Image::ConstSharedPtr msg);
+  void update_image_preview(
+    const std::string & topic, const sensor_msgs::msg::Image & image);
   std::string offered_qos_for(const std::string & topic) const;
 
   rclcpp::Node::SharedPtr node_;
