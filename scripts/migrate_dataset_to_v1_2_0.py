@@ -2,8 +2,9 @@
 """将旧版本录制数据集升级为 1.2.0 版本格式。
 
 旧格式（`session.yaml` 无 `version` 字段）与 1.2.0 格式的差异：
-  - `session.yaml` 顶层新增 `version: 1.2.0`；`backend: video` 的话题条目
-    新增 `offered_qos_profiles`（真实 QoS 已不可回溯，用固定占位值）。
+  - 保留 `session.yaml` 原有字段，顶层新增 `version: 1.2.0`；
+    `backend: video` 的话题条目仅在缺少 `offered_qos_profiles` 时补充
+    固定占位值（缺失的真实 QoS 已不可回溯），已有值保持不变。
   - video 话题的 CSV 从 3 列 (`frame_index,ros_stamp_ns,pts_ns`) 扩展为 7 列
     (`frame_index,recv_stamp_ns,header_stamp_ns,pts_ns,frame_id,encoding,is_bigendian`)：
       * `header_stamp_ns` 就是旧的 `ros_stamp_ns`（语义相同，只是改名）。
@@ -20,7 +21,8 @@
         `color/image_raw` 均为此编码）。
   - rosbag（`rosbag/metadata.yaml` + `.db3`）原样拷贝，不做存储后端转码。
 
-转换后的 `session.yaml` 会新增 `migrated_from` 字段记录迁移来源，
+迁移脚本版本：1.1。
+转换后的 `session.yaml` 会新增 `migrated_from` 字段记录迁移来源及脚本版本，
 并通过 YAML 注释说明时间戳估算方法和固定值的含义。
 默认跳过已有 version 字段的会话；使用 --copy-skipped 可将这些会话及
 会话目录之外的附属文件原样复制到输出目录（输出目录必须尚不存在）。
@@ -50,14 +52,11 @@ try:
     from rclpy.serialization import deserialize_message
     from rosidl_runtime_py.utilities import get_message
 except ImportError:
-    sys.exit(
-        "需要 ROS 2 Python 环境 (rosbag2_py / rclpy)，未能导入。\n"
-        "请先执行: source /opt/ros/humble/setup.bash\n"
-        "然后重新运行本脚本。"
-    )
+    sys.exit("需要 ROS 2 Python 环境 (rosbag2_py / rclpy)，未能导入。\n" "请先执行: source /opt/ros/humble/setup.bash\n" "然后重新运行本脚本。")
 
 TARGET_VERSION = "1.2.0"
 SCRIPT_NAME = "migrate_dataset_to_v1_2_0.py"
+SCRIPT_VERSION = "1.1"
 
 # 抄自 recordings/gripper_pick_1（当前 1.2.0 recorder 实际录制的视频话题 QoS），
 # 旧数据的真实发布者 QoS 已不可回溯，作为固定占位值写入。
@@ -84,15 +83,12 @@ FIXED_ENCODING = "rgb8"
 FIXED_IS_BIGENDIAN = "0"
 
 MIGRATION_COMMENTS = (
-    "迁移说明：旧数据缺少以下信息，转换时采用估算值或固定值补齐。",
-    "recv_stamp_ns：匹配 header 时间戳相同的 camera_info 和 metadata 消息，"
-    "取两者接收时间的均值；若仅匹配到一条消息，则使用该消息的接收时间。"
-    "若均未匹配到，则以图像 header 时间加上本会话中该相机 camera_info 的"
-    "接收时间与 header 时间之差的中位数进行估算。",
-    "frame_id：使用匹配消息的 header.frame_id，优先选择非空值；"
-    "若两者均非空，则优先使用 metadata 的值；若均未匹配到，则留空。",
-    "encoding 和 is_bigendian：分别固定为 rgb8 和 0。",
-    "视频话题的 offered_qos_profiles 为固定占位值，不代表录制时的真实 QoS。",
+    "迁移自旧版本数据，补齐了下面的信息：",
+    "    recv_stamp_ns：匹配 header 时间戳相同的 camera_info 和 metadata 消息，取两者接收时间的均值；若仅匹配到一条消息，则使用该消息的接收时间。若均未匹配到，则以图像 header 时间加上本会话中该相机 camera_info 的接收时间与 header 时间之差的中位数进行估算；",
+    "    frame_id：使用匹配的 metadata 或 camera_info 的 header.frame_id，优先使用 metadata 的值，若未匹配到，则留空；",
+    "    encoding：固定为 rgb8；",
+    "    is_bigendian：固定为 0；",
+    "    offered_qos_profiles：若缺少，则使用固定占位值补齐。",
 )
 
 
@@ -184,8 +180,7 @@ def estimate_recv_and_frame_id(
         recv_ns = (ci_ref.recv_ns + md_ref.recv_ns) // 2
         if ci_ref.frame_id != md_ref.frame_id:
             warnings.append(
-                f"{camera} frame_index={frame_index}: camera_info.frame_id="
-                f"{ci_ref.frame_id!r} 与 metadata.frame_id={md_ref.frame_id!r} 不一致"
+                f"{camera} frame_index={frame_index}: camera_info.frame_id=" f"{ci_ref.frame_id!r} 与 metadata.frame_id={md_ref.frame_id!r} 不一致"
             )
         frame_id = md_ref.frame_id or ci_ref.frame_id or ""
     elif ci_ref is not None:
@@ -222,9 +217,7 @@ def migrate_video_csv(
         writer.writeheader()
         for row in rows:
             header_ns = int(row["ros_stamp_ns"])
-            recv_ns, frame_id = estimate_recv_and_frame_id(
-                header_ns, camera, row["frame_index"], camera_index, warnings
-            )
+            recv_ns, frame_id = estimate_recv_and_frame_id(header_ns, camera, row["frame_index"], camera_index, warnings)
             writer.writerow(
                 {
                     "frame_index": row["frame_index"],
@@ -247,20 +240,17 @@ def camera_name_from_csv(csv_path: Path) -> Optional[str]:
 
 def migrate_session_yaml(old_yaml: Path, new_yaml: Path) -> None:
     with old_yaml.open("r", encoding="utf-8") as f:
-        old_content = yaml.safe_load(f) or {}
+        content = yaml.safe_load(f) or {}
 
-    for topic in old_content.get("topics", []):
+    for topic in content.get("topics", []):
         if topic.get("backend") == "video":
-            topic["offered_qos_profiles"] = VIDEO_OFFERED_QOS_PROFILES_PLACEHOLDER
+            topic.setdefault("offered_qos_profiles", VIDEO_OFFERED_QOS_PROFILES_PLACEHOLDER)
 
-    # 按新格式实际的字段顺序 (session, version, recorded_at, duration_seconds,
-    # topics) 重建，保持与 recorder 当前写出的 session.yaml 一致的可读顺序。
-    content = {"session": old_content["session"], "version": TARGET_VERSION}
-    for key in ("recorded_at", "duration_seconds", "topics"):
-        if key in old_content:
-            content[key] = old_content[key]
+    # 在原字典上更新迁移字段，保留标签、标注及其他已有元数据。
+    content["version"] = TARGET_VERSION
     content["migrated_from"] = {
         "script": SCRIPT_NAME,
+        "script_version": SCRIPT_VERSION,
         "migrated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": "legacy (no version field)",
     }
@@ -297,9 +287,7 @@ def migrate_session(session_dir: Path, input_root: Path, output_root: Path) -> l
                     continue
                 if camera not in camera_index_cache:
                     camera_index_cache[camera] = build_camera_index(old_rosbag, camera)
-                migrate_video_csv(
-                    item, new_video / item.name, camera, camera_index_cache[camera], warnings
-                )
+                migrate_video_csv(item, new_video / item.name, camera, camera_index_cache[camera], warnings)
             else:
                 shutil.copy2(item, new_video / item.name)
 
@@ -309,9 +297,7 @@ def migrate_session(session_dir: Path, input_root: Path, output_root: Path) -> l
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--input", required=True, help="旧版本数据集根目录")
     parser.add_argument("--output", required=True, help="转换后数据集输出根目录")
     parser.add_argument(
@@ -327,10 +313,7 @@ def main() -> int:
         sys.exit(f"目录不存在: {input_root}")
     resolved_input = input_root.resolve()
     resolved_output = output_root.resolve()
-    if (
-        resolved_input.is_relative_to(resolved_output)
-        or resolved_output.is_relative_to(resolved_input)
-    ):
+    if resolved_input.is_relative_to(resolved_output) or resolved_output.is_relative_to(resolved_input):
         parser.error("输入目录与输出目录不能相同或互相包含")
     if args.copy_skipped and output_root.exists():
         parser.error("使用 --copy-skipped 时，输出目录必须不存在，以免覆盖已有数据")
