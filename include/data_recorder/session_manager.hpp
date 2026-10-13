@@ -12,12 +12,12 @@ namespace data_recorder
 class SessionManager
 {
 public:
-  // 在 output_dir 下建 <session_id>/ 子目录，返回其绝对路径。
+  // 在已存在的 output_dir 下独占创建 <session_id>/，已存在或创建失败时抛出异常。
   std::string create_session_directory(
     const std::string & output_dir, const std::string & session_id) const;
 
   // 把 record 序列化为 <record.directory>/session.yaml。
-  bool write_session_yaml(const SessionRecord & record) const;
+  bool write_session_yaml(const SessionRecord & record, std::string * error = nullptr) const;
 
   // 扫描 output_dir 各子目录，读 session.yaml（无则跳过），现算 size_bytes；按 session_id 降序（新在前）。
   std::vector<SessionRecord> scan(const std::string & output_dir) const;

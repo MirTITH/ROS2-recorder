@@ -34,28 +34,33 @@ public:
   VideoRecorder(
     const std::string & video_path, const std::string & csv_path,
     int width, int height, const VideoParams & params);
-  ~VideoRecorder();
+  ~VideoRecorder() noexcept;
 
   VideoRecorder(const VideoRecorder &) = delete;
   VideoRecorder & operator=(const VideoRecorder &) = delete;
 
   bool is_open() const { return open_; }
+  // 仅致命初始化/编码/存储错误；正常丢帧不会设置。保留首次错误。
+  const std::string & error_message() const { return error_message_; }
 
   // 编码一帧。不支持的编码、尺寸不符、或编码相对首帧变化，都会丢弃该帧并打印警告，
   // 返回 false（不抛）。
   bool encode(const ImageFrame & frame);
 
-  // flush 编码器、写 trailer、关 CSV。可安全重复调用。CSV 保存失败时返回 false
-  // （已打印警告），但 FFmpeg 资源仍保证清理完毕。
+  // flush 编码器、写 trailer、保存 CSV。可安全重复调用，任何致命错误均返回 false，
+  // 后续调用保留首次失败，FFmpeg 资源始终清理完毕。
   bool close();
 
 private:
   bool init(const VideoParams & params);
   bool fill_source_frame(const ImageFrame & frame);
-  void drain_packets();
+  bool drain_packets();
+  bool record_error(const std::string & detail);
+  bool record_av_error(const std::string & operation, int code);
 
   std::string video_path_;
   std::string csv_path_;
+  std::string error_message_;
   int width_{0};
   int height_{0};
   std::string source_encoding_;  // 首帧锁定的源编码；后续帧编码变化则丢弃+警告

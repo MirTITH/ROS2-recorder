@@ -39,12 +39,14 @@ public:
   ~RecorderEngine();
 
   // 由 GUI 线程调（通过 AppController），内部用锁保护会话状态。
-  // 返回 session_id（成功）或空串（失败，如 output_dir 不可写）。
-  std::string start_session();
-  // 写 annotations/tags 快照到 session.yaml；返回完成的 SessionRecord。
-  SessionRecord stop_session(
-    const std::vector<AnnotationRecord> & annotations,
-    const std::vector<TagRecord> & tags);
+  SessionStartResult start_session();
+  // 停止准入、排空并关闭所有后端，再直接写 session.yaml。重复停止返回上次结果。
+  SessionFinishResult stop_session();
+  // GUI 模型变动时同步内存快照；不进行录制中落盘。
+  void update_session_metadata(
+    const std::vector<AnnotationRecord> & annotations, const std::vector<TagRecord> & tags);
+  // 由 GUI 定时检查工作线程错误，随后在控制线程统一停录。
+  std::string recording_error() const;
 
   bool is_recording() const { return recording_.load(); }
   double live_edge_seconds() const;
@@ -55,6 +57,8 @@ public:
   void notify_curves_consumed();
 
 private:
+  friend class RecorderEngineTestAccess;
+
   void setup_subscriptions();
   // 订阅一个 rosbag 话题；发布者尚未被发现则返回 false（留待 try_subscribe_pending 补订）。
   bool subscribe_rosbag_topic(const std::string & topic_name);
@@ -117,29 +121,34 @@ private:
   struct VideoSink
   {
     std::unique_ptr<VideoRecorder> recorder;
-    std::unique_ptr<WriterQueue<ImageFrame>> queue;
     std::string video_path;
     std::string csv_path;
     VideoParams params;
+    // 最先析构队列并等待 worker；其回调使用的字段必须仍然存活。
+    std::unique_ptr<WriterQueue<ImageFrame>> queue;
   };
 
+  struct ActiveSession
+  {
+    SessionRecord record;
+    int64_t start_steady_ns{0};
+    std::atomic<bool> accepting{false};
+    std::mutex metadata_mutex;
+    std::shared_ptr<RosbagWriter> rosbag_writer;
+    std::map<std::string, std::shared_ptr<VideoSink>> video_sinks;
+    // 启动期间登记，提交后仅 rosbag worker 访问。
+    std::set<std::string> registered_topics;
+    std::shared_ptr<WriterQueue<std::function<void()>>> rosbag_queue;
+  };
+  std::shared_ptr<ActiveSession> accepting_session() const;
+
   // 会话态（GUI start/stop 与 ROS 回调共享）
-  std::mutex session_mutex_;
+  // 生命周期调用串行；session_mutex_ 只保护当前会话的发布/撤下，不在锁内等待 writer。
+  std::mutex lifecycle_mutex_;
+  mutable std::mutex session_mutex_;
   std::atomic<bool> recording_{false};
-  std::string session_dir_;
-  std::string session_id_;
-  // steady_clock 起点存为 atomic ns（live_edge_timer_ 在 ROS 线程读，start_session 在 GUI 线程写）。
-  std::atomic<int64_t> record_start_steady_ns_{0};
-  double record_start_unix_{0.0};
-  int64_t record_start_ros_ns_{0};
-  // shared_ptr：on_rosbag_message 可在 session_mutex_ 外持本地副本完成阻塞 push，
-  // 即使 stop_session 已 reset 成员，本地副本仍保活 queue/writer 直到 push 返回。
-  std::shared_ptr<RosbagWriter> rosbag_writer_;
-  std::shared_ptr<WriterQueue<std::function<void()>>> rosbag_queue_;
-  std::map<std::string, std::shared_ptr<VideoSink>> video_sinks_;
-  // 本会话已在 writer 上 add_topic 过的话题（session_mutex_ 保护）。start_session 预登记开录时
-  // 已有发布者的话题；录制中补订的话题在首帧时懒登记，靠此集合防重复 create_topic。
-  std::set<std::string> registered_topics_;
+  std::shared_ptr<ActiveSession> active_session_;
+  SessionFinishResult last_finish_;
 
   // live edge / stats 定时器
   rclcpp::TimerBase::SharedPtr stats_timer_;

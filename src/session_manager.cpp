@@ -14,15 +14,22 @@ namespace data_recorder
 std::string SessionManager::create_session_directory(
   const std::string & output_dir, const std::string & session_id) const
 {
-  const fs::path dir = fs::path(output_dir) / session_id;
-  fs::create_directories(dir);
-  return fs::absolute(dir).string();
+  const fs::path dir = fs::absolute(fs::path(output_dir) / session_id);
+  if (!fs::create_directory(dir)) {
+    throw fs::filesystem_error(
+            "Session directory already exists", dir,
+            std::make_error_code(std::errc::file_exists));
+  }
+  return dir.string();
 }
 
-bool SessionManager::write_session_yaml(const SessionRecord & record) const
+bool SessionManager::write_session_yaml(const SessionRecord & record, std::string * error) const
 {
-  // 此函数现也从 GUI 线程的 Q_INVOKABLE（toggleTag）调用：yaml-cpp 操作非 noexcept，
-  // 逃逸异常 = std::terminate，故全程 try/catch。写临时文件再原子重命名，崩溃/失败绝不截断真文件。
+  if (error) { error->clear(); }
+  const auto fail = [&](const std::string & detail) {
+      if (error) { *error = "Failed to save " + record.directory + "/session.yaml: " + detail; }
+      return false;
+    };
   try {
     YAML::Node root;
     root["session"] = record.session_id;
@@ -63,24 +70,20 @@ bool SessionManager::write_session_yaml(const SessionRecord & record) const
       root["annotations"].push_back(n);
     }
 
+    // Serialize before opening the destination so YAML errors cannot truncate it.
+    const std::string contents = YAML::Dump(root);
     const fs::path path = fs::path(record.directory) / "session.yaml";
-    const fs::path tmp_path = fs::path(record.directory) / "session.yaml.tmp";
-    {
-      std::ofstream out(tmp_path);
-      if (!out.is_open()) { return false; }
-      out << root;
-      out.flush();
-      if (out.fail()) { return false; }
-    }  // close before rename
-    std::error_code ec;
-    fs::rename(tmp_path, path, ec);
-    if (ec) {
-      fs::remove(tmp_path, ec);  // 清理临时文件，忽略二次错误
-      return false;
-    }
+    std::ofstream out(path, std::ios::out | std::ios::trunc);
+    if (!out.is_open()) { return fail("could not open file for writing"); }
+    out << contents;
+    if (out.fail()) { return fail("write failed"); }
+    out.flush();
+    if (out.fail()) { return fail("flush failed"); }
+    out.close();
+    if (out.fail()) { return fail("close failed"); }
     return true;
-  } catch (const std::exception &) {
-    return false;
+  } catch (const std::exception & e) {
+    return fail(e.what());
   }
 }
 

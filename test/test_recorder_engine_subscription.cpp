@@ -1,10 +1,12 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -18,10 +20,41 @@
 #include "data_recorder/live_bridge.hpp"
 #include "data_recorder/path_utils.hpp"
 #include "data_recorder/recorder_engine.hpp"
+#include "data_recorder/rosbag2_compat.hpp"
 #include "data_recorder/session_manager.hpp"
 
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
+
+namespace data_recorder
+{
+
+class RecorderEngineTestAccess
+{
+public:
+  static std::mutex & rate_mutex(RecorderEngine & engine) { return engine.rate_mutex_; }
+
+  static std::shared_ptr<const void> current_session(RecorderEngine & engine)
+  {
+    return engine.accepting_session();
+  }
+
+  static void deliver_string(
+    RecorderEngine & engine, const std::string & topic, bool transient_local,
+    const std::shared_ptr<rclcpp::SerializedMessage> & message)
+  {
+    engine.on_rosbag_message(topic, "std_msgs/msg/String", transient_local, message);
+  }
+
+  static std::size_t received_message_count(RecorderEngine & engine, const std::string & topic)
+  {
+    std::lock_guard<std::mutex> lock(engine.series_mutex_);
+    const auto it = engine.series_.find(topic);
+    return it == engine.series_.end() ? 0u : it->second.message_times(100).size();
+  }
+};
+
+}  // namespace data_recorder
 
 namespace
 {
@@ -80,6 +113,82 @@ protected:
   fs::path test_dir_;
 };
 
+class RecorderEngineSessionBoundaryTest
+  : public RecorderEngineImageBackendTest, public ::testing::WithParamInterface<bool>
+{};
+
+// Release the callback and join it even when a fatal assertion returns from the test.
+class BlockedRosbagCallback
+{
+public:
+  BlockedRosbagCallback(
+    data_recorder::RecorderEngine & engine, const std::string & topic, bool transient_local,
+    const std::shared_ptr<rclcpp::SerializedMessage> & message)
+  : gate_(data_recorder::RecorderEngineTestAccess::rate_mutex(engine)),
+    session_(data_recorder::RecorderEngineTestAccess::current_session(engine)),
+    worker_([this, &engine, topic, transient_local, message]() {
+      try {
+        data_recorder::RecorderEngineTestAccess::deliver_string(
+          engine, topic, transient_local, message);
+      } catch (...) {
+        error_ = std::current_exception();
+      }
+    })
+  {}
+
+  ~BlockedRosbagCallback() { release(); }
+
+  bool wait_until_session_captured()
+  {
+    const auto deadline = std::chrono::steady_clock::now() + 5s;
+    while (std::chrono::steady_clock::now() < deadline) {
+      // The engine and this guard hold two references; the callback takes the third.
+      if (session_.use_count() >= 3) { return true; }
+      std::this_thread::sleep_for(1ms);
+    }
+    return false;
+  }
+
+  void release()
+  {
+    if (gate_.owns_lock()) { gate_.unlock(); }
+    if (worker_.joinable()) { worker_.join(); }
+  }
+
+  std::exception_ptr error() const { return error_; }
+
+private:
+  std::unique_lock<std::mutex> gate_;
+  std::shared_ptr<const void> session_;
+  std::exception_ptr error_;
+  std::thread worker_;
+};
+
+struct StringBagReadback
+{
+  std::vector<rosbag2_storage::TopicMetadata> topics;
+  std::vector<std::string> messages;
+  std::vector<int64_t> timestamps;
+};
+
+StringBagReadback read_string_bag(const data_recorder::SessionRecord & record)
+{
+  rosbag2_cpp::Reader reader;
+  reader.open((fs::path(record.directory) / "rosbag").string());
+  StringBagReadback result;
+  result.topics = reader.get_all_topics_and_types();
+  rclcpp::Serialization<std_msgs::msg::String> serializer;
+  while (reader.has_next()) {
+    const auto bag_message = reader.read_next();
+    rclcpp::SerializedMessage serialized(*bag_message->serialized_data);
+    std_msgs::msg::String message;
+    serializer.deserialize_message(&serialized, &message);
+    result.messages.push_back(message.data);
+    result.timestamps.push_back(data_recorder::rosbag2_compat::message_timestamp(*bag_message));
+  }
+  return result;
+}
+
 }  // namespace
 
 TEST_F(RecorderEngineImageBackendTest, RosbagImagesKeepPreviewAndOriginalMessagesInMixedSession)
@@ -125,7 +234,7 @@ TEST_F(RecorderEngineImageBackendTest, RosbagImagesKeepPreviewAndOriginalMessage
   EXPECT_EQ(bridge.latest_frame(raw_key)->width(), 64);
   EXPECT_EQ(bridge.latest_frame(raw_key)->height(), 48);
 
-  ASSERT_FALSE(engine.start_session().empty());
+  ASSERT_TRUE(engine.start_session().success());
   std::vector<sensor_msgs::msg::Image> expected_images;
   for (const uint8_t fill : {uint8_t{30}, uint8_t{60}, uint8_t{90}}) {
     auto image = make_test_image(fill);
@@ -139,7 +248,9 @@ TEST_F(RecorderEngineImageBackendTest, RosbagImagesKeepPreviewAndOriginalMessage
              raw_preview->constBits()[0] == fill && video_preview->constBits()[0] == fill;
     })) << "Both image backends must update their camera previews while recording";
   }
-  const auto record = engine.stop_session({}, {});
+  const auto finish = engine.stop_session();
+  ASSERT_TRUE(finish.success());
+  const auto & record = finish.record;
   ASSERT_FALSE(record.directory.empty());
   ASSERT_EQ(record.topics.size(), 2u);
   EXPECT_EQ(record.topics[0].name, raw_topic);
@@ -378,14 +489,16 @@ TEST(RecorderEngineSubscription, RecordsTransientLocalSampleConsumedBeforeSessio
     std::this_thread::sleep_for(10ms);
   }
 
-  const std::string session_id = engine.start_session();
-  ASSERT_FALSE(session_id.empty());
+  const auto start = engine.start_session();
+  ASSERT_TRUE(start.success());
   // 开录后故意不再 publish。
   const auto record_deadline = std::chrono::steady_clock::now() + 300ms;
   while (std::chrono::steady_clock::now() < record_deadline) {
     executor.spin_some(50ms);
   }
-  const auto record = engine.stop_session({}, {});
+  const auto finish = engine.stop_session();
+  ASSERT_TRUE(finish.success());
+  const auto & record = finish.record;
   ASSERT_FALSE(record.directory.empty());
 
   rosbag2_cpp::Reader reader;
@@ -404,4 +517,108 @@ TEST(RecorderEngineSubscription, RecordsTransientLocalSampleConsumedBeforeSessio
   executor.remove_node(pub_node);
   rclcpp::shutdown();
   fs::remove_all(output_dir, ec);
+}
+
+TEST_P(RecorderEngineSessionBoundaryTest, DelayedCallbackRespectsDurabilityAcrossSessions)
+{
+  const bool transient_local = GetParam();
+  const std::string topic = "/dr_test_session_boundary";
+  data_recorder::ConfigData config;
+  config.output_dir = (test_dir_ / "recordings").string();
+  data_recorder::TopicEntry entry;
+  entry.topic_name = topic;
+  entry.backend_name = "rosbag";
+  config.topics.push_back(entry);
+
+  auto node = std::make_shared<rclcpp::Node>("dr_test_session_boundary_recorder");
+  data_recorder::SessionManager session_manager;
+  data_recorder::RecorderEngine engine(node, config, nullptr, &session_manager);
+  ASSERT_TRUE(engine.start_session().success());
+
+  std_msgs::msg::String message;
+  message.data = "received before the session boundary";
+  auto serialized = std::make_shared<rclcpp::SerializedMessage>();
+  rclcpp::Serialization<std_msgs::msg::String>().serialize_message(&message, serialized.get());
+  BlockedRosbagCallback callback(engine, topic, transient_local, serialized);
+  ASSERT_TRUE(callback.wait_until_session_captured())
+    << "The callback must capture session A before it is stopped";
+
+  const auto first = engine.stop_session();
+  ASSERT_TRUE(first.success());
+  ASSERT_TRUE(engine.start_session().success());
+  callback.release();
+  ASSERT_FALSE(callback.error());
+  const auto second = engine.stop_session();
+  ASSERT_TRUE(second.success());
+  ASSERT_TRUE(engine.start_session().success());
+  const auto third = engine.stop_session();
+  ASSERT_TRUE(third.success());
+
+  EXPECT_TRUE(read_string_bag(first.record).messages.empty());
+  for (const auto & finish : {second, third}) {
+    const auto bag = read_string_bag(finish.record);
+    if (transient_local) {
+      ASSERT_EQ(bag.messages.size(), 1u)
+        << "Both the active session and the next session need the persistent sample";
+      EXPECT_EQ(bag.messages.front(), message.data);
+      EXPECT_GE(bag.timestamps.front(), finish.record.ros_time_ns)
+        << "A delayed persistent sample must not precede its destination session";
+    } else {
+      EXPECT_TRUE(bag.messages.empty())
+        << "A volatile callback captured by session A must not enter a later session";
+    }
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+  Durability, RecorderEngineSessionBoundaryTest, ::testing::Bool(),
+  [](const ::testing::TestParamInfo<bool> & info) {
+    return info.param ? "TransientLocal" : "Volatile";
+  });
+
+TEST_F(RecorderEngineImageBackendTest, LateRosbagPublisherRegistersFirstMessageAndPreservesQos)
+{
+  const std::string topic = "/dr_test_publisher_after_recording";
+  data_recorder::ConfigData config;
+  config.output_dir = (test_dir_ / "recordings").string();
+  data_recorder::TopicEntry entry;
+  entry.topic_name = topic;
+  entry.backend_name = "rosbag";
+  config.topics.push_back(entry);
+
+  auto node = std::make_shared<rclcpp::Node>("dr_test_late_recording_recorder");
+  data_recorder::SessionManager session_manager;
+  data_recorder::RecorderEngine engine(node, config, nullptr, &session_manager);
+  ASSERT_TRUE(engine.start_session().success());
+
+  // This topic cannot be registered at start_session(): its publisher does not exist yet.
+  auto pub_node = std::make_shared<rclcpp::Node>("dr_test_late_recording_publisher");
+  auto publisher = pub_node->create_publisher<std_msgs::msg::String>(
+    topic, rclcpp::QoS(7).reliable().transient_local());
+  rclcpp::executors::SingleThreadedExecutor executor;
+  executor.add_node(node);
+  executor.add_node(pub_node);
+  ASSERT_TRUE(spin_until(executor, [&]() { return publisher->get_subscription_count() > 0; }));
+
+  const std::vector<std::string> expected = {"first message", "second message", "third message"};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    std_msgs::msg::String message;
+    message.data = expected[i];
+    publisher->publish(message);
+    ASSERT_TRUE(spin_until(executor, [&]() {
+      return data_recorder::RecorderEngineTestAccess::received_message_count(engine, topic) == i + 1;
+    })) << "Each published message must finish its subscription callback before stopping";
+  }
+
+  const auto finish = engine.stop_session();
+  ASSERT_TRUE(finish.success());
+  const auto bag = read_string_bag(finish.record);
+  EXPECT_EQ(bag.messages, expected);
+  ASSERT_EQ(bag.topics.size(), 1u);
+  EXPECT_EQ(bag.topics.front().name, topic);
+  EXPECT_EQ(bag.topics.front().type, "std_msgs/msg/String");
+  const auto profiles = data_recorder::rosbag2_compat::topic_qos_profiles(bag.topics.front());
+  ASSERT_EQ(profiles.size(), 1u);
+  EXPECT_EQ(profiles.front().reliability(), rclcpp::ReliabilityPolicy::Reliable);
+  EXPECT_EQ(profiles.front().durability(), rclcpp::DurabilityPolicy::TransientLocal);
 }

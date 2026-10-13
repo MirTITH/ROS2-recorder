@@ -99,6 +99,8 @@ int main(int argc, char ** argv)
     }
   });
   ros_shutdown_timer.start(100);
+  QObject::connect(&app, &QCoreApplication::aboutToQuit,
+    &controller, &data_recorder::AppController::shutdownRecording);
 
   const auto package_share =
     QString::fromStdString(ament_index_cpp::get_package_share_directory("data_recorder"));
@@ -118,7 +120,8 @@ int main(int argc, char ** argv)
 
   const int result = app.exec();
 
-  // 干净退出：停 spin、join、shutdown
+  // 先关闭写入准入并唤醒阻塞回调，再等待 ROS spin 线程退出。
+  controller.shutdownRecording();
   spin_running.store(false);
   if (spin_thread.joinable()) {
     spin_thread.join();

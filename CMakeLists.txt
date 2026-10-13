@@ -224,6 +224,12 @@ if(BUILD_TESTING)
   ament_add_gtest(test_recorder_engine_subscription test/test_recorder_engine_subscription.cpp)
   target_link_libraries(test_recorder_engine_subscription data_recorder_core)
   ament_target_dependencies(test_recorder_engine_subscription rclcpp rosbag2_cpp std_msgs)
+
+  ament_add_gtest(test_recording_lifecycle test/test_recording_lifecycle.cpp
+    ENV "QT_QPA_PLATFORM=offscreen"
+  )
+  target_link_libraries(test_recording_lifecycle data_recorder_core Qt6::Widgets Qt6::Test)
+  ament_target_dependencies(test_recording_lifecycle rclcpp rosbag2_cpp sensor_msgs std_msgs)
 endif()
 
 ament_package()

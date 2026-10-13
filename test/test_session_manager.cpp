@@ -43,9 +43,12 @@ TEST(SessionManager, WritesAndReadsBackSessionYaml)
   data_recorder::SessionManager mgr;
   auto record = make_record("2026-06-22_14-30-05");
   record.directory = (tmp / "2026-06-22_14-30-05").string();
-  mgr.write_session_yaml(record);
+  std::string error = "previous error";
+  ASSERT_TRUE(mgr.write_session_yaml(record, &error));
+  EXPECT_TRUE(error.empty());
 
   ASSERT_TRUE(fs::exists(tmp / "2026-06-22_14-30-05" / "session.yaml"));
+  EXPECT_FALSE(fs::exists(tmp / "2026-06-22_14-30-05" / "session.yaml.tmp"));
 
   auto sessions = mgr.scan(tmp.string());
   ASSERT_EQ(sessions.size(), 1u);
@@ -160,8 +163,10 @@ TEST(SessionManager, CreateSessionDirectoryMakesTimestampedSubdir)
   data_recorder::SessionManager mgr;
   const std::string dir = mgr.create_session_directory(tmp.string(), "2026-06-22_15-00-00");
   EXPECT_TRUE(fs::exists(dir));
-  EXPECT_TRUE(fs::exists(fs::path(dir) / "rosbag") || true);  // rosbag 子目录由 writer 建，这里不强求
   EXPECT_NE(dir.find("2026-06-22_15-00-00"), std::string::npos);
+  EXPECT_TRUE(fs::path(dir).is_absolute());
+  EXPECT_THROW(
+    mgr.create_session_directory(tmp.string(), "2026-06-22_15-00-00"), fs::filesystem_error);
 
   fs::remove_all(tmp);
 }
@@ -175,11 +180,12 @@ TEST(SessionManager, RewriteWithNewTagsPreservesOtherFields)
   data_recorder::SessionManager mgr;
   auto record = make_record("2026-06-30_10-00-00");
   record.directory = (tmp / "2026-06-30_10-00-00").string();
-  mgr.write_session_yaml(record);
+  ASSERT_TRUE(mgr.write_session_yaml(record));
 
   // 改 tags 后重写。
   record.tags = {{"成功", "#2f9e44"}, {"力控", "#7c4dff"}};
-  mgr.write_session_yaml(record);
+  ASSERT_TRUE(mgr.write_session_yaml(record));
+  EXPECT_FALSE(fs::exists(fs::path(record.directory) / "session.yaml.tmp"));
 
   auto sessions = mgr.scan(tmp.string());
   ASSERT_EQ(sessions.size(), 1u);
@@ -201,6 +207,46 @@ TEST(SessionManager, WriteToMissingDirectoryReturnsFalseNoThrow)
   auto record = make_record("2026-06-30_11-00-00");
   record.directory = "/nonexistent_dir_xyz/2026-06-30_11-00-00";  // 不存在的目录
   bool ok = true;
-  EXPECT_NO_THROW({ ok = mgr.write_session_yaml(record); });
+  std::string error;
+  EXPECT_NO_THROW({ ok = mgr.write_session_yaml(record, &error); });
   EXPECT_FALSE(ok);
+  EXPECT_NE(error.find(record.directory + "/session.yaml"), std::string::npos);
+}
+
+TEST(SessionManager, WriteWhenOutputPathIsFileReturnsError)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_session_test_output_file";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  const fs::path output = tmp / "output";
+  std::ofstream(output) << "existing file";
+
+  data_recorder::SessionManager mgr;
+  auto record = make_record("session");
+  record.directory = output.string();
+  std::string error;
+  EXPECT_FALSE(mgr.write_session_yaml(record, &error));
+  EXPECT_NE(error.find((output / "session.yaml").string()), std::string::npos);
+  EXPECT_TRUE(fs::is_regular_file(output));
+  EXPECT_THROW(mgr.create_session_directory(output.string(), "session"), fs::filesystem_error);
+
+  fs::remove_all(tmp);
+}
+
+TEST(SessionManager, WriteWhenDestinationIsDirectoryReturnsError)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_session_test_yaml_directory";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp / "session.yaml");
+
+  data_recorder::SessionManager mgr;
+  auto record = make_record("session");
+  record.directory = tmp.string();
+  std::string error;
+  EXPECT_FALSE(mgr.write_session_yaml(record, &error));
+  EXPECT_NE(error.find((tmp / "session.yaml").string()), std::string::npos);
+  EXPECT_TRUE(fs::is_directory(tmp / "session.yaml"));
+  EXPECT_FALSE(fs::exists(tmp / "session.yaml.tmp"));
+
+  fs::remove_all(tmp);
 }

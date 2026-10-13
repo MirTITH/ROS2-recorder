@@ -10,6 +10,8 @@ namespace rosbag2_cpp { class Writer; }
 namespace data_recorder
 {
 
+struct RosbagMetadataWriteStatus;
+
 // 包 rosbag2_cpp::Writer：默认存储（mcap 若可用，否则回退）；产物可被 ros2 bag 读取。
 // 非线程安全——由单个 worker 线程使用。
 class RosbagWriter
@@ -17,13 +19,14 @@ class RosbagWriter
 public:
   // storage_id 空 → 用 rosbag2_storage::get_default_storage_id()，但优先 mcap（若已注册）。
   RosbagWriter(const std::string & bag_dir, const std::string & storage_id);
-  ~RosbagWriter();
+  ~RosbagWriter() noexcept;
 
   RosbagWriter(const RosbagWriter &) = delete;
   RosbagWriter & operator=(const RosbagWriter &) = delete;
 
   bool is_open() const { return open_; }
   const std::string & storage_id() const { return resolved_storage_id_; }
+  const std::string & error_message() const { return error_message_; }
 
   void add_topic(
     const std::string & name, const std::string & type,
@@ -32,11 +35,18 @@ public:
   void write(
     const std::string & topic, const rclcpp::SerializedMessage & msg, int64_t time_stamp_ns);
 
-  void close();
+  // 显式关闭并写 metadata；首次失败保留，重复关闭返回同一结果。
+  bool close();
 
 private:
+  void record_error(const std::string & operation, const std::string & detail);
+  void require_open();
+
   std::unique_ptr<rosbag2_cpp::Writer> writer_;
+  std::shared_ptr<RosbagMetadataWriteStatus> metadata_status_;
+  std::string bag_dir_;
   std::string resolved_storage_id_;
+  std::string error_message_;
   bool open_{false};
 };
 

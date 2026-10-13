@@ -69,4 +69,19 @@ struct SessionRecord
   std::vector<AnnotationRecord> annotations;
 };
 
+struct SessionStartResult
+{
+  std::string session_id;
+  std::string error;
+  bool success() const { return !session_id.empty() && error.empty(); }
+};
+
+struct SessionFinishResult
+{
+  SessionRecord record;
+  bool metadata_saved{false};
+  std::vector<std::string> errors;
+  bool success() const { return metadata_saved && errors.empty(); }
+};
+
 }  // namespace data_recorder

@@ -179,7 +179,8 @@ TEST(VideoRecorder, UnsupportedEncodingFailsToOpenGracefully)
   f.data.assign(64 * 48 * 3, 0);
   const bool encoded = rec.encode(f);
   EXPECT_FALSE(encoded);  // 跳过，不崩溃
-  rec.close();
+  EXPECT_TRUE(rec.error_message().empty());
+  EXPECT_TRUE(rec.close());
 
   fs::remove_all(tmp);
 }
@@ -303,8 +304,127 @@ TEST(VideoRecorder, BogusCodecFailsToOpenAndDestructsCleanly)
     data_recorder::VideoRecorder rec(
       (tmp / "x.mp4").string(), (tmp / "x.csv").string(), 64, 48, params);
     EXPECT_FALSE(rec.is_open());
+    ASSERT_FALSE(rec.error_message().empty());
+    const auto error = rec.error_message();
+    EXPECT_FALSE(rec.close());
+    EXPECT_FALSE(rec.close());
+    EXPECT_EQ(rec.error_message(), error);
   }  // 离开作用域 → 析构 → close()；header 未写，不应崩溃
 
+  fs::remove_all(tmp);
+}
+
+TEST(VideoRecorder, MissingVideoDirectoryReportsInitializationFailure)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_missing_directory";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  {
+    data_recorder::VideoRecorder rec(
+      (tmp / "missing" / "cam.mp4").string(), (tmp / "cam.csv").string(), 64, 48, {});
+    EXPECT_FALSE(rec.is_open());
+    ASSERT_FALSE(rec.error_message().empty());
+    const auto error = rec.error_message();
+    EXPECT_FALSE(rec.close());
+    EXPECT_FALSE(rec.close());
+    EXPECT_EQ(rec.error_message(), error);
+  }
+  fs::remove_all(tmp);
+}
+
+TEST(VideoRecorder, CsvOpenFailureDoesNotPreventVideoFinalization)
+{
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_csv_failure";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp / "cam.csv");  // CSV 目标被目录占用。
+  const std::string mp4 = (tmp / "cam.mp4").string();
+  {
+    data_recorder::VideoRecorder rec(mp4, (tmp / "cam.csv").string(), 64, 48, {});
+    ASSERT_TRUE(rec.is_open()) << rec.error_message();
+    ASSERT_TRUE(rec.encode(make_bgr8_frame(64, 48, 0, 10)));
+    EXPECT_FALSE(rec.close());
+    EXPECT_FALSE(rec.is_open());
+    ASSERT_FALSE(rec.error_message().empty());
+    EXPECT_NE(rec.error_message().find("CSV"), std::string::npos);
+    const auto error = rec.error_message();
+    EXPECT_FALSE(rec.close());
+    EXPECT_EQ(rec.error_message(), error);
+  }
+  EXPECT_EQ(video_pixel_format(mp4), AV_PIX_FMT_YUV420P);
+  fs::remove_all(tmp);
+}
+
+TEST(VideoRecorder, BufferedCsvDiskFailureIsReported)
+{
+  if (!fs::exists("/dev/full")) { GTEST_SKIP() << "requires /dev/full"; }
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_csv_disk_full";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  {
+    data_recorder::VideoRecorder rec(
+      (tmp / "cam.mp4").string(), "/dev/full", 64, 48, {});
+    ASSERT_TRUE(rec.is_open()) << rec.error_message();
+    ASSERT_TRUE(rec.encode(make_bgr8_frame(64, 48, 0, 10)));
+    EXPECT_FALSE(rec.close());
+    EXPECT_NE(rec.error_message().find("CSV"), std::string::npos);
+    const auto error = rec.error_message();
+    EXPECT_FALSE(rec.close());
+    EXPECT_EQ(rec.error_message(), error);
+  }
+  fs::remove_all(tmp);
+}
+
+TEST(VideoRecorder, BufferedVideoDiskFailureIsReportedAtClose)
+{
+  if (!fs::exists("/dev/full")) { GTEST_SKIP() << "requires /dev/full"; }
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_disk_full_close";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  {
+    data_recorder::VideoParams params;
+    params.container = "mpegts";  // header 在首包时输出，初始化可成功。
+    data_recorder::VideoRecorder rec("/dev/full", (tmp / "cam.csv").string(), 64, 48, params);
+    ASSERT_TRUE(rec.is_open()) << rec.error_message();
+    ASSERT_TRUE(rec.encode(make_bgr8_frame(64, 48, 0, 10)));
+    EXPECT_FALSE(rec.close());
+    ASSERT_FALSE(rec.error_message().empty());
+    const auto error = rec.error_message();
+    EXPECT_FALSE(rec.close());
+    EXPECT_EQ(rec.error_message(), error);
+    EXPECT_TRUE(fs::exists(tmp / "cam.csv"));
+  }
+  fs::remove_all(tmp);
+}
+
+TEST(VideoRecorder, VideoPacketDiskFailureRejectsFurtherEncoding)
+{
+  if (!fs::exists("/dev/full")) { GTEST_SKIP() << "requires /dev/full"; }
+  const fs::path tmp = fs::temp_directory_path() / "dr_video_test_disk_full_encode";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  {
+    data_recorder::VideoParams params;
+    params.container = "mpegts";
+    params.preset = "ultrafast";
+    params.crf = 0;
+    data_recorder::VideoRecorder rec("/dev/full", (tmp / "cam.csv").string(), 160, 120, params);
+    ASSERT_TRUE(rec.is_open()) << rec.error_message();
+    uint32_t random_state = 1;
+    for (int i = 0; i < 30 && rec.error_message().empty(); ++i) {
+      auto frame = make_bgr8_frame(160, 120, i * 33'333'333LL, 0);
+      for (auto & pixel : frame.data) {
+        random_state = random_state * 1664525u + 1013904223u;
+        pixel = static_cast<uint8_t>(random_state >> 24);
+      }
+      rec.encode(frame);
+    }
+    ASSERT_FALSE(rec.error_message().empty());
+    const auto error = rec.error_message();
+    EXPECT_FALSE(rec.encode(make_bgr8_frame(160, 120, 1'000'000'000LL, 0)));
+    EXPECT_FALSE(rec.close());
+    EXPECT_FALSE(rec.close());
+    EXPECT_EQ(rec.error_message(), error);
+  }
   fs::remove_all(tmp);
 }
 

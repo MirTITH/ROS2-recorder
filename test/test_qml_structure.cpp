@@ -427,7 +427,7 @@ TEST(RecorderEngineStructure, LiveCurveBufferKeepsFullRecordingSpan)
   expect_contains(engine, "kLiveCurveBufferMaxPoints");
   expect_contains(engine, "std::numeric_limits<std::size_t>::max()");
   expect_contains(engine, "series_.try_emplace(topic, kLiveCurveBufferMaxPoints)");
-  expect_contains(engine, "if (!recording_.load()) { return; }");
+  expect_contains(engine, "if (!session || !session->accepting.load()) { return; }");
   expect_not_contains(engine, "auto & buffer = series_[topic];");
 }
 
@@ -437,7 +437,7 @@ TEST(RecorderEngineStructure, LiveCurveSamplesUsePerMessageTime)
 
   expect_contains(engine, "#include \"data_recorder/recording_time.hpp\"");
   expect_contains(engine, "const int64_t now_steady_ns = steady_now_ns();");
-  expect_contains(engine, "const double t_seconds = relative_seconds(now_steady_ns, record_start_steady_ns_.load());");
+  expect_contains(engine, "const double t_seconds = relative_seconds(now_steady_ns, session->start_steady_ns);");
   expect_not_contains(engine, "const double t_seconds = live_edge_seconds_.load();");
 }
 

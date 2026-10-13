@@ -83,6 +83,8 @@ public:
   RecordingSessionModel * recordingSessionModel();
 
   Q_INVOKABLE void toggleRecording();
+  Q_INVOKABLE void stopRecording();
+  void shutdownRecording();
   Q_INVOKABLE void togglePlayback();
   Q_INVOKABLE void selectOnlineData();
   Q_INVOKABLE void selectHistorySession(int row);
@@ -125,6 +127,7 @@ signals:
   void diskSpaceLowChanged();
 
 private:
+  void syncSessionMetadata();
   void refreshVisibleCameraCount();
   QString statusTextForCurrentState() const;
   void refreshStatusText();
@@ -150,6 +153,9 @@ private:
   QString output_directory_;
   QString status_text_{"实时查看"};
   bool recording_{false};
+  bool stopping_{false};
+  bool shutting_down_{false};
+  QString save_error_;
   bool history_mode_{false};
   int selected_session_row_{-1};
   double playhead_seconds_{0.0};
@@ -163,6 +169,7 @@ private:
   EventMarkerModel event_marker_model_;
   RecordingSessionModel recording_session_model_;
   QTimer disk_timer_;
+  QTimer recording_error_timer_;
   QString disk_space_text_{"磁盘 -- / --"};
   bool disk_space_low_{false};
 };

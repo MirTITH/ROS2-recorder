@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <stdexcept>
 #include <sstream>
 
 #include <rclcpp/serialization.hpp>
@@ -80,6 +81,17 @@ rclcpp::QoS subscription_qos(const QosConfig & config)
   }
   return qos;
 }
+
+std::string offered_qos_for_node(rclcpp::Node & node, const std::string & topic)
+{
+  const auto endpoints = node.get_publishers_info_by_topic(topic);
+  if (endpoints.empty()) { return ""; }
+  std::vector<rclcpp::QoS> profiles;
+  for (const auto & ep : endpoints) {
+    profiles.emplace_back(ep.qos_profile());
+  }
+  return rosbag2_compat::serialize_qos_profiles(profiles);
+}
 }  // namespace
 
 RecorderEngine::RecorderEngine(
@@ -114,9 +126,10 @@ RecorderEngine::RecorderEngine(
   // 还能捕获录制开始后才启动/重启的发布者。
   resubscribe_timer_ = node_->create_wall_timer(500ms, [this]() { try_subscribe_pending(); });
 
-  record_start_steady_ns_.store(steady_now_ns());
   live_edge_timer_ = node_->create_wall_timer(33ms, [this]() {
-    const double seconds = relative_seconds(steady_now_ns(), record_start_steady_ns_.load());
+    std::lock_guard<std::mutex> lock(session_mutex_);
+    if (!active_session_ || !active_session_->accepting.load()) { return; }
+    const double seconds = relative_seconds(steady_now_ns(), active_session_->start_steady_ns);
     live_edge_seconds_.store(seconds);
     if (bridge_) { bridge_->set_live_edge(seconds); }
   });
@@ -153,20 +166,18 @@ RecorderEngine::RecorderEngine(
 
 RecorderEngine::~RecorderEngine()
 {
-  if (recording_.load()) {
-    stop_session({}, {});
+  // Controller/main 正常退出时显式停录；这里只用已同步的内存快照兜底。
+  try { stop_session(); }
+  catch (const std::exception & error) {
+    std::cerr << "[RecorderEngine] 退出收尾失败: " << error.what() << "\n";
+  } catch (...) {
+    std::cerr << "[RecorderEngine] 退出收尾失败\n";
   }
 }
 
 std::string RecorderEngine::offered_qos_for(const std::string & topic) const
 {
-  const auto endpoints = node_->get_publishers_info_by_topic(topic);
-  if (endpoints.empty()) { return ""; }
-  std::vector<rclcpp::QoS> profiles;
-  for (const auto & ep : endpoints) {
-    profiles.emplace_back(ep.qos_profile());
-  }
-  return rosbag2_compat::serialize_qos_profiles(profiles);
+  return offered_qos_for_node(*node_, topic);
 }
 
 void RecorderEngine::setup_subscriptions()
@@ -275,6 +286,7 @@ void RecorderEngine::on_rosbag_message(
   const std::string & topic, const std::string & type,
   bool transient_local, std::shared_ptr<rclcpp::SerializedMessage> msg)
 {
+  auto initial_session = accepting_session();
   const int64_t now_ns = node_->now().nanoseconds();
   const int64_t now_steady_ns = steady_now_ns();
   {
@@ -299,9 +311,9 @@ void RecorderEngine::on_rosbag_message(
 
   // /tf_static 等 TRANSIENT_LOCAL 话题通常只发布一次。长期订阅会在开录前就消费 DDS
   // 回放的历史样本，因此缓存最近的消息，供每个新会话写入。
-  // should_record 必须在缓存锁内取值：它与 start_session 的“写缓存 + 开录”临界区配合，
-  // 避免边界上的消息既漏录又重复录制。
-  bool should_record = recording_.load();
+  // 在缓存锁内选择当前会话：若新会话已读取缓存，当前样本由回调补写；否则它会在
+  // 开录时从缓存写入。持久状态可以跨会话补写，普通消息仍只使用回调开始时的会话。
+  auto session = transient_local ? std::shared_ptr<ActiveSession>() : initial_session;
   if (transient_local) {
     std::lock_guard<std::mutex> lock(transient_cache_mutex_);
     auto & cached_messages = transient_cache_[topic];
@@ -310,17 +322,18 @@ void RecorderEngine::on_rosbag_message(
       cached_messages.pop_front();
     }
     cached_messages.push_back({type, std::make_shared<rclcpp::SerializedMessage>(*msg)});
-    should_record = recording_.load();
+    session = accepting_session();
   }
 
-  if (!should_record) { return; }
+  if (!session || !session->accepting.load()) { return; }
 
   // 数值曲线：录制中记折叠点；可绘制类型则反序列化提取标量。用每条消息到达时的
   // steady-clock 相对时间做 x 轴，避免高频 topic 共用 33ms live-edge timer 时间而画出竖线尖峰。
   // 这里不能使用 TopicSeries 默认 20000 点环形缓冲，否则高频 topic 在几分钟内就会只剩尾部。
-  const double t_seconds = relative_seconds(now_steady_ns, record_start_steady_ns_.load());
+  const double t_seconds = relative_seconds(now_steady_ns, session->start_steady_ns);
   {
     std::lock_guard<std::mutex> lock(series_mutex_);
+    if (!session->accepting.load()) { return; }
     auto [buffer_it, inserted] = series_.try_emplace(topic, kLiveCurveBufferMaxPoints);
     (void)inserted;
     auto & buffer = buffer_it->second;
@@ -333,46 +346,26 @@ void RecorderEngine::on_rosbag_message(
     }
   }
 
-  if (!recording_.load()) { return; }
-
-  // 在锁内只取 queue/writer 的 shared_ptr 本地副本，随即释放 session_mutex_，
-  // 再做可能阻塞的 push（Block 背压满时会等 space_cv_）。这样即便 writer 卡住，
-  // stop_session 仍能拿到 session_mutex_ 调 rosbag_queue_->stop() 解除阻塞。
-  // 本地副本保活 queue/writer 直到本次 push 返回；任务闭包另持 writer 副本，
-  // 保证 worker 线程执行 write 时 writer 仍存活。
-  std::shared_ptr<WriterQueue<std::function<void()>>> queue;
-  std::shared_ptr<RosbagWriter> writer;
-  bool need_register = false;
-  {
-    std::lock_guard<std::mutex> lock(session_mutex_);
-    queue = rosbag_queue_;
-    writer = rosbag_writer_;
-    // 录制中补订的话题，start_session 没 add_topic 过：首帧时补登记（防重复，故用 insert 的返回值）。
-    if (queue && writer) { need_register = registered_topics_.insert(topic).second; }
-  }
-  if (queue && writer) {
-    // 首次见到该话题：把 add_topic 任务排在 write 之前入队。队列是单 worker FIFO，
-    // 既保证 rosbag2 要求的 create-before-write，又让所有 writer 调用都在该 worker 线程上串行。
-    if (need_register) {
-      const std::string topic_reg = topic;
-      const std::string type_reg = type;
-      const std::string qos_reg = offered_qos_for(topic);
-      queue->push([writer, topic_reg, type_reg, qos_reg]() {
-        writer->add_topic(topic_reg, type_reg, qos_reg);
-      });
+  if (!session->accepting.load()) { return; }
+  const auto writer = session->rosbag_writer;
+  const auto queue = session->rosbag_queue;
+  const auto serialized = std::make_shared<rclcpp::SerializedMessage>(*msg);
+  const int64_t bag_stamp_ns = transient_local ? std::max(now_ns, session->record.ros_time_ns) : now_ns;
+  // 任务只保留本会话的 writer 和登记集合。不会在停录后查找下一会话的资源。
+  auto * registered = &session->registered_topics;
+  queue->push([writer, registered, node = node_, topic, type, serialized, bag_stamp_ns]() {
+    // 只有首次登记才查询 ROS graph 并序列化 QoS，避免占用每条消息的订阅回调时间。
+    if (registered->insert(topic).second) {
+      writer->add_topic(topic, type, offered_qos_for_node(*node, topic));
     }
-    // 拷贝序列化消息进闭包（生命周期安全），入队到 writer 线程。
-    auto serialized = std::make_shared<rclcpp::SerializedMessage>(*msg);
-    const std::string topic_copy = topic;
-    queue->push([writer, topic_copy, serialized, now_ns]() {
-      writer->write(topic_copy, *serialized, now_ns);
-    });
-  }
+    writer->write(topic, *serialized, bag_stamp_ns);
+  });
 }
 
 void RecorderEngine::on_image_message(
   const std::string & topic, sensor_msgs::msg::Image::ConstSharedPtr msg)
 {
+  const auto session = accepting_session();
   const int64_t header_ns =
     static_cast<int64_t>(msg->header.stamp.sec) * 1'000'000'000LL + msg->header.stamp.nanosec;
   const int64_t now_ns = node_->now().nanoseconds();
@@ -384,10 +377,9 @@ void RecorderEngine::on_image_message(
   }
   update_image_preview(topic, *msg);
 
-  if (!recording_.load()) { return; }
-  std::lock_guard<std::mutex> lock(session_mutex_);
-  auto sit = video_sinks_.find(topic);
-  if (sit != video_sinks_.end() && sit->second && sit->second->queue) {
+  if (!session || !session->accepting.load()) { return; }
+  auto sit = session->video_sinks.find(topic);
+  if (sit != session->video_sinks.end() && sit->second && sit->second->queue) {
     ImageFrame frame;
     frame.width = static_cast<int>(msg->width);
     frame.height = static_cast<int>(msg->height);
@@ -422,162 +414,258 @@ void RecorderEngine::update_image_preview(
   }
 }
 
-std::string RecorderEngine::start_session()
+std::shared_ptr<RecorderEngine::ActiveSession> RecorderEngine::accepting_session() const
 {
   std::lock_guard<std::mutex> lock(session_mutex_);
-  if (recording_.load()) { return session_id_; }
+  return active_session_ && active_session_->accepting.load() ? active_session_ : nullptr;
+}
 
-  const std::string output_dir = fs::absolute(config_.output_dir).string();
-  std::error_code ec;
-  fs::create_directories(output_dir, ec);
+void RecorderEngine::update_session_metadata(
+  const std::vector<AnnotationRecord> & annotations, const std::vector<TagRecord> & tags)
+{
+  const auto session = accepting_session();
+  if (!session) { return; }
+  std::lock_guard<std::mutex> lock(session->metadata_mutex);
+  if (!session->accepting.load()) { return; }
+  session->record.annotations = annotations;
+  session->record.tags = tags;
+}
 
-  session_id_ = timestamp_now();
-  session_dir_ = session_manager_->create_session_directory(output_dir, session_id_);
+namespace
+{
+std::string exception_message(const std::exception_ptr & error)
+{
+  if (!error) { return {}; }
+  try { std::rethrow_exception(error); }
+  catch (const std::exception & e) { return e.what(); }
+  catch (...) { return "未知写入异常"; }
+}
+}  // namespace
 
-  // rosbag writer + 队列（阻塞背压）
-  rosbag_writer_ = std::make_shared<RosbagWriter>(
-    (fs::path(session_dir_) / "rosbag").string(), /*storage_id=*/"");
-  if (!rosbag_writer_->is_open()) {
-    std::cerr << "[RecorderEngine] rosbag writer 打开失败，取消录制\n";
-    rosbag_writer_.reset();
-    return "";
+std::string RecorderEngine::recording_error() const
+{
+  const auto session = accepting_session();
+  if (!session) { return {}; }
+  if (auto error = session->rosbag_queue->error()) {
+    return "rosbag: " + exception_message(error);
   }
-  // 预登记开录时已有发布者的话题（即便整段会话 0 消息也会出现在 bag metadata 里）。
-  // 录制中才补订的话题不在此列，由 on_rosbag_message 首帧懒登记；registered_topics_ 两边共用、防重复。
-  registered_topics_.clear();
-  for (const auto & topic : config_.topics) {
-    if (topic.backend_name != "video") {
-      const auto eps = node_->get_publishers_info_by_topic(topic.topic_name);
-      std::string type = eps.empty() ? "" : eps.front().topic_type();
-      if (!type.empty()) {
-        rosbag_writer_->add_topic(topic.topic_name, type, offered_qos_for(topic.topic_name));
-        registered_topics_.insert(topic.topic_name);
-      }
+  for (const auto & [topic, sink] : session->video_sinks) {
+    if (auto error = sink->queue->error()) {
+      return topic + ": " + exception_message(error);
     }
   }
-  rosbag_queue_ = std::make_shared<WriterQueue<std::function<void()>>>(
-    2000, OverflowPolicy::Block, [](std::function<void()> task) { task(); });
+  return {};
+}
 
-  // video sinks（丢最旧背压）。recorder 在首帧到达时懒建（尺寸首帧才知）。
-  const fs::path video_dir = fs::path(session_dir_) / "video";
-  fs::create_directories(video_dir, ec);
-  for (const auto & topic : config_.topics) {
-    if (topic.backend_name == "video") {
-      const std::string key = topic.topic_name;
-      const std::string base = file_name_for_topic(topic.topic_name);
-      VideoParams params;
+SessionStartResult RecorderEngine::start_session()
+{
+  std::lock_guard<std::mutex> lifecycle_lock(lifecycle_mutex_);
+  if (const auto session = accepting_session()) { return {session->record.session_id, {}}; }
+
+  std::shared_ptr<ActiveSession> session;
+  bool directory_created = false;
+  try {
+    session = std::make_shared<ActiveSession>();
+    if (!session_manager_) { throw std::runtime_error("缺少会话管理器"); }
+    const fs::path output_dir = fs::absolute(config_.output_dir);
+    std::error_code ec;
+    fs::create_directories(output_dir, ec);
+    if (ec) { throw fs::filesystem_error("无法创建输出目录", output_dir, ec); }
+    if (!fs::is_directory(output_dir)) {
+      throw std::runtime_error("输出路径不是目录: " + output_dir.string());
+    }
+
+    // 独占新目录；同一秒内重复录制也不会复用上一会话。
+    const std::string base_id = timestamp_now();
+    for (unsigned suffix = 0; ; ++suffix) {
+      session->record.session_id = base_id + (suffix ? "_" + std::to_string(suffix) : "");
+      const fs::path candidate = output_dir / session->record.session_id;
+      if (fs::exists(candidate)) { continue; }
+      try {
+        session->record.directory = session_manager_->create_session_directory(
+          output_dir.string(), session->record.session_id);
+        break;
+      } catch (const fs::filesystem_error & e) {
+        if (e.code() == std::errc::file_exists) { continue; }
+        throw;
+      }
+    }
+    directory_created = true;
+    session->record.recorder_version = DATA_RECORDER_VERSION;
+    session->rosbag_writer = std::make_shared<RosbagWriter>(
+      (fs::path(session->record.directory) / "rosbag").string(), "");
+    if (!session->rosbag_writer->is_open()) {
+      throw std::runtime_error(session->rosbag_writer->error_message());
+    }
+    for (const auto & topic : config_.topics) {
+      const bool video = topic.backend_name == "video";
+      const auto offered_qos = offered_qos_for(topic.topic_name);
+      session->record.topics.push_back({topic.topic_name, video ? "video" : "rosbag",
+        video ? offered_qos : ""});
+      if (!video) {
+        const auto endpoints = node_->get_publishers_info_by_topic(topic.topic_name);
+        if (!endpoints.empty() && !endpoints.front().topic_type().empty()) {
+          session->rosbag_writer->add_topic(
+            topic.topic_name, endpoints.front().topic_type(), offered_qos);
+          session->registered_topics.insert(topic.topic_name);
+        }
+      }
+    }
+    session->rosbag_queue = std::make_shared<WriterQueue<std::function<void()>>>(
+      2000, OverflowPolicy::Block, [](std::function<void()> task) { task(); });
+
+    const fs::path video_dir = fs::path(session->record.directory) / "video";
+    fs::create_directory(video_dir);
+    for (const auto & topic : config_.topics) {
+      if (topic.backend_name != "video") { continue; }
+      auto sink = std::make_shared<VideoSink>();
+      auto & params = sink->params;
       auto pit = topic.params.find("codec"); if (pit != topic.params.end()) params.codec = pit->second;
       pit = topic.params.find("preset"); if (pit != topic.params.end()) params.preset = pit->second;
       pit = topic.params.find("crf");
       if (pit != topic.params.end()) {
-        // crf 来自用户可改的 YAML 标量，无数值校验；非法值不应让 start_session 抛出。
         try {
           size_t consumed = 0;
           const int crf = std::stoi(pit->second, &consumed);
-          if (consumed == pit->second.size()) {
-            params.crf = crf;
-          } else {
-            std::cerr << "[RecorderEngine] crf 含非数字字符（\"" << pit->second
-                      << "\"），用默认值 " << params.crf << "\n";
-          }
-        } catch (const std::exception & e) {
-          std::cerr << "[RecorderEngine] crf 解析失败（\"" << pit->second
-                    << "\"）：" << e.what() << "，用默认值 " << params.crf << "\n";
+          if (consumed == pit->second.size()) { params.crf = crf; }
+          else { std::cerr << "[RecorderEngine] crf 无效，使用默认值\n"; }
+        } catch (const std::exception &) {
+          std::cerr << "[RecorderEngine] crf 无效，使用默认值\n";
         }
       }
       pit = topic.params.find("pix_fmt"); if (pit != topic.params.end()) params.pix_fmt = pit->second;
       pit = topic.params.find("container"); if (pit != topic.params.end()) params.container = pit->second;
-
-      auto sink = std::make_shared<VideoSink>();
+      const auto base = file_name_for_topic(topic.topic_name);
       sink->video_path = (video_dir / (base + "." + params.container)).string();
       sink->csv_path = (video_dir / (base + ".csv")).string();
-      sink->params = params;
-      auto * sink_raw = sink.get();  // 队列 worker 线程在 sink 生命周期内运行
+      auto * sink_raw = sink.get();
       sink->queue = std::make_unique<WriterQueue<ImageFrame>>(
-        90, OverflowPolicy::DropOldest,
-        [sink_raw](ImageFrame frame) {
+        90, OverflowPolicy::DropOldest, [sink_raw](ImageFrame frame) {
           if (!sink_raw->recorder) {
             sink_raw->recorder = std::make_unique<VideoRecorder>(
               sink_raw->video_path, sink_raw->csv_path, frame.width, frame.height, sink_raw->params);
+            if (!sink_raw->recorder->is_open()) {
+              throw std::runtime_error(sink_raw->video_path + ": " +
+                sink_raw->recorder->error_message());
+            }
           }
-          sink_raw->recorder->encode(frame);
+          if (!sink_raw->recorder->encode(frame) &&
+            !sink_raw->recorder->error_message().empty())
+          {
+            throw std::runtime_error(sink_raw->video_path + ": " +
+              sink_raw->recorder->error_message());
+          }
         });
-      video_sinks_[key] = sink;
+      session->video_sinks.emplace(topic.topic_name, std::move(sink));
     }
-  }
 
-  record_start_steady_ns_.store(steady_now_ns());
-  record_start_unix_ = std::chrono::duration<double>(
-    std::chrono::system_clock::now().time_since_epoch()).count();
-  record_start_ros_ns_ = node_->now().nanoseconds();
-  live_edge_seconds_.store(0.0);
-
-  // 时间轴零点已重置：清掉录制前按旧零点积累的曲线/折叠点缓冲，否则旧点会与新录制叠加。
-  // 类型也重新通告（清 announced_），让 GUI 在新会话重新点亮 chevron。
-  {
-    std::lock_guard<std::mutex> slock(series_mutex_);
-    series_.clear();
-    topic_types_.clear();
-    announced_types_.clear();
-  }
-
-  // 同一个 DDS TRANSIENT_LOCAL 订阅不会在每次点击录制时重新回放历史样本。在锁内把
-  // 开录前缓存的有界历史样本写进 bag，再原子切换录制状态。回调也在此锁内
-  // 判断边界状态，因此并发到达的消息会恰好走缓存回放或正常写入中的一条路径。
-  {
+    // 在缓存锁内写入已收到的 TRANSIENT_LOCAL 历史样本，然后才允许回调投递。
     std::lock_guard<std::mutex> cache_lock(transient_cache_mutex_);
+    session->start_steady_ns = steady_now_ns();
+    session->record.unix_time = std::chrono::duration<double>(
+      std::chrono::system_clock::now().time_since_epoch()).count();
+    session->record.ros_time_ns = node_->now().nanoseconds();
     for (const auto & [topic, cached_messages] : transient_cache_) {
       for (const auto & cached : cached_messages) {
-        if (registered_topics_.insert(topic).second) {
-          rosbag_writer_->add_topic(topic, cached.type, offered_qos_for(topic));
+        if (session->registered_topics.insert(topic).second) {
+          session->rosbag_writer->add_topic(topic, cached.type, offered_qos_for(topic));
         }
-        rosbag_writer_->write(topic, *cached.message, record_start_ros_ns_);
+        session->rosbag_writer->write(topic, *cached.message, session->record.ros_time_ns);
       }
     }
-    recording_.store(true);
+    {
+      std::lock_guard<std::mutex> series_lock(series_mutex_);
+      series_.clear();
+      topic_types_.clear();
+      announced_types_.clear();
+    }
+    {
+      std::lock_guard<std::mutex> lock(session_mutex_);
+      live_edge_seconds_.store(0.0);
+      session->accepting.store(true);
+      active_session_ = session;
+      recording_.store(true);
+    }
+    last_finish_ = {};
+    return {session->record.session_id, {}};
+  } catch (...) {
+    const auto error = exception_message(std::current_exception());
+    if (!session) { return {{}, error}; }
+    // 局部会话从未发布给回调。停止全部已建队列后再释放 writers。
+    if (session->rosbag_queue) { session->rosbag_queue->request_stop(); }
+    for (const auto & [topic, sink] : session->video_sinks) { sink->queue->request_stop(); }
+    if (session->rosbag_queue) { session->rosbag_queue->join(); }
+    for (const auto & [topic, sink] : session->video_sinks) { sink->queue->join(); }
+    if (session->rosbag_writer) {
+      try { session->rosbag_writer->close(); } catch (...) {}
+    }
+    // 只删除本次新建、仍为空的目录；部分初始化产物保留，绝不触碰旧会话。
+    std::error_code cleanup_error;
+    if (directory_created && fs::is_empty(session->record.directory, cleanup_error)) {
+      fs::remove(session->record.directory, cleanup_error);
+    }
+    std::cerr << "[RecorderEngine] 启动录制失败: " << error << "\n";
+    return {{}, error};
   }
-  return session_id_;
 }
 
-SessionRecord RecorderEngine::stop_session(
-  const std::vector<AnnotationRecord> & annotations, const std::vector<TagRecord> & tags)
+SessionFinishResult RecorderEngine::stop_session()
 {
-  std::lock_guard<std::mutex> lock(session_mutex_);
-  SessionRecord record;
-  if (!recording_.load()) { return record; }
-  recording_.store(false);
-
-  // 停 video sinks：排空帧队列 → recorder flush + 写 trailer/CSV
-  for (auto & [key, sink] : video_sinks_) {
-    if (sink->queue) { sink->queue->stop(); }
-    if (sink->recorder) { sink->recorder->close(); }
+  std::lock_guard<std::mutex> lifecycle_lock(lifecycle_mutex_);
+  std::shared_ptr<ActiveSession> session;
+  {
+    std::lock_guard<std::mutex> lock(session_mutex_);
+    session = std::move(active_session_);
+    if (!session) { return last_finish_; }
+    session->accepting.store(false);
+    recording_.store(false);
+    // 保存时长在切断准入时冻结，不计排队、flush 或 YAML 写入耗时。
+    session->record.duration_seconds = relative_seconds(steady_now_ns(), session->start_steady_ns);
+    live_edge_seconds_.store(session->record.duration_seconds);
   }
-  video_sinks_.clear();
-
-  // 停 rosbag 队列再关 writer
-  if (rosbag_queue_) { rosbag_queue_->stop(); rosbag_queue_.reset(); }
-  if (rosbag_writer_) { rosbag_writer_->close(); rosbag_writer_.reset(); }
-
-  record.session_id = session_id_;
-  record.directory = session_dir_;
-  record.unix_time = record_start_unix_;
-  record.ros_time_ns = record_start_ros_ns_;
-  record.duration_seconds = live_edge_seconds_.load();
-  record.recorder_version = DATA_RECORDER_VERSION;
-  for (const auto & t : config_.topics) {
-    const bool is_video = t.backend_name == "video";
-    TopicRef ref;
-    ref.name = t.topic_name;
-    ref.backend = is_video ? "video" : "rosbag";
-    // rosbag 话题的 offered_qos_profiles 记在 bag 自己的 metadata 里；video 话题没有独立的 bag，记在此处。
-    if (is_video) { ref.offered_qos_profiles = offered_qos_for(t.topic_name); }
-    record.topics.push_back(std::move(ref));
+  SessionFinishResult result;
+  {
+    std::lock_guard<std::mutex> lock(session->metadata_mutex);
+    result.record = session->record;
   }
-  record.tags = tags;
-  record.annotations = annotations;
+  // 全部队列先关闭入口，解除 Block 生产者，再在 session_mutex_ 外 join。
+  session->rosbag_queue->request_stop();
+  for (const auto & [topic, sink] : session->video_sinks) { sink->queue->request_stop(); }
+  session->rosbag_queue->join();
+  for (const auto & [topic, sink] : session->video_sinks) { sink->queue->join(); }
 
-  session_manager_->write_session_yaml(record);
-  return record;
+  if (auto error = session->rosbag_queue->error()) {
+    result.errors.push_back("rosbag 写入失败: " + exception_message(error));
+  }
+  for (const auto & [topic, sink] : session->video_sinks) {
+    if (auto error = sink->queue->error()) {
+      result.errors.push_back(topic + " 写入失败: " + exception_message(error));
+    }
+    try {
+      if (sink->recorder && !sink->recorder->close()) {
+        result.errors.push_back(topic + " 收尾失败: " + sink->recorder->error_message());
+      }
+    } catch (...) {
+      result.errors.push_back(topic + " 收尾异常: " + exception_message(std::current_exception()));
+    }
+  }
+  try {
+    if (!session->rosbag_writer->close()) {
+      result.errors.push_back("rosbag 收尾失败: " + session->rosbag_writer->error_message());
+    }
+  } catch (...) {
+    result.errors.push_back("rosbag 收尾异常: " + exception_message(std::current_exception()));
+  }
+  std::string metadata_error;
+  try {
+    result.metadata_saved = session_manager_->write_session_yaml(result.record, &metadata_error);
+  } catch (...) {
+    metadata_error = "session.yaml 保存异常: " + exception_message(std::current_exception());
+  }
+  if (!result.metadata_saved) { result.errors.push_back(metadata_error); }
+  for (const auto & error : result.errors) { std::cerr << "[RecorderEngine] " << error << "\n"; }
+  last_finish_ = result;
+  return result;
 }
 
 double RecorderEngine::live_edge_seconds() const

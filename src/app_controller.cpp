@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <iostream>
 
 #include "data_recorder/live_bridge.hpp"
 #include "data_recorder/recorder_engine.hpp"
@@ -58,6 +59,20 @@ AppController::AppController(
   engine_ = engine;
   session_manager_ = session_manager;
 
+  connect(&tag_model_, &QAbstractItemModel::dataChanged,
+    this, [this]() { syncSessionMetadata(); });
+  connect(&tag_model_, &QAbstractItemModel::modelReset,
+    this, &AppController::syncSessionMetadata);
+  connect(&event_marker_model_, &QAbstractItemModel::dataChanged,
+    this, [this]() { syncSessionMetadata(); });
+  connect(&event_marker_model_, &QAbstractItemModel::modelReset,
+    this, &AppController::syncSessionMetadata);
+
+  connect(&recording_error_timer_, &QTimer::timeout, this, [this]() {
+    if (recording_ && engine_ && !engine_->recording_error().empty()) { stopRecording(); }
+  });
+  recording_error_timer_.setInterval(100);
+
   if (bridge_) {
     connect(bridge_, &LiveBridge::statsUpdated, this, &AppController::onStatsUpdated);
     connect(bridge_, &LiveBridge::frameReady, this, &AppController::onFrameReady);
@@ -107,6 +122,7 @@ AppController::AppController(
 
 AppController::~AppController()
 {
+  shutdownRecording();
   if (player_thread_) {
     player_thread_->quit();
     player_thread_->wait();
@@ -170,7 +186,7 @@ int AppController::selectedSessionRow() const
 
 bool AppController::canRecord() const
 {
-  return !history_mode_;
+  return !history_mode_ && !stopping_ && !shutting_down_;
 }
 
 double AppController::playheadSeconds() const
@@ -247,36 +263,35 @@ void AppController::toggleRecording()
     return;
   }
 
+  if (recording_) {
+    stopRecording();
+    return;
+  }
+
   const bool prev_recording = recording_;
   const bool prev_following = following_live_edge_;
   const double prev_playhead = playhead_seconds_;
+  const double prev_live_edge = live_edge_seconds_;
+  const double prev_timeline_duration = timelineDurationSeconds();
   const QString prev_status = status_text_;
   const QString prev_mode = modeText();
 
-  if (!recording_) {
-    // 开始
-    event_marker_model_.clearInstances();
-    tag_model_.clearSelection();  // 清标签选择，每次录制从干净状态开始
-    topic_model_.clearCurves();   // 清上次会话残留的折叠点/曲线，避免与新录制叠加
-    if (engine_) {
-      const std::string id = engine_->start_session();
-      if (id.empty()) {
-        status_text_ = QStringLiteral("录制启动失败");
-        emit statusTextChanged();
-        return;
-      }
+  if (engine_) {
+    const auto result = engine_->start_session();
+    if (!result.success()) {
+      save_error_ = QStringLiteral("录制启动失败：%1").arg(QString::fromStdString(result.error));
+      refreshStatusText();
+      return;
     }
-    recording_ = true;
-  } else {
-    // 停止
-    if (engine_) {
-      engine_->stop_session(
-        event_marker_model_.exportAnnotations(), tag_model_.exportSelectedTags());
-    }
-    recording_ = false;
-    refreshSessions();
-    tag_model_.clearSelection();  // 清空「在线数据」行标签（已随会话写入历史）
   }
+  event_marker_model_.clearInstances();
+  tag_model_.clearSelection();
+  topic_model_.clearCurves();
+  save_error_.clear();
+  live_edge_seconds_ = 0.0;
+  recording_ = true;
+  syncSessionMetadata();
+  recording_error_timer_.start();
 
   if (recording_) {
     following_live_edge_ = true;
@@ -295,12 +310,78 @@ void AppController::toggleRecording()
   if (prev_playhead != playhead_seconds_) {
     emit playheadSecondsChanged();
   }
+  if (prev_live_edge != live_edge_seconds_) { emit liveEdgeSecondsChanged(); }
+  if (prev_timeline_duration != timelineDurationSeconds()) { emit timelineDurationSecondsChanged(); }
   if (prev_status != status_text_) {
     emit statusTextChanged();
   }
   if (prev_mode != modeText()) {
     emit modeTextChanged();
   }
+}
+
+void AppController::syncSessionMetadata()
+{
+  if (recording_ && engine_) {
+    engine_->update_session_metadata(
+      event_marker_model_.exportAnnotations(), tag_model_.exportSelectedTags());
+  }
+}
+
+void AppController::stopRecording()
+{
+  if (!recording_ || stopping_) { return; }
+  syncSessionMetadata();
+  stopping_ = true;
+  recording_error_timer_.stop();
+  emit canRecordChanged();
+  status_text_ = QStringLiteral("保存中");
+  emit statusTextChanged();
+
+  SessionFinishResult result;
+  try {
+    if (engine_) { result = engine_->stop_session(); }
+  } catch (const std::exception & e) {
+    result.errors.push_back(e.what());
+  } catch (...) {
+    result.errors.push_back("未知保存异常");
+  }
+
+  recording_ = false;
+  stopping_ = false;
+  const bool was_following = following_live_edge_;
+  following_live_edge_ = false;
+  if (engine_ && !result.record.session_id.empty()) {
+    live_edge_seconds_ = result.record.duration_seconds;
+    if (was_following) {
+      playhead_seconds_ = live_edge_seconds_;
+      emit playheadSecondsChanged();
+    }
+    emit liveEdgeSecondsChanged();
+    emit timelineDurationSecondsChanged();
+  }
+  save_error_.clear();
+  if (engine_ && !result.success()) {
+    QStringList errors;
+    for (const auto & error : result.errors) { errors.push_back(QString::fromStdString(error)); }
+    save_error_ = QStringLiteral("录制保存失败：%1").arg(errors.join(QStringLiteral("；")));
+    std::cerr << "[AppController] " << save_error_.toStdString() << "\n";
+  } else {
+    tag_model_.clearSelection();
+  }
+  // A failed direct write can leave incomplete YAML. Do not scan it on this path.
+  if (!shutting_down_ && (!engine_ || result.success())) { refreshSessions(); }
+  refreshStatusText();
+  emit recordingChanged();
+  emit canRecordChanged();
+  if (was_following) { emit followingLiveEdgeChanged(); }
+  emit modeTextChanged();
+}
+
+void AppController::shutdownRecording()
+{
+  shutting_down_ = true;
+  stopRecording();
 }
 
 void AppController::selectOnlineData()
@@ -572,14 +653,19 @@ void AppController::toggleTag(int tag_row)
   // 词表勾选 + 保留不在词表里的孤儿标签(改名/删词条后遗留的历史标签不被覆盖抹掉)。
   const auto tags = tag_model_.exportSelectedTagsMerged(previous_tags);
   record.tags = tags;
-  // 先落盘，仅写成功才更新内存/模型行（写盘失败则回滚，保持内存与磁盘一致）。
-  const bool written = session_manager_ && session_manager_->write_session_yaml(record);
+  std::string error;
+  const bool written = session_manager_ && session_manager_->write_session_yaml(record, &error);
   if (!written) {
-    record.tags = previous_tags;  // 写盘失败：回滚内存，保持与磁盘一致
-    tag_model_.select(tag_row);   // 撤销面板勾选，使 UI 与磁盘一致
+    record.tags = previous_tags;
+    tag_model_.select(tag_row);
+    save_error_ = QStringLiteral("标签保存失败：%1").arg(QString::fromStdString(error));
+    status_text_ = save_error_;
+    emit statusTextChanged();
     return;
   }
   recording_session_model_.updateSessionTags(selected_session_row_, tags);
+  save_error_.clear();
+  refreshStatusText();
 }
 
 void AppController::removeSessionTag(int session_row, int tag_index)
@@ -592,10 +678,13 @@ void AppController::removeSessionTag(int session_row, int tag_index)
 
   const auto previous_tags = record.tags;
   record.tags.erase(record.tags.begin() + tag_index);
-  // 先落盘,仅写成功才更新内存/模型行(写盘失败则回滚,保持与磁盘一致)。
-  const bool written = session_manager_ && session_manager_->write_session_yaml(record);
+  std::string error;
+  const bool written = session_manager_ && session_manager_->write_session_yaml(record, &error);
   if (!written) {
     record.tags = previous_tags;
+    save_error_ = QStringLiteral("标签保存失败：%1").arg(QString::fromStdString(error));
+    status_text_ = save_error_;
+    emit statusTextChanged();
     return;
   }
   recording_session_model_.updateSessionTags(session_row, record.tags);
@@ -603,6 +692,8 @@ void AppController::removeSessionTag(int session_row, int tag_index)
   if (history_mode_ && session_row == selected_session_row_) {
     tag_model_.setSelectedTags(record.tags);
   }
+  save_error_.clear();
+  refreshStatusText();
 }
 
 bool AppController::eventFilter(QObject * watched, QEvent * event)
@@ -657,6 +748,7 @@ QString AppController::statusTextForCurrentState() const
       recording_session_model_.data(session_index, RecordingSessionModel::FolderNameRole).toString();
     return QStringLiteral("历史查看：%1").arg(folder_name);
   }
+  if (!save_error_.isEmpty()) { return save_error_; }
   return modeText();
 }
 
@@ -761,8 +853,27 @@ void AppController::refreshDiskSpace()
 void AppController::refreshSessions()
 {
   if (!session_manager_) { return; }
-  const std::string dir = std::filesystem::absolute(output_directory_.toStdString()).string();
-  scanned_sessions_ = session_manager_->scan(dir);
+  std::string dir = output_directory_.toStdString();
+  std::vector<SessionRecord> sessions;
+  const auto report_error = [this, &dir](const std::string & error) {
+      save_error_ = QStringLiteral("历史列表扫描失败：%1：%2").arg(
+        QString::fromStdString(dir), QString::fromStdString(error));
+      std::cerr << "[AppController] " << save_error_.toStdString() << "\n";
+      refreshStatusText();
+    };
+  try {
+    dir = std::filesystem::absolute(dir).string();
+    sessions = session_manager_->scan(dir);
+  } catch (const std::exception & error) {
+    report_error(error.what());
+    return;
+  } catch (...) {
+    report_error("未知扫描异常");
+    return;
+  }
+  // Failed direct writes can leave malformed metadata. Keep the previous list
+  // when scanning fails; the files themselves are left untouched.
+  scanned_sessions_ = std::move(sessions);
   recording_session_model_.setSessions(scanned_sessions_);
 }
 
