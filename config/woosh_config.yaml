@@ -61,10 +61,12 @@ groups:
       - /left_arm_servo_node/pose_target_cmds
       - /left_force_torque_sensor_broadcaster/transition_event
       - /left_force_torque_sensor_broadcaster/wrench
+      - /left_gravity_compensation/interaction_wrench
+      - /left_gravity_compensation/transition_event
       - /left_gravity_compensation/wrench
       - /left_gripper_controller/commands
       - /left_gripper_controller/transition_event
-      # - /left_pinocchio_servo/debug/admittance_result
+      - /left_pinocchio_servo/debug/admittance_result
       - /left_raw_force_torque_sensor_broadcaster/transition_event
       - /left_raw_force_torque_sensor_broadcaster/wrench
       # - /monitored_planning_scene
@@ -75,11 +77,13 @@ groups:
       # - /recognized_object_array
       - /right_arm_controller/controller_state
       - /right_arm_controller/joint_trajectory
-      # - /right_arm_controller/state
+      - /right_arm_controller/state
       - /right_arm_controller/transition_event
       - /right_arm_servo_node/pose_target_cmds
       - /right_force_torque_sensor_broadcaster/transition_event
       - /right_force_torque_sensor_broadcaster/wrench
+      - /right_gravity_compensation/interaction_wrench
+      - /right_gravity_compensation/transition_event
       - /right_gravity_compensation/wrench
       - /right_hand_controller/commands
       - /right_hand_controller/transition_event
