@@ -13,7 +13,7 @@
 # output_dir: "./recordings/experiment"
 # output_dir: "./recordings/experiment_wipe"
 # output_dir: "./recordings/experiment_screw"
-output_dir: "./recordings/apex-force"
+output_dir: "./recordings/woosh-af"
 
 # 标签，用于标注单条数据
 # name 必须唯一；color 可省略（默认灰色）。
