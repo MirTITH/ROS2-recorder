@@ -77,7 +77,7 @@ groups:
       # - /recognized_object_array
       - /right_arm_controller/controller_state
       - /right_arm_controller/joint_trajectory
-      - /right_arm_controller/state
+      # - /right_arm_controller/state
       - /right_arm_controller/transition_event
       - /right_arm_servo_node/pose_target_cmds
       - /right_force_torque_sensor_broadcaster/transition_event
