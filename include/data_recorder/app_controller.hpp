@@ -83,7 +83,9 @@ public:
   RecordingSessionModel * recordingSessionModel();
 
   Q_INVOKABLE void toggleRecording();
+  Q_INVOKABLE void startRecording();
   Q_INVOKABLE void stopRecording();
+  QString setRecording(bool enabled);
   void shutdownRecording();
   Q_INVOKABLE void togglePlayback();
   Q_INVOKABLE void selectOnlineData();

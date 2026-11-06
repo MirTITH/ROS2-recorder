@@ -215,11 +215,12 @@ TEST_F(RecordingLifecycleTest, ControllerStopAllowsNewSessionAndShutdownPrevents
   data_recorder::SessionManager manager;
   data_recorder::RecorderEngine engine(node, config_data, &bridge, &manager);
   data_recorder::AppController controller(config_data, &bridge, &engine, &manager);
-  controller.toggleRecording();
+  EXPECT_TRUE(controller.setRecording(true).isEmpty());
+  EXPECT_TRUE(controller.setRecording(true).isEmpty());
   ASSERT_TRUE(controller.recording());
   controller.toggleTag(0);
-  controller.stopRecording();
-  controller.stopRecording();
+  EXPECT_TRUE(controller.setRecording(false).isEmpty());
+  EXPECT_TRUE(controller.setRecording(false).isEmpty());
   EXPECT_FALSE(controller.recording());
   const auto first_sessions = manager.scan(config_data.output_dir);
   ASSERT_EQ(first_sessions.size(), 1u);
@@ -231,6 +232,7 @@ TEST_F(RecordingLifecycleTest, ControllerStopAllowsNewSessionAndShutdownPrevents
   controller.shutdownRecording();
   controller.shutdownRecording();
   EXPECT_FALSE(controller.canRecord());
+  EXPECT_FALSE(controller.setRecording(true).isEmpty());
   controller.toggleRecording();
   EXPECT_FALSE(controller.recording());
   EXPECT_FALSE(engine.is_recording());

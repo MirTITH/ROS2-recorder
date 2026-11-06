@@ -268,6 +268,27 @@ void AppController::toggleRecording()
     return;
   }
 
+  startRecording();
+}
+
+QString AppController::setRecording(bool enabled)
+{
+  if (enabled == recording_) { return {}; }
+  if (enabled && !canRecord()) {
+    return QStringLiteral("当前无法开始录制，请切换到在线数据并确认程序未在关闭");
+  }
+  if (enabled) {
+    startRecording();
+  } else {
+    stopRecording();
+  }
+  return save_error_;
+}
+
+void AppController::startRecording()
+{
+  if (recording_ || !canRecord()) { return; }
+
   const bool prev_recording = recording_;
   const bool prev_following = following_live_edge_;
   const double prev_playhead = playhead_seconds_;
@@ -293,12 +314,8 @@ void AppController::toggleRecording()
   syncSessionMetadata();
   recording_error_timer_.start();
 
-  if (recording_) {
-    following_live_edge_ = true;
-    playhead_seconds_ = live_edge_seconds_;
-  } else {
-    following_live_edge_ = false;
-  }
+  following_live_edge_ = true;
+  playhead_seconds_ = live_edge_seconds_;
   status_text_ = statusTextForCurrentState();
 
   if (prev_recording != recording_) {

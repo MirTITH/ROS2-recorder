@@ -79,6 +79,29 @@ sudo apt install ros-humble-rosbag2-storage-mcap
 
 每次录制都会在 `output_dir` 下生成一个独立的会话目录，其中包含 rosbag、视频及会话标注信息。
 
+## 服务控制与提示音
+
+录制器提供两个私有服务，默认节点名为 `data_recorder_ui`：
+
+| 服务 | 类型 | 操作 |
+| --- | --- | --- |
+| `~/set_recording` | `std_srvs/srv/SetBool` | `data: true` 开始，`data: false` 停止并保存；重复设置相同状态不创建新会话。 |
+| `~/toggle_recording` | `std_srvs/srv/Trigger` | 每次调用切换一次录制状态，适合 VR 按键。 |
+
+```bash
+ros2 service call /data_recorder_ui/set_recording std_srvs/srv/SetBool "{data: true}"
+ros2 service call /data_recorder_ui/set_recording std_srvs/srv/SetBool "{data: false}"
+ros2 service call /data_recorder_ui/toggle_recording std_srvs/srv/Trigger "{}"
+```
+
+服务在启动或停止保存流程完成后返回 `success/message`，失败时返回具体原因。
+开始录制需要处于“在线数据”模式。服务控制与界面按钮、空格键共享录制状态及标签保存逻辑。
+通过 `__node` 或 `__ns` 重命名节点后，服务路径随节点变化。
+
+开始录制播放升调提示音，停止录制播放降调提示音；重复设置相同状态不播放。
+提示音是随包安装的合成 WAV 文件，使用 `pulseaudio-utils` 中的 `paplay` 异步播放，
+从运行录制器的电脑默认音频设备输出。需要在 VR 头显内听到时，应将电脑音频路由到对应设备。
+
 ## 迁移旧版数据集
 
 `scripts/migrate_dataset_to_v1_2_0.py` 可将不含 `version` 字段的旧版会话转换为

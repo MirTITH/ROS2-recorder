@@ -23,6 +23,7 @@ find_package(rosbag2_transport REQUIRED)
 find_package(rosgraph_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(PkgConfig REQUIRED)
@@ -105,7 +106,7 @@ target_compile_definitions(data_recorder_core PRIVATE
 add_executable(data_recorder src/data_recorder.cpp)
 target_link_libraries(data_recorder data_recorder_core)
 target_link_libraries(data_recorder Qt6::Widgets)
-ament_target_dependencies(data_recorder rclcpp ament_index_cpp)
+ament_target_dependencies(data_recorder rclcpp ament_index_cpp std_srvs)
 
 add_executable(image_latency_monitor src/image_latency_monitor.cpp)
 target_link_libraries(image_latency_monitor data_recorder_core)
@@ -139,6 +140,9 @@ install(DIRECTORY qml
   DESTINATION share/${PROJECT_NAME}
 )
 install(DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
+)
+install(DIRECTORY sounds
   DESTINATION share/${PROJECT_NAME}
 )
 

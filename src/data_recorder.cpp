@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QProcess>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QTimer>
@@ -12,6 +13,8 @@
 #include <iostream>
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
+#include <std_srvs/srv/set_bool.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <string>
 #include <thread>
 #include <vector>
@@ -76,6 +79,49 @@ int main(int argc, char ** argv)
   data_recorder::AppController controller(config, &bridge, &engine, &session_manager);
   app.installEventFilter(&controller);
 
+  // 延后回复服务，让录制控制在 Qt 主线程执行，同时保持 ROS 订阅继续处理数据。
+  using SetBool = std_srvs::srv::SetBool;
+  const auto set_recording_service = node->create_service<SetBool>(
+    "~/set_recording",
+    [&controller](
+      rclcpp::Service<SetBool>::SharedPtr service,
+      std::shared_ptr<rmw_request_id_t> header, SetBool::Request::SharedPtr request) {
+      QMetaObject::invokeMethod(&controller, [&controller, service, header, enabled = request->data]() {
+        const auto error = controller.setRecording(enabled);
+        SetBool::Response response;
+        response.success = error.isEmpty();
+        response.message = error.isEmpty() ?
+          (controller.recording() ? "录制中" : "已停止录制") : error.toStdString();
+        if (rclcpp::ok()) { service->send_response(*header, response); }
+      }, Qt::QueuedConnection);
+    });
+
+  using Trigger = std_srvs::srv::Trigger;
+  const auto toggle_recording_service = node->create_service<Trigger>(
+    "~/toggle_recording",
+    [&controller](
+      rclcpp::Service<Trigger>::SharedPtr service,
+      std::shared_ptr<rmw_request_id_t> header, Trigger::Request::SharedPtr) {
+      QMetaObject::invokeMethod(&controller, [&controller, service, header]() {
+        const auto error = controller.setRecording(!controller.recording());
+        Trigger::Response response;
+        response.success = error.isEmpty();
+        response.message = error.isEmpty() ?
+          (controller.recording() ? "录制中" : "已停止录制") : error.toStdString();
+        if (rclcpp::ok()) { service->send_response(*header, response); }
+      }, Qt::QueuedConnection);
+    });
+
+  const auto package_share =
+    QString::fromStdString(ament_index_cpp::get_package_share_directory("data_recorder"));
+  QObject::connect(&controller, &data_recorder::AppController::recordingChanged, &app,
+    [&controller, node, package_share]() {
+      const auto sound = controller.recording() ? "recording_started.wav" : "recording_stopped.wav";
+      if (!QProcess::startDetached("paplay", {package_share + "/sounds/" + sound})) {
+        RCLCPP_WARN(node->get_logger(), "无法播放录制提示音，请确认已安装 pulseaudio-utils");
+      }
+    });
+
   QQmlApplicationEngine qml_engine;
   qml_engine.addImageProvider(
     QStringLiteral("camera"),
@@ -102,8 +148,6 @@ int main(int argc, char ** argv)
   QObject::connect(&app, &QCoreApplication::aboutToQuit,
     &controller, &data_recorder::AppController::shutdownRecording);
 
-  const auto package_share =
-    QString::fromStdString(ament_index_cpp::get_package_share_directory("data_recorder"));
   const auto qml_dir = package_share + QStringLiteral("/qml");
   qml_engine.addImportPath(qml_dir);
 
