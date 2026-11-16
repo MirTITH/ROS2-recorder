@@ -120,7 +120,7 @@ ConfigData ConfigModel::load_from_file(const std::string & path) const
       throw ConfigError("config must contain a 'groups' sequence");
     }
 
-    config.output_dir = optional_scalar(root, "output_dir", "./recordings");
+    config.output_dir = optional_scalar(root, "output_dir", "./data/recordings");
 
     if (root["tags"] && root["tags"].IsSequence()) {
       for (const auto & tag_node : root["tags"]) {

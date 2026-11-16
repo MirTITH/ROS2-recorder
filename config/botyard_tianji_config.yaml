@@ -1,7 +1,7 @@
 # data_recorder 配置示例
 # 使用方法：ros2 run data_recorder data_recorder --ros-args -p config_file:="<this file>"
 
-output_dir: "./recordings"
+output_dir: "./data/recordings"
 
 # 标签，用于标注单条数据
 # name 必须唯一；color 可省略（默认灰色）。
