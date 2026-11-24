@@ -54,8 +54,10 @@ groups:
       # - /grounding_dino/debug_pointcloud
       - /joint_state_broadcaster/transition_event
       - /joint_states
+      - /left_arco_servo/debug/admittance
+      - /left_arco_servo/debug/status
       - /left_arco_servo/desired_wrench
-      - /left_arco_servo/pre_admittance_pose
+      - /left_arco_servo/nominal_pose
       - /left_arco_servo/preferred_joint_positions
       - /left_arm/desired_pose_trajectory
       - /left_arm_controller/controller_state
@@ -76,8 +78,10 @@ groups:
       # - /planning_scene
       # - /planning_scene_world
       # - /recognized_object_array
+      - /right_arco_servo/debug/admittance
+      - /right_arco_servo/debug/status
       - /right_arco_servo/desired_wrench
-      - /right_arco_servo/pre_admittance_pose
+      - /right_arco_servo/nominal_pose
       - /right_arco_servo/preferred_joint_positions
       - /right_arm/desired_pose_trajectory
       - /right_arm_controller/controller_state
