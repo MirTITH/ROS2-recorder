@@ -403,7 +403,9 @@ void RecorderEngine::update_image_preview(
   }
 
   // 预览：转 QImage（bgr8 用 Format_BGR888；其余转 RGB888），不选择录制后端。
-  if (bridge_ && (image.encoding == "bgr8" || image.encoding == "rgb8" || image.encoding == "mono8")) {
+  if (bridge_ && bridge_->wants_live_frames() &&
+    (image.encoding == "bgr8" || image.encoding == "rgb8" || image.encoding == "mono8"))
+  {
     QImage::Format fmt = image.encoding == "bgr8" ? QImage::Format_BGR888
       : image.encoding == "mono8" ? QImage::Format_Grayscale8
       : QImage::Format_RGB888;

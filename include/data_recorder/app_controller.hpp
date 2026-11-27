@@ -90,6 +90,7 @@ public:
   Q_INVOKABLE void togglePlayback();
   Q_INVOKABLE void selectOnlineData();
   Q_INVOKABLE void selectHistorySession(int row);
+  Q_INVOKABLE void setLiveOverlayEnabled(bool enabled);
   Q_INVOKABLE void setPlayheadSeconds(double seconds);
   Q_INVOKABLE void advanceLiveEdge(double seconds);
   Q_INVOKABLE void returnToLiveEdge();

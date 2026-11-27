@@ -58,10 +58,10 @@ TEST(SessionPlayerTest, LoadAndSeekPushFrames)
   auto session = makeSession(dir);
 
   data_recorder::LiveBridge bridge;
-  bridge.set_playback_mode(true);
+  const auto preview_revision = bridge.set_playback_mode(true);
   data_recorder::SessionPlayer player(&bridge);
 
-  player.load(session);
+  player.load(session, preview_revision);
   EXPECT_GT(player.durationSeconds(), 1.0);
   EXPECT_FALSE(player.playing());
   ASSERT_NE(bridge.latest_frame("/cam"), nullptr);

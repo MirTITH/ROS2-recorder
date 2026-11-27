@@ -8,6 +8,7 @@
 #include <QQmlEngine>
 #include <QQmlContext>
 #include <QQuickItem>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QTest>
 #include <QTimer>
@@ -331,6 +332,56 @@ TEST_F(QmlSmokeTest, DataSourceRowsSwitchBetweenOnlineAndHistoryState)
   EXPECT_EQ(controller_->selectedSessionRow(), -1);
   EXPECT_EQ(controller_->statusText().toStdString(), "实时查看");
   EXPECT_TRUE(primary_button_item->property("enabled").toBool());
+}
+
+TEST_F(QmlSmokeTest, LiveOverlaySliderUpdatesPercentageWhileDraggingInHistory)
+{
+  const auto overlay_control_visible = [this](const QString & name) {
+      auto * item = qobject_cast<QQuickItem *>(find_by_object_name(root_, name));
+      return item != nullptr && item->isVisible();
+    };
+  const QString slider_name = QStringLiteral("liveOverlaySlider");
+  const QString label_name = QStringLiteral("liveOverlayLabel");
+  EXPECT_FALSE(overlay_control_visible(slider_name));
+  EXPECT_FALSE(overlay_control_visible(label_name));
+
+  controller_->selectHistorySession(0);
+  auto * slider = qobject_cast<QQuickItem *>(find_required(root_, slider_name));
+  auto * label = qobject_cast<QQuickItem *>(find_required(root_, label_name));
+  ASSERT_NE(slider, nullptr);
+  ASSERT_NE(label, nullptr);
+  ASSERT_TRUE(slider->isVisible());
+  ASSERT_TRUE(label->isVisible());
+  ASSERT_GT(slider->width(), 0.0);
+  ASSERT_GT(slider->height(), 0.0);
+  EXPECT_GE(label->mapToScene(QPointF()).x(), slider->mapToScene(QPointF(slider->width(), 0)).x());
+  EXPECT_EQ(label->property("text").toString(), QStringLiteral("0% 叠加实时画面"));
+
+  const auto slider_position = [slider](qreal x) {
+      return slider->mapToScene(QPointF(x, slider->height() / 2.0)).toPoint();
+    };
+  const QPoint right = slider_position(slider->width() - 1.0);
+  QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, slider_position(1.0));
+  QTest::mouseMove(window_, slider_position(slider->width() / 2.0));
+  QCoreApplication::processEvents();
+  const QString during_drag = label->property("text").toString();
+  QTest::mouseMove(window_, right);
+  QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, right);
+  QCoreApplication::processEvents();
+
+  const QRegularExpression intermediate_percent(QStringLiteral("^[1-9][0-9]?% 叠加实时画面$"));
+  EXPECT_TRUE(intermediate_percent.match(during_drag).hasMatch()) << during_drag.toStdString();
+  EXPECT_EQ(label->property("text").toString(), QStringLiteral("100% 叠加实时画面"));
+
+  controller_->selectOnlineData();
+  EXPECT_FALSE(overlay_control_visible(slider_name));
+  EXPECT_FALSE(overlay_control_visible(label_name));
+
+  controller_->selectHistorySession(0);
+  label = qobject_cast<QQuickItem *>(find_required(root_, label_name));
+  ASSERT_NE(label, nullptr);
+  EXPECT_TRUE(label->isVisible());
+  EXPECT_EQ(label->property("text").toString(), QStringLiteral("0% 叠加实时画面"));
 }
 
 TEST_F(QmlSmokeTest, MarkerShortcutAddsPointAtPlayhead)

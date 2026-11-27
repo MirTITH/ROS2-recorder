@@ -9,7 +9,20 @@ CameraGridModel::CameraGridModel(TopicListModel * source, QObject * parent)
 : QAbstractListModel(parent), source_(source)
 {
   if (source_ != nullptr) {
-    connect(source_, &QAbstractItemModel::dataChanged, this, [this]() { rebuild(); });
+    connect(source_, &QAbstractItemModel::dataChanged, this,
+      [this](const QModelIndex & first, const QModelIndex & last, const QList<int> & roles) {
+        if (roles.isEmpty() || roles.contains(TopicListModel::IsVisibleRole) ||
+          roles.contains(TopicListModel::ResolutionTextRole))
+        {
+          rebuild();
+        } else if (roles.contains(TopicListModel::FrameSeqRole)) {
+          for (int row = first.row(); row <= last.row(); ++row) {
+            const auto idx = source_->index(row, 0);
+            updateFrameSeq(source_->data(idx, TopicListModel::TopicNameRole).toString(),
+              source_->data(idx, TopicListModel::FrameSeqRole).toInt());
+          }
+        }
+      });
     connect(source_, &QAbstractItemModel::rowsInserted, this, [this]() { rebuild(); });
     connect(source_, &QAbstractItemModel::rowsRemoved, this, [this]() { rebuild(); });
     connect(source_, &QAbstractItemModel::modelReset, this, [this]() { rebuild(); });
@@ -26,7 +39,7 @@ void CameraGridModel::rebuild()
 {
   beginResetModel();
 
-  struct SourceCamera { QString key, topic, backend, resolution, color; bool visible; };
+  struct SourceCamera { QString key, topic, backend, resolution, color; int frame_seq; bool visible; };
   std::vector<SourceCamera> cameras;
   const int rows = source_ ? source_->rowCount() : 0;
   for (int row = 0; row < rows; ++row) {
@@ -39,6 +52,7 @@ void CameraGridModel::rebuild()
     c.backend = source_->data(idx, TopicListModel::BackendNameRole).toString();
     c.resolution = source_->data(idx, TopicListModel::ResolutionTextRole).toString();
     c.color = source_->data(idx, TopicListModel::SeriesColorRole).toString();
+    c.frame_seq = source_->data(idx, TopicListModel::FrameSeqRole).toInt();
     c.visible = source_->data(idx, TopicListModel::IsVisibleRole).toBool();
     c.key = key_of(c.topic, c.backend);
     cameras.push_back(std::move(c));
@@ -64,7 +78,7 @@ void CameraGridModel::rebuild()
     const auto it = std::find_if(cameras.begin(), cameras.end(),
       [&](const SourceCamera & c) { return c.key == key; });
     if (it != cameras.end() && it->visible) {
-      visible_.push_back(Camera{it->topic, it->backend, it->resolution, it->color});
+      visible_.push_back(Camera{it->topic, it->backend, it->resolution, it->color, it->frame_seq});
     }
   }
 
@@ -95,6 +109,7 @@ QVariant CameraGridModel::data(const QModelIndex & index, int role) const
     case SeriesColorRole: return c.series_color;
     case TopicKeyRole: return c.topic_name;
     case FrameSeqRole: return c.frame_seq;
+    case LiveOverlayFrameSeqRole: return live_overlay_seqs_.value(c.topic_name);
     default: return {};
   }
 }
@@ -108,6 +123,7 @@ QHash<int, QByteArray> CameraGridModel::roleNames() const
     {SeriesColorRole, "seriesColor"},
     {TopicKeyRole, "topicKey"},
     {FrameSeqRole, "frameSeq"},
+    {LiveOverlayFrameSeqRole, "liveOverlayFrameSeq"},
   };
 }
 
@@ -167,7 +183,16 @@ void CameraGridModel::updateFrameSeq(const QString & topic_key, int seq)
     visible_[i].frame_seq = seq;
     const auto idx = index(static_cast<int>(i), 0);
     emit dataChanged(idx, idx, {FrameSeqRole});
-    return;
+  }
+}
+
+void CameraGridModel::updateLiveOverlayFrameSeq(const QString & topic_key, int seq)
+{
+  live_overlay_seqs_.insert(topic_key, seq);
+  for (int row = 0; row < rowCount(); ++row) {
+    if (visible_[static_cast<std::size_t>(row)].topic_name != topic_key) { continue; }
+    const auto idx = index(row, 0);
+    emit dataChanged(idx, idx, {LiveOverlayFrameSeqRole});
   }
 }
 

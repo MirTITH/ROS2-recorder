@@ -14,22 +14,14 @@
 # output_dir: "./data/recordings/experiment_screw"
 # output_dir: "./data/recordings/woosh-af-live"
 # output_dir: "./data/recordings/打包OOD"
-output_dir: "./data/recordings/press_experiment"
+# output_dir: "./data/recordings/woosh-af/左手下压软垫2"
+output_dir: "./data/recordings/擦白板"
 
 # 标签，用于标注单条数据
 # name 必须唯一；color 可省略（默认灰色）。
 tags:
   - { name: "成功", color: "#2f9e44" }
   - { name: "失败", color: "#e03131" }
-  - { name: "碰撞", color: "#e8590c" }
-  - { name: "矿泉水", color: "#1763c9" }
-  - { name: "兔子", color: "#0ea5b7" }
-  - { name: "胶带", color: "#e8a915" }
-  - { name: "外部扰动", color: "#e462f0e5" }
-  - { name: "无预测基线", color: "#495057" }
-  - { name: "shadow", color: "#7048e8" }
-  - { name: "active", color: "#12b886" }
-  - { name: "ARCO-UT-FO", color: "#1c7ed6" }
   - { name: "左臂", color: "#f76707" }
   - { name: "右臂", color: "#ae3ec9" }
 
@@ -65,6 +57,7 @@ groups:
       - /left_arco_servo/debug/compliant_pose
       - /left_arco_servo/debug/status
       - /left_arco_servo/desired_wrench
+      - /left_arco_servo/follow_joint_trajectory/_action/status
       - /left_arco_servo/nominal_pose
       - /left_arco_servo/preferred_joint_positions
       - /left_arco_servo/surface_context
@@ -83,6 +76,8 @@ groups:
       - /left_raw_force_torque_sensor_broadcaster/transition_event
       - /left_raw_force_torque_sensor_broadcaster/wrench
       # - /monitored_planning_scene
+      # MoveIt plans and executes the supervised Home moves.
+      - /move_action/_action/status
       - /parameter_events
       # - /pipeline_state
       # - /planning_scene
@@ -92,6 +87,7 @@ groups:
       - /right_arco_servo/debug/compliant_pose
       - /right_arco_servo/debug/status
       - /right_arco_servo/desired_wrench
+      - /right_arco_servo/follow_joint_trajectory/_action/status
       - /right_arco_servo/nominal_pose
       - /right_arco_servo/preferred_joint_positions
       - /right_arco_servo/surface_context
@@ -151,8 +147,10 @@ groups:
       - /woosh/camera/woosh_right_hand_rgbd/extrinsics/depth_to_color
       - /xr_teleoperate/head_pose
       - /xr_teleoperate/left/controller_state
+      - /xr_teleoperate/left/hand_landmarks
       - /xr_teleoperate/left/pose
       - /xr_teleoperate/right/controller_state
+      - /xr_teleoperate/right/hand_landmarks
       - /xr_teleoperate/right/pose
     backend: rosbag # 记录到 rosbag
 

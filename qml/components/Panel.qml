@@ -7,6 +7,7 @@ Rectangle {
     id: root
 
     property alias title: titleLabel.text
+    property alias headerData: headerRow.data
     default property alias contentData: body.data
     property bool active: false
 
@@ -25,6 +26,8 @@ Rectangle {
             color: Theme.panelHeader
 
             RowLayout {
+                id: headerRow
+
                 anchors.fill: parent
                 anchors.leftMargin: 10
                 anchors.rightMargin: 10

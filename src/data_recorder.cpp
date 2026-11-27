@@ -126,6 +126,9 @@ int main(int argc, char ** argv)
   qml_engine.addImageProvider(
     QStringLiteral("camera"),
     new data_recorder::CameraImageProvider(&bridge));  // 引擎接管所有权
+  qml_engine.addImageProvider(
+    QStringLiteral("camera-live"), new data_recorder::CameraImageProvider(
+      &bridge, data_recorder::CameraImageProvider::Source::LiveOverlay));
   qml_engine.rootContext()->setContextProperty("appController", &controller);
 
   // 后台 ROS spin 线程

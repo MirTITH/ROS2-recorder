@@ -27,6 +27,7 @@ public:
     SeriesColorRole,
     TopicKeyRole,
     FrameSeqRole,
+    LiveOverlayFrameSeqRole,
   };
 
   explicit CameraGridModel(TopicListModel * source, QObject * parent = nullptr);
@@ -37,6 +38,7 @@ public:
 
   Q_INVOKABLE void moveCamera(int from, int to);
   Q_INVOKABLE void updateFrameSeq(const QString & topic_key, int seq);
+  void updateLiveOverlayFrameSeq(const QString & topic_key, int seq);
 
 signals:
   void countChanged();
@@ -57,6 +59,7 @@ private:
   TopicListModel * source_;
   std::vector<QString> order_;    // remembered full-camera order (keys)
   std::vector<Camera> visible_;   // current visible rows, filtered by order_
+  QHash<QString, int> live_overlay_seqs_;
 };
 
 }  // namespace data_recorder

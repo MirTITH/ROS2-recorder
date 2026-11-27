@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
 import "."
 
 Panel {
@@ -13,6 +14,15 @@ Panel {
     // CameraDragController (drag state machine + drop-commit via moveCamera).
     property var model
     property int visibleCameraCount: 0
+    property bool historyMode: false
+    readonly property real liveOverlayOpacity: historyMode ? liveOverlaySlider.value / liveOverlaySlider.to : 0
+    readonly property bool liveOverlayEnabled: visibleCameraCount > 0 && liveOverlayOpacity > 0
+
+    onHistoryModeChanged: {
+        if (!historyMode) {
+            liveOverlaySlider.value = 0
+        }
+    }
 
     // Per-visible-index resolution snapshot, populated by the cell delegates and
     // consumed by gridLayout for aspect-aware column/row scoring. The Repeater
@@ -21,6 +31,73 @@ Panel {
     property var resolutionByIndex: ({})
 
     title: "相机预览"
+
+    headerData: RowLayout {
+        visible: root.historyMode
+        spacing: 8
+
+        Slider {
+            id: liveOverlaySlider
+
+            objectName: "liveOverlaySlider"
+            Accessible.name: "叠加实时画面"
+            Layout.preferredWidth: 240
+            Layout.preferredHeight: 20
+            orientation: Qt.Horizontal
+            padding: 0
+            from: 0
+            to: 100
+            value: 0
+            stepSize: 1
+            live: true
+            snapMode: Slider.SnapAlways
+
+            background: Rectangle {
+                x: liveOverlaySlider.leftPadding + liveOverlaySlider.handle.width / 2
+                y: liveOverlaySlider.topPadding + (liveOverlaySlider.availableHeight - height) / 2
+                width: liveOverlaySlider.availableWidth - liveOverlaySlider.handle.width
+                height: 4
+                color: Theme.tickStrong
+                radius: height / 2
+
+                Rectangle {
+                    width: parent.width * liveOverlaySlider.position
+                    height: parent.height
+                    color: Theme.accent
+                    radius: parent.radius
+                }
+            }
+
+            handle: Rectangle {
+                x: liveOverlaySlider.leftPadding + liveOverlaySlider.visualPosition * (liveOverlaySlider.availableWidth - width)
+                y: liveOverlaySlider.topPadding + (liveOverlaySlider.availableHeight - height) / 2
+                implicitWidth: 12
+                implicitHeight: 12
+                color: liveOverlaySlider.pressed ? Theme.titleText : Theme.accent
+                radius: width / 2
+                border.color: Theme.titleText
+                border.width: liveOverlaySlider.visualFocus ? 1 : 0
+            }
+        }
+
+        Label {
+            id: liveOverlayLabel
+
+            readonly property string format: "%1% 叠加实时画面"
+            objectName: "liveOverlayLabel"
+            text: format.arg(liveOverlaySlider.value)
+            color: Theme.titleText
+            font.pixelSize: 11
+            Layout.preferredWidth: Math.ceil(liveOverlayLabelMetrics.advanceWidth)
+        }
+
+        TextMetrics {
+            id: liveOverlayLabelMetrics
+
+            font: liveOverlayLabel.font
+            text: liveOverlayLabel.format.arg(liveOverlaySlider.to)
+        }
+    }
 
     visible: visibleCameraCount > 0
     SplitView.preferredHeight: visible ? 260 : 0
@@ -66,6 +143,7 @@ Panel {
                 required property color seriesColor
                 required property string topicKey
                 required property int frameSeq
+                required property int liveOverlayFrameSeq
 
                 // Per-cell key (matches the C++ model's internal "topic|backend"
                 // key). Kept as a stable per-drag identity and for placeholder
@@ -90,6 +168,8 @@ Panel {
                     seriesColor: cameraCell.seriesColor
                     topicKey: cameraCell.topicKey
                     frameSeq: cameraCell.frameSeq
+                    liveOverlayFrameSeq: cameraCell.liveOverlayFrameSeq
+                    liveOverlayOpacity: root.liveOverlayOpacity
                 }
 
                 MouseArea {

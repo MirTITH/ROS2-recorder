@@ -5,6 +5,7 @@
 #include <QString>
 #include <QTimer>
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -31,7 +32,7 @@ public:
   bool playing() const { return playing_; }
 
 public slots:
-  void load(const data_recorder::SessionRecord & session);
+  void load(const data_recorder::SessionRecord & session, std::uint64_t preview_revision);
   void play();
   void pause();
   void togglePlay();
@@ -50,6 +51,7 @@ private:
 
   LiveBridge * bridge_{nullptr};
   QTimer * timer_{nullptr};
+  std::uint64_t preview_revision_{0};
 
   struct Clip
   {

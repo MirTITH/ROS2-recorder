@@ -14,6 +14,7 @@
 #include "data_recorder/live_bridge.hpp"
 
 #include "data_recorder/app_controller.hpp"
+#include "data_recorder/camera_image_provider.hpp"
 #include "data_recorder/session_manager.hpp"
 #include "data_recorder/topic_series.hpp"
 #include "data_recorder/ui_models.hpp"
@@ -1793,36 +1794,54 @@ TEST(TagListModel, SelectTogglesAdditivelyOnTopOfSetSelectedTags)
     data_recorder::TagListModel::IsSelectedRole).toBool());   // 碰撞 仍选中
 }
 
-TEST(LiveBridgeTest, PlaybackModeGatesLiveButAllowsPlayback)
+TEST(LiveBridgeTest, PlaybackAndLiveOverlayUseIndependentFrames)
 {
   data_recorder::LiveBridge bridge;
   const QString key = "/camera/image_raw";
-  auto img = std::make_shared<QImage>(4, 4, QImage::Format_RGB888);
+  auto live = std::make_shared<QImage>(8, 8, QImage::Format_RGB888);
+  live->fill(Qt::blue);
+  auto playback = std::make_shared<QImage>(8, 8, QImage::Format_RGB888);
+  playback->fill(Qt::red);
+  data_recorder::CameraImageProvider preview(&bridge);
+  data_recorder::CameraImageProvider overlay(
+    &bridge, data_recorder::CameraImageProvider::Source::LiveOverlay);
+  const QString frame_id = key + "?seq=1";
+  const auto preview_color = [&]() {
+      return preview.requestImage(frame_id, nullptr, {}).pixelColor(0, 0);
+    };
 
-  bridge.push_frame(key, img);
-  ASSERT_NE(bridge.latest_frame(key), nullptr);
+  bridge.push_frame(key, live);
+  EXPECT_EQ(preview_color(), QColor(Qt::blue));
 
-  bridge.set_playback_mode(true);
-  auto live2 = std::make_shared<QImage>(8, 8, QImage::Format_RGB888);
-  bridge.push_frame(key, live2);
-  EXPECT_EQ(bridge.latest_frame(key)->width(), 4);  // still old frame
+  const auto preview_revision = bridge.set_playback_mode(true);
+  bridge.push_frame(key, live);
+  EXPECT_EQ(bridge.latest_frame(key), nullptr);
+  EXPECT_EQ(bridge.latest_live_overlay_frame(key), nullptr);
 
-  auto play = std::make_shared<QImage>(16, 16, QImage::Format_RGB888);
-  bridge.push_playback_frame(key, play);
-  EXPECT_EQ(bridge.latest_frame(key)->width(), 16);
+  bridge.push_playback_frame(key, playback, preview_revision);
+  bridge.set_live_overlay_enabled(true);
+  bridge.push_frame(key, live);
+  EXPECT_EQ(preview_color(), QColor(Qt::red));
+  EXPECT_EQ(overlay.requestImage(frame_id, nullptr, {}).pixelColor(0, 0), QColor(Qt::blue));
+  EXPECT_EQ(overlay.requestImage("/other/image?seq=1", nullptr, {}).pixelColor(0, 0).alpha(), 0);
 
-  // 退出回放：帧仓库被清空（历史相机帧不再驻留）。
+  bridge.set_live_overlay_enabled(false);
+  bridge.push_frame(key, live);
+  EXPECT_EQ(bridge.latest_live_overlay_frame(key), nullptr);
+  EXPECT_EQ(preview_color(), QColor(Qt::red));
+
+  const auto next_revision = bridge.set_playback_mode(true);
+  bridge.push_playback_frame(key, playback, preview_revision);
+  EXPECT_EQ(bridge.latest_frame(key), nullptr);
+  bridge.push_playback_frame(key, playback, next_revision);
+  EXPECT_EQ(preview_color(), QColor(Qt::red));
+
   bridge.set_playback_mode(false);
+  bridge.push_playback_frame(key, playback, next_revision);
   EXPECT_EQ(bridge.latest_frame(key), nullptr);
 
-  // 网关关闭后到达的迟到回放帧应被丢弃，不更新仓库。
-  auto late_play = std::make_shared<QImage>(32, 32, QImage::Format_RGB888);
-  bridge.push_playback_frame(key, late_play);
-  EXPECT_EQ(bridge.latest_frame(key), nullptr);
-
-  // 网关关闭后实时帧正常写入。
-  bridge.push_frame(key, live2);
-  EXPECT_EQ(bridge.latest_frame(key)->width(), 8);
+  bridge.push_frame(key, live);
+  EXPECT_EQ(preview_color(), QColor(Qt::blue));
 }
 
 TEST(AppControllerHistoryTest, SelectHistoryEntersPlaybackMode)

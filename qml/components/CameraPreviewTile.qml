@@ -12,6 +12,8 @@ Rectangle {
     property bool dragActive: false
     property string topicKey: ""
     property int frameSeq: 0
+    property int liveOverlayFrameSeq: 0
+    property real liveOverlayOpacity: 0
 
     color: Theme.cameraTileBg
     clip: true
@@ -64,6 +66,8 @@ Rectangle {
             Layout.fillHeight: true
 
             Image {
+                id: previewImage
+
                 anchors.fill: parent
                 fillMode: Image.PreserveAspectFit
                 cache: false
@@ -72,6 +76,18 @@ Rectangle {
                     ? "image://camera/" + root.topicKey + "?seq=" + root.frameSeq
                     : ""
                 // seq 变化 → source 变化 → 重新拉帧
+            }
+
+            Image {
+                anchors.centerIn: previewImage
+                width: previewImage.paintedWidth
+                height: previewImage.paintedHeight
+                fillMode: Image.PreserveAspectFit
+                cache: false
+                opacity: root.liveOverlayOpacity
+                source: opacity > 0 && root.frameSeq > 0 && root.topicKey.length > 0
+                    ? "image://camera-live/" + root.topicKey + "?seq=" + root.liveOverlayFrameSeq
+                    : ""
             }
         }
     }

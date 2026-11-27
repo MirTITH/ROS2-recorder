@@ -27,13 +27,14 @@ SessionPlayer::SessionPlayer(LiveBridge * bridge, QObject * parent)
 
 SessionPlayer::~SessionPlayer() = default;
 
-void SessionPlayer::load(const SessionRecord & session)
+void SessionPlayer::load(const SessionRecord & session, std::uint64_t preview_revision)
 {
   timer_->stop();
   playing_ = false;
   clips_.clear();
   playhead_ = 0.0;
   duration_ = session.duration_seconds;
+  preview_revision_ = preview_revision;
 
   const fs::path video_dir = fs::path(session.directory) / "video";
   for (const auto & topic : session.topics) {
@@ -62,7 +63,8 @@ void SessionPlayer::pushFramesAt(double t)
     if (!clip.reader) { continue; }
     QImage img = clip.reader->frameAtSeconds(t);
     if (img.isNull()) { continue; }
-    bridge_->push_playback_frame(clip.topic_key, std::make_shared<QImage>(std::move(img)));
+    bridge_->push_playback_frame(
+      clip.topic_key, std::make_shared<QImage>(std::move(img)), preview_revision_);
   }
 }
 

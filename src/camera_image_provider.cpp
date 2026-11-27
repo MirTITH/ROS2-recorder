@@ -5,8 +5,8 @@
 namespace data_recorder
 {
 
-CameraImageProvider::CameraImageProvider(LiveBridge * bridge)
-: QQuickImageProvider(QQuickImageProvider::Image), bridge_(bridge)
+CameraImageProvider::CameraImageProvider(LiveBridge * bridge, Source source)
+: QQuickImageProvider(QQuickImageProvider::Image), bridge_(bridge), source_(source)
 {
 }
 
@@ -15,11 +15,13 @@ QImage CameraImageProvider::requestImage(
 {
   // id 形如 "<topic_key>?seq=N"；去掉 query 部分取 key。
   const QString key = id.section('?', 0, 0);
-  auto frame = bridge_ ? bridge_->latest_frame(key) : nullptr;
+  const bool overlay = source_ == Source::LiveOverlay;
+  auto frame = bridge_ ? (overlay ? bridge_->latest_live_overlay_frame(key) : bridge_->latest_frame(key))
+    : nullptr;
   if (!frame || frame->isNull()) {
     QImage placeholder(requestedSize.isValid() ? requestedSize : QSize(16, 16),
-      QImage::Format_RGB888);
-    placeholder.fill(Qt::black);
+      overlay ? QImage::Format_ARGB32_Premultiplied : QImage::Format_RGB888);
+    placeholder.fill(overlay ? Qt::transparent : Qt::black);
     if (size) { *size = placeholder.size(); }
     return placeholder;
   }

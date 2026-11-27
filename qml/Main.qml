@@ -51,6 +51,8 @@ ApplicationWindow {
                 CameraGridPanel {
                     model: appController.cameraGridModel
                     visibleCameraCount: appController.visibleCameraCount
+                    historyMode: appController.historyMode
+                    onLiveOverlayEnabledChanged: appController.setLiveOverlayEnabled(liveOverlayEnabled)
                 }
 
                 SplitView {

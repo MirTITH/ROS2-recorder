@@ -76,6 +76,8 @@ AppController::AppController(
   if (bridge_) {
     connect(bridge_, &LiveBridge::statsUpdated, this, &AppController::onStatsUpdated);
     connect(bridge_, &LiveBridge::frameReady, this, &AppController::onFrameReady);
+    connect(bridge_, &LiveBridge::liveOverlayFrameReady,
+      &camera_grid_model_, &CameraGridModel::updateLiveOverlayFrameSeq);
     connect(bridge_, &LiveBridge::liveEdgeChanged, this, &AppController::onLiveEdge);
     connect(bridge_, &LiveBridge::curvesUpdated, this, &AppController::onCurvesUpdated);
     connect(bridge_, &LiveBridge::topicTypesUpdated, this, &AppController::onTopicTypesUpdated);
@@ -412,6 +414,7 @@ void AppController::selectOnlineData()
   const bool previous_can_record = canRecord();
   history_mode_ = false;
   selected_session_row_ = -1;
+  if (bridge_) { bridge_->set_playback_mode(false); }
   status_text_ = statusTextForCurrentState();
   emit dataSourceChanged();
   if (previous_can_record != canRecord()) {
@@ -424,7 +427,6 @@ void AppController::selectOnlineData()
     emit modeTextChanged();
   }
 
-  if (bridge_) { bridge_->set_playback_mode(false); }
   if (player_) { QMetaObject::invokeMethod(player_, [p = player_] { p->stop(); }, Qt::QueuedConnection); }
   topic_model_.set_topics(live_topics_);
   event_marker_model_.clearInstances();
@@ -456,6 +458,7 @@ void AppController::selectHistorySession(int row)
   history_mode_ = true;
   selected_session_row_ = row;
   following_live_edge_ = false;
+  const auto preview_revision = bridge_ ? bridge_->set_playback_mode(true) : 0;
   status_text_ = statusTextForCurrentState();
   if (previous_history_mode != history_mode_ || previous_selected_row != selected_session_row_) {
     emit dataSourceChanged();
@@ -499,9 +502,9 @@ void AppController::selectHistorySession(int row)
     emit playheadSecondsChanged();
     emit timelineDurationSecondsChanged();
 
-    if (bridge_) { bridge_->set_playback_mode(true); }
     if (player_) {
-      QMetaObject::invokeMethod(player_, [p = player_, session] { p->load(session); },
+      QMetaObject::invokeMethod(player_,
+        [p = player_, session, preview_revision] { p->load(session, preview_revision); },
         Qt::QueuedConnection);
     }
     if (curve_loader_) {
@@ -517,6 +520,11 @@ void AppController::selectHistorySession(int row)
         Qt::QueuedConnection);
     }
   }
+}
+
+void AppController::setLiveOverlayEnabled(bool enabled)
+{
+  if (bridge_) { bridge_->set_live_overlay_enabled(history_mode_ && enabled); }
 }
 
 void AppController::setPlayheadSeconds(double seconds)
@@ -836,7 +844,6 @@ void AppController::onCurvesUpdated(const QVariantList & topics)
 void AppController::onFrameReady(const QString & key, int seq)
 {
   topic_model_.updateFrameSeq(key, seq);
-  camera_grid_model_.updateFrameSeq(key, seq);
 }
 
 void AppController::onLiveEdge(double seconds)
